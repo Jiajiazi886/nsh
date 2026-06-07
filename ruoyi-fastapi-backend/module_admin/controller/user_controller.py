@@ -30,6 +30,7 @@ from module_admin.entity.vo.user_vo import (
     CurrentUserModel,
     DeleteUserModel,
     EditUserModel,
+    RegisterCleanupRuleModel,
     ResetPasswordModel,
     ResetUserModel,
     UserDetailModel,
@@ -255,6 +256,45 @@ async def query_detail_system_user_profile(
     logger.info(f'获取user_id为{current_user.user.user_id}的信息成功')
 
     return ResponseUtil.success(model_content=profile_user_result)
+
+
+@user_controller.get(
+    '/register-cleanup-rule',
+    summary='获取注册用户清理规则接口',
+    description='用于获取注册后24小时未登录自动清理规则状态',
+    response_model=DataResponseModel[RegisterCleanupRuleModel],
+    dependencies=[UserInterfaceAuthDependency('system:user:list')],
+)
+async def get_register_cleanup_rule(
+    request: Request,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+) -> Response:
+    rule_result = await UserService.get_register_cleanup_rule_services(request, query_db)
+    logger.info('获取注册用户清理规则成功')
+
+    return ResponseUtil.success(data=rule_result)
+
+
+@user_controller.put(
+    '/register-cleanup-rule',
+    summary='修改注册用户清理规则接口',
+    description='用于开启或关闭注册后24小时未登录自动清理规则',
+    response_model=DataResponseModel[RegisterCleanupRuleModel],
+    dependencies=[UserInterfaceAuthDependency('system:user:edit')],
+)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def update_register_cleanup_rule(
+    request: Request,
+    rule: RegisterCleanupRuleModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    rule_result = await UserService.set_register_cleanup_rule_services(
+        request, query_db, rule, current_user.user.user_name
+    )
+    logger.info('修改注册用户清理规则成功')
+
+    return ResponseUtil.success(data=rule_result)
 
 
 @user_controller.get(

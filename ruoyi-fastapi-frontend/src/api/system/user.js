@@ -126,3 +126,20 @@ export function updateAuthRole(data) {
     params: data
   })
 }
+
+// 查询注册用户清理规则
+export function getRegisterCleanupRule() {
+  return request({
+    url: '/system/user/register-cleanup-rule',
+    method: 'get'
+  })
+}
+
+// 修改注册用户清理规则
+export function updateRegisterCleanupRule(data) {
+  return request({
+    url: '/system/user/register-cleanup-rule',
+    method: 'put',
+    data: data
+  })
+}

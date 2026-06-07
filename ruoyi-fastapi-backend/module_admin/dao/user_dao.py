@@ -352,6 +352,24 @@ class UserDao:
         )
 
     @classmethod
+    async def cleanup_inactive_registered_users(cls, db: AsyncSession, cutoff_time: datetime) -> int:
+        """
+        Soft delete self-registered users who have never logged in after the cutoff time.
+        """
+        result = await db.execute(
+            update(SysUser)
+            .where(
+                SysUser.del_flag == '0',
+                SysUser.user_id != 1,
+                SysUser.create_by == 'register',
+                SysUser.login_date.is_(None),
+                SysUser.create_time <= cutoff_time,
+            )
+            .values(del_flag='2', update_by='system', update_time=datetime.now())
+        )
+        return result.rowcount or 0
+
+    @classmethod
     async def get_user_role_allocated_list_by_user_id(
         cls, db: AsyncSession, query_object: UserRoleQueryModel
     ) -> Sequence[SysRole]:

@@ -194,6 +194,17 @@ class UserPageQueryModel(UserQueryModel):
     page_size: int = Field(default=10, description='每页记录数')
 
 
+class RegisterCleanupRuleModel(BaseModel):
+    """
+    Registered user cleanup rule model.
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel)
+
+    enabled: bool = Field(default=False, description='是否启用注册用户24小时未登录自动清理')
+    job_id: int | None = Field(default=None, description='定时任务ID')
+
+
 class AddUserModel(UserModel):
     """
     新增用户模型

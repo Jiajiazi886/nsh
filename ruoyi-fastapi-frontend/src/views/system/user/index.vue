@@ -120,6 +120,18 @@
               >导出</el-button
             >
           </el-col>
+          <el-col :span="1.5">
+            <div class="cleanup-rule-toggle" v-hasPermi="['system:user:edit']">
+              <span>清理未登录注册用户</span>
+              <el-switch
+                v-model="registerCleanupEnabled"
+                :loading="registerCleanupLoading"
+                active-text="开"
+                inactive-text="关"
+                @change="handleRegisterCleanupChange"
+              />
+            </div>
+          </el-col>
           <right-toolbar
             v-model:showSearch="showSearch"
             @queryTable="getList"
@@ -448,6 +460,8 @@ import {
   getUser,
   updateUser,
   addUser,
+  getRegisterCleanupRule,
+  updateRegisterCleanupRule,
 } from "@/api/system/user";
 
 const router = useRouter();
@@ -469,6 +483,8 @@ const title = ref("");
 const dateRange = ref([]);
 const initPassword = ref(undefined);
 const roleOptions = ref([]);
+const registerCleanupEnabled = ref(false);
+const registerCleanupLoading = ref(false);
 const upload = reactive({
   open: false,
   title: "",
@@ -558,6 +574,24 @@ function fetchRoleOptions() {
   getUser().then((response) => {
     roleOptions.value = response.roles || [];
   });
+}
+function fetchRegisterCleanupRule() {
+  getRegisterCleanupRule().then((response) => {
+    registerCleanupEnabled.value = !!response.data?.enabled;
+  });
+}
+function handleRegisterCleanupChange(enabled) {
+  registerCleanupLoading.value = true;
+  updateRegisterCleanupRule({ enabled })
+    .then(() => {
+      proxy.$modal.msgSuccess(enabled ? "已开启自动清理规则" : "已关闭自动清理规则");
+    })
+    .catch(() => {
+      registerCleanupEnabled.value = !enabled;
+    })
+    .finally(() => {
+      registerCleanupLoading.value = false;
+    });
 }
 function handleDelete(row) {
   const userIds = row.userId || ids.value;
@@ -745,6 +779,7 @@ function submitForm() {
 
 onMounted(() => {
   fetchRoleOptions();
+  fetchRegisterCleanupRule();
   getList();
   proxy.getConfigKey("sys.user.initPassword").then((response) => {
     initPassword.value = response.msg;
@@ -758,5 +793,15 @@ onMounted(() => {
   justify-content: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.cleanup-rule-toggle {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  white-space: nowrap;
 }
 </style>

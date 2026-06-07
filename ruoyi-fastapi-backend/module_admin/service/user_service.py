@@ -8,16 +8,23 @@ from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.constant import CommonConstant
+from common.enums import RedisInitKeyConfig
 from common.vo import CrudResponseModel, PageModel
+from config.get_scheduler import SchedulerUtil
 from exceptions.exception import ServiceException
+from module_admin.dao.config_dao import ConfigDao
+from module_admin.dao.job_dao import JobDao
 from module_admin.dao.user_dao import UserDao
 from module_admin.entity.do.user_do import SysUserRole
+from module_admin.entity.vo.config_vo import ConfigModel
+from module_admin.entity.vo.job_vo import JobModel
 from module_admin.entity.vo.user_vo import (
     AddUserModel,
     CrudUserRoleModel,
     CurrentUserModel,
     DeleteUserModel,
     EditUserModel,
+    RegisterCleanupRuleModel,
     ResetUserModel,
     SelectedRoleModel,
     UserDetailModel,
@@ -42,6 +49,11 @@ class UserService:
     """
     用户管理模块服务层
     """
+
+    REGISTER_CLEANUP_CONFIG_KEY = 'sys.account.cleanupInactiveRegisteredUsers'
+    REGISTER_CLEANUP_JOB_NAME = '注册用户24小时未登录自动清理'
+    REGISTER_CLEANUP_JOB_TARGET = 'module_task.user_cleanup.cleanup_inactive_registered_users'
+    REGISTER_CLEANUP_CRON = '0 0 * * * ?'
 
     @classmethod
     async def get_user_list_services(
@@ -84,6 +96,109 @@ class UserService:
         role_map = await UserDao.get_roles_by_user_ids(query_db, user_ids)
         for row in rows:
             row['role'] = CamelCaseUtil.transform_result(role_map.get(row.get('userId'), []))
+
+    @classmethod
+    async def get_register_cleanup_rule_services(
+        cls, request: Request, query_db: AsyncSession
+    ) -> RegisterCleanupRuleModel:
+        """
+        Get the self-registered inactive user cleanup rule.
+        """
+        config, job = await cls.__ensure_register_cleanup_rule(query_db)
+        enabled = config.config_value == 'true'
+        config_value = config.config_value
+        job_id = job.job_id if job else None
+        await query_db.commit()
+        await request.app.state.redis.set(
+            f'{RedisInitKeyConfig.SYS_CONFIG.key}:{cls.REGISTER_CLEANUP_CONFIG_KEY}', config_value
+        )
+        return RegisterCleanupRuleModel(enabled=enabled, jobId=job_id)
+
+    @classmethod
+    async def set_register_cleanup_rule_services(
+        cls, request: Request, query_db: AsyncSession, rule: RegisterCleanupRuleModel, update_by: str
+    ) -> RegisterCleanupRuleModel:
+        """
+        Enable or disable the self-registered inactive user cleanup rule.
+        """
+        config, job = await cls.__ensure_register_cleanup_rule(query_db)
+        enabled_value = 'true' if rule.enabled else 'false'
+        job_status = '0' if rule.enabled else '1'
+        job_id = job.job_id if job else None
+        now = datetime.now()
+
+        await ConfigDao.edit_config_dao(
+            query_db,
+            {
+                'config_id': config.config_id,
+                'config_name': config.config_name,
+                'config_key': config.config_key,
+                'config_value': enabled_value,
+                'config_type': config.config_type,
+                'update_by': update_by,
+                'update_time': now,
+            },
+        )
+        if job:
+            await JobDao.edit_job_dao(
+                query_db,
+                {
+                    'job_id': job.job_id,
+                    'status': job_status,
+                    'update_by': update_by,
+                    'update_time': now,
+                },
+                JobModel(**CamelCaseUtil.transform_result(job)),
+            )
+        await query_db.commit()
+        await request.app.state.redis.set(
+            f'{RedisInitKeyConfig.SYS_CONFIG.key}:{cls.REGISTER_CLEANUP_CONFIG_KEY}', enabled_value
+        )
+        await SchedulerUtil.request_scheduler_sync()
+        return RegisterCleanupRuleModel(enabled=rule.enabled, jobId=job_id)
+
+    @classmethod
+    async def __ensure_register_cleanup_rule(cls, query_db: AsyncSession) -> tuple[Any, Any]:
+        config = await ConfigDao.get_config_detail_by_info(
+            query_db, ConfigModel(configKey=cls.REGISTER_CLEANUP_CONFIG_KEY)
+        )
+        if config is None:
+            config = await ConfigDao.add_config_dao(
+                query_db,
+                ConfigModel(
+                    configName='账号自助-是否清理24小时未登录注册用户',
+                    configKey=cls.REGISTER_CLEANUP_CONFIG_KEY,
+                    configValue='false',
+                    configType='Y',
+                    createBy='system',
+                    createTime=datetime.now(),
+                    updateBy='system',
+                    updateTime=datetime.now(),
+                    remark='开启后，定时任务会软删除注册后24小时仍未登录的自助注册账号',
+                ),
+            )
+
+        job = await JobDao.get_job_detail_by_invoke_target(query_db, cls.REGISTER_CLEANUP_JOB_TARGET)
+        if job is None:
+            job = await JobDao.add_job_dao(
+                query_db,
+                JobModel(
+                    jobName=cls.REGISTER_CLEANUP_JOB_NAME,
+                    jobGroup='default',
+                    jobExecutor='default',
+                    invokeTarget=cls.REGISTER_CLEANUP_JOB_TARGET,
+                    cronExpression=cls.REGISTER_CLEANUP_CRON,
+                    misfirePolicy='3',
+                    concurrent='1',
+                    status='1',
+                    createBy='system',
+                    createTime=datetime.now(),
+                    updateBy='system',
+                    updateTime=datetime.now(),
+                    remark='清理注册后24小时仍未登录的自助注册账号',
+                ),
+            )
+        return config, job
 
     @classmethod
     async def check_user_allowed_services(cls, check_user: UserModel) -> CrudResponseModel:

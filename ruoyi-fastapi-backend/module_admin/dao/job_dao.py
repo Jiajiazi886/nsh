@@ -58,6 +58,17 @@ class JobDao:
         return job_info
 
     @classmethod
+    async def get_job_detail_by_invoke_target(cls, db: AsyncSession, invoke_target: str) -> SysJob | None:
+        """
+        Get a scheduled job by invoke target.
+        """
+        job_info = (
+            (await db.execute(select(SysJob).where(SysJob.invoke_target == invoke_target))).scalars().first()
+        )
+
+        return job_info
+
+    @classmethod
     async def get_job_list(
         cls, db: AsyncSession, query_object: JobPageQueryModel, is_page: bool = False
     ) -> PageModel | list[dict[str, Any]]:
