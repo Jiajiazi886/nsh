@@ -94,3 +94,50 @@
 .el-dropdown .el-dropdown-link{
   color: var(--el-color-primary) !important;
 }
+
+.el-button--primary {
+  --el-button-bg-color: var(--el-color-primary);
+  --el-button-border-color: var(--el-color-primary);
+  --el-button-hover-bg-color: #2d2d2d;
+  --el-button-hover-border-color: #2d2d2d;
+  --el-button-active-bg-color: #111827;
+  --el-button-active-border-color: #111827;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.el-button:not(.is-circle) {
+  border-radius: 8px;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: 8px !important;
+}
+
+.el-card,
+.el-dialog {
+  border-radius: 8px;
+}
+
+.el-table {
+  --el-table-header-bg-color: #f8f7ff;
+  --el-table-header-text-color: #374151;
+  --el-table-row-hover-bg-color: #fbf8ef;
+
+  th.el-table__cell {
+    font-weight: 700;
+  }
+}
+
+.el-tag--primary {
+  --el-tag-bg-color: #f3f0ff;
+  --el-tag-border-color: #d8ccff;
+  --el-tag-text-color: var(--el-color-primary);
+}
+
+.el-switch.is-checked .el-switch__core {
+  border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary);
+}

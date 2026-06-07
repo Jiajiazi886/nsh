@@ -121,7 +121,7 @@ const navType = ref(settingsStore.navType)
 const theme = ref(settingsStore.theme);
 const sideTheme = ref(settingsStore.sideTheme);
 const storeSettings = computed(() => settingsStore);
-const predefineColors = ref(["#409EFF", "#ff4500", "#ff8c00", "#ffd700", "#90ee90", "#00ced1", "#1e90ff", "#c71585"]);
+const predefineColors = ref(["#6C3FF5", "#111827", "#FF9B6B", "#E8D754", "#30B08F", "#4AB7BD", "#A78BFA", "#F56C6C"]);
 
 /** 是否需要dynamicTitle */
 function dynamicTitleChange() {

@@ -24,8 +24,8 @@
     left: 0;
     z-index: 1001;
     overflow: hidden;
-    -webkit-box-shadow: 2px 0 6px rgba(0,21,41,.35);
-    box-shadow: 0px 0px 8px 0px rgba(0, 0, 0, 0.1);
+    -webkit-box-shadow: 2px 0 14px rgba(17, 24, 39, 0.22);
+    box-shadow: 2px 0 14px rgba(17, 24, 39, 0.22);
 
     // reset element-ui css
     .horizontal-collapse-transition {
@@ -84,7 +84,7 @@
     .sub-menu-title-noDropdown,
     .el-sub-menu__title {
       &:hover {
-        background-color: rgba(0, 0, 0, 0.06) !important;
+        background-color: rgba(108, 63, 245, 0.14) !important;
       }
     }
 
@@ -97,7 +97,7 @@
       min-width: vars.$base-sidebar-width !important;
 
       &:hover {
-        background-color: rgba(0, 0, 0, 0.06) !important;
+        background-color: rgba(108, 63, 245, 0.14) !important;
       }
     }
 
@@ -107,6 +107,22 @@
 
       &:hover {
         background-color: vars.$base-sub-menu-hover !important;
+      }
+    }
+
+    .el-menu-item.is-active {
+      position: relative;
+      background: linear-gradient(90deg, rgba(108, 63, 245, 0.28), rgba(255, 155, 107, 0.08)) !important;
+
+      &::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 10px;
+        bottom: 10px;
+        width: 4px;
+        border-radius: 0 999px 999px 0;
+        background: #e8d754;
       }
     }
   }
@@ -213,7 +229,7 @@
   .el-menu-item {
     &:hover {
       // you can use $sub-menuHover
-      background-color: rgba(0, 0, 0, 0.06) !important;
+      background-color: rgba(108, 63, 245, 0.14) !important;
     }
   }
 

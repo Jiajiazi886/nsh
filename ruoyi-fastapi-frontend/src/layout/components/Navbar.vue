@@ -142,7 +142,7 @@ async function toggleTheme(event) {
   overflow: hidden;
   position: relative;
   background: var(--navbar-bg);
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  box-shadow: 0 1px 0 rgba(17, 24, 39, 0.08);
   display: flex;
   align-items: center;
   // padding: 0 8px;
@@ -160,7 +160,7 @@ async function toggleTheme(event) {
     margin-right: 8px;
 
     &:hover {
-      background: rgba(0, 0, 0, 0.025);
+      background: var(--navbar-hover, rgba(108, 63, 245, 0.08));
     }
   }
 
@@ -211,7 +211,7 @@ async function toggleTheme(event) {
         transition: background 0.3s;
 
         &:hover {
-          background: rgba(0, 0, 0, 0.025);
+          background: var(--navbar-hover, rgba(108, 63, 245, 0.08));
         }
       }
 

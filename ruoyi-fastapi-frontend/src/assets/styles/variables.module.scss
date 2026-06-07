@@ -1,38 +1,38 @@
 // base color
-$blue: #324157;
-$light-blue: #333c46;
+$blue: #6C3FF5;
+$light-blue: #A78BFA;
 $red: #C03639;
 $pink: #E65D6E;
 $green: #30B08F;
 $tiffany: #4AB7BD;
-$yellow: #FEC171;
+$yellow: #E8D754;
 $panGreen: #30B08F;
 
 // 默认主题变量
-$menuText: #bfcbd9;
-$menuActiveText: #409eff;
-$menuBg: #304156;
-$menuHover: #263445;
+$menuText: #d1d5db;
+$menuActiveText: #E8D754;
+$menuBg: #2D2D2D;
+$menuHover: #3f3f46;
 
 // 浅色主题theme-light
 $menuLightBg: #ffffff;
 $menuLightHover: #f0f1f5;
 $menuLightText: #303133;
-$menuLightActiveText: #409EFF;
+$menuLightActiveText: #6C3FF5;
 
 // 基础变量
 $base-sidebar-width: 200px;
 $sideBarWidth: 200px;
 
 // 菜单暗色变量
-$base-menu-color: #bfcbd9;
+$base-menu-color: #d1d5db;
 $base-menu-color-active: #f4f4f5;
-$base-menu-background: #304156;
-$base-sub-menu-background: #1f2d3d;
-$base-sub-menu-hover: #001528;
+$base-menu-background: #2D2D2D;
+$base-sub-menu-background: #242424;
+$base-sub-menu-hover: #3f3f46;
 
 // 组件变量
-$--color-primary: #409EFF;
+$--color-primary: #6C3FF5;
 $--color-success: #67C23A;
 $--color-warning: #E6A23C;
 $--color-danger: #F56C6C;
@@ -71,9 +71,18 @@ $--color-info: #909399;
   --sidebar-bg: #{$menuBg};
   --sidebar-text: #{$menuText};
   --menu-hover: #{$menuHover};
+  --menu-active-text: #{$menuActiveText};
   
   --navbar-bg: #ffffff;
   --navbar-text: #303133;
+  --navbar-hover: #f3f0ff;
+
+  --auth-primary: #6C3FF5;
+  --auth-ink: #111827;
+  --auth-panel: #ffffff;
+  --auth-muted: #6b7280;
+  --auth-orange: #FF9B6B;
+  --auth-yellow: #E8D754;
   
   /* splitpanes default-theme 变量 */
   --splitpanes-default-bg: #ffffff;
@@ -89,20 +98,21 @@ html.dark {
   --el-text-color-regular: #d0d0d0;
   --el-border-color: #434343;
   --el-border-color-light: #434343;
+  --el-color-primary: #6C3FF5;
 
   /* primary */
-  --primary-bg: #18212b;
+  --primary-bg: #201834;
 
   /* 侧边栏 */
-  --sidebar-bg: #141414;
+  --sidebar-bg: #2D2D2D;
   --sidebar-text: #ffffff;
-  --menu-hover: #2d2d2d;
+  --menu-hover: #3f3f46;
   --menu-active-text: #{$menuActiveText};
 
   /* 顶部导航栏 */
-  --navbar-bg: #141414;
+  --navbar-bg: #1f1f1f;
   --navbar-text: #ffffff;
-  --navbar-hover: #141414;
+  --navbar-hover: #2d2d2d;
 
   /* 标签栏 */
   --tags-bg: #141414;
