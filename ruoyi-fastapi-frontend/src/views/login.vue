@@ -72,26 +72,6 @@
             </div>
           </el-form-item>
 
-          <el-form-item prop="code" v-if="captchaEnabled">
-            <label class="form-label">验证码</label>
-            <div class="captcha-row">
-              <el-input
-                v-model="loginForm.code"
-                size="large"
-                autocomplete="off"
-                placeholder="请输入验证码"
-                @focus="isTyping = true"
-                @blur="isTyping = false"
-                @keyup.enter="handleLogin"
-              >
-                <template #prefix><svg-icon icon-class="validCode" class="input-icon" /></template>
-              </el-input>
-              <button type="button" class="captcha-image" @click="getCode">
-                <img :src="codeUrl" alt="验证码" />
-              </button>
-            </div>
-          </el-form-item>
-
           <div class="form-options">
             <el-checkbox v-model="loginForm.rememberMe">记住密码</el-checkbox>
             <router-link v-if="register" class="auth-link" :to="'/register'">立即注册</router-link>
@@ -112,7 +92,7 @@
 </template>
 
 <script setup>
-import { getCodeImg } from "@/api/login";
+import { getAuthConfig } from "@/api/login";
 import Cookies from "js-cookie";
 import { encrypt, decrypt } from "@/utils/jsencrypt";
 import useUserStore from "@/store/modules/user";
@@ -129,20 +109,15 @@ const { proxy } = getCurrentInstance();
 const loginForm = ref({
   username: "",
   password: "",
-  rememberMe: false,
-  code: "",
-  uuid: ""
+  rememberMe: false
 });
 
 const loginRules = {
   username: [{ required: true, trigger: "blur", message: "请输入您的账号" }],
-  password: [{ required: true, trigger: "blur", message: "请输入您的密码" }],
-  code: [{ required: true, trigger: "change", message: "请输入验证码" }]
+  password: [{ required: true, trigger: "blur", message: "请输入您的密码" }]
 };
 
-const codeUrl = ref("");
 const loading = ref(false);
-const captchaEnabled = ref(true);
 const register = ref(false);
 const redirect = ref(undefined);
 const showPassword = ref(false);
@@ -189,21 +164,13 @@ function handleLogin() {
       setTimeout(() => {
         loginFailed.value = false;
       }, 3000);
-      if (captchaEnabled.value) {
-        getCode();
-      }
     });
   });
 }
 
-function getCode() {
-  getCodeImg().then(res => {
-    captchaEnabled.value = res.captchaEnabled === undefined ? true : res.captchaEnabled;
+function fetchAuthConfig() {
+  getAuthConfig().then(res => {
     register.value = res.registerEnabled === undefined ? false : res.registerEnabled;
-    if (captchaEnabled.value) {
-      codeUrl.value = "data:image/gif;base64," + res.img;
-      loginForm.value.uuid = res.uuid;
-    }
   });
 }
 
@@ -216,7 +183,7 @@ function getCookie() {
   loginForm.value.rememberMe = rememberMe === undefined ? false : Boolean(rememberMe);
 }
 
-getCode();
+fetchAuthConfig();
 getCookie();
 </script>
 
@@ -380,18 +347,13 @@ getCookie();
   font-weight: 700;
 }
 
-.password-field,
-.captcha-row {
+.password-field {
   width: 100%;
   display: flex;
   gap: 10px;
 }
 
 .password-field :deep(.el-input) {
-  flex: 1;
-}
-
-.captcha-row :deep(.el-input) {
   flex: 1;
 }
 
@@ -412,8 +374,7 @@ getCookie();
   color: #9ca3af;
 }
 
-.password-toggle,
-.captcha-image {
+.password-toggle {
   height: 48px;
   border: 1.5px solid rgba(209, 213, 219, 0.9);
   border-radius: 8px;
@@ -428,24 +389,10 @@ getCookie();
   font-weight: 700;
 }
 
-.password-toggle:hover,
-.captcha-image:hover {
+.password-toggle:hover {
   border-color: #6c3ff5;
   color: #6c3ff5;
   transform: translateY(-1px);
-}
-
-.captcha-image {
-  width: 116px;
-  padding: 0;
-  overflow: hidden;
-}
-
-.captcha-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 
 .form-options {
@@ -554,12 +501,5 @@ getCookie();
     font-size: 28px;
   }
 
-  .captcha-row {
-    flex-direction: column;
-  }
-
-  .captcha-image {
-    width: 100%;
-  }
 }
 </style>

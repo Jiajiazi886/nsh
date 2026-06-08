@@ -30,6 +30,11 @@ async def get_captcha_image(request: Request) -> Response:
     register_enabled = (
         await request.app.state.redis.get(f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.registerUser') == 'true'
     )
+    if not captcha_enabled:
+        return ResponseUtil.success(
+            model_content=CaptchaCode(captchaEnabled=False, registerEnabled=register_enabled, img='', uuid='')
+        )
+
     session_id = str(uuid.uuid4())
     captcha_result = await CaptchaService.create_captcha_image_service()
     image = captcha_result[0]

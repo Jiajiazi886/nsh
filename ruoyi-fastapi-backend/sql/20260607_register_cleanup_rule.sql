@@ -16,6 +16,12 @@ SET config_value = 'true',
     update_time = NOW()
 WHERE config_key = 'sys.account.registerUser';
 
+UPDATE sys_config
+SET config_value = 'false',
+    update_by = 'admin',
+    update_time = NOW()
+WHERE config_key = 'sys.account.captchaEnabled';
+
 INSERT INTO sys_config (
   config_name, config_key, config_value, config_type,
   create_by, create_time, update_by, update_time, remark

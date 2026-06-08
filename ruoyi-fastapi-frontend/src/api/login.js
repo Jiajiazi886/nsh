@@ -1,12 +1,10 @@
 import request from '@/utils/request'
 
 // 登录方法
-export function login(username, password, code, uuid) {
+export function login(username, password) {
   const data = {
     username,
-    password,
-    code,
-    uuid
+    password
   }
   return request({
     url: '/login',
@@ -48,10 +46,10 @@ export function logout() {
   })
 }
 
-// 获取验证码
-export function getCodeImg() {
+// 获取登录页配置
+export function getAuthConfig() {
   return request({
-    url: '/captchaImage',
+    url: '/authConfig',
     headers: {
       isToken: false
     },

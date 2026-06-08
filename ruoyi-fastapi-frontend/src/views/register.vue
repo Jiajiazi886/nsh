@@ -98,26 +98,6 @@
             </div>
           </el-form-item>
 
-          <el-form-item prop="code" v-if="captchaEnabled">
-            <label class="form-label">验证码</label>
-            <div class="captcha-row">
-              <el-input
-                v-model="registerForm.code"
-                size="large"
-                autocomplete="off"
-                placeholder="请输入验证码"
-                @focus="isTyping = true"
-                @blur="isTyping = false"
-                @keyup.enter="handleRegister"
-              >
-                <template #prefix><svg-icon icon-class="validCode" class="input-icon" /></template>
-              </el-input>
-              <button type="button" class="captcha-image" @click="getCode">
-                <img :src="codeUrl" alt="验证码" />
-              </button>
-            </div>
-          </el-form-item>
-
           <el-button :loading="loading" class="submit-button" size="large" @click.prevent="handleRegister">
             <span>{{ loading ? "创建中..." : "创建账号" }}</span>
             <span v-if="!loading" class="button-arrow" aria-hidden="true"></span>
@@ -139,7 +119,7 @@
 
 <script setup>
 import { ElMessageBox } from "element-plus";
-import { getCodeImg, register } from "@/api/login";
+import { register } from "@/api/login";
 import defaultSettings from "@/settings";
 import AnimatedCharacters from "@/components/AuthCharacters/AnimatedCharacters.vue";
 
@@ -151,9 +131,7 @@ const { proxy } = getCurrentInstance();
 const registerForm = ref({
   username: "",
   password: "",
-  confirmPassword: "",
-  code: "",
-  uuid: ""
+  confirmPassword: ""
 });
 
 const showPassword = ref(false);
@@ -183,8 +161,7 @@ const registerRules = {
   confirmPassword: [
     { required: true, trigger: "blur", message: "请再次输入您的密码" },
     { required: true, validator: equalToPassword, trigger: "blur" }
-  ],
-  code: [{ required: true, trigger: "change", message: "请输入验证码" }]
+  ]
 };
 
 const passwordStrength = computed(() => {
@@ -195,9 +172,7 @@ const passwordStrength = computed(() => {
   return score;
 });
 
-const codeUrl = ref("");
 const loading = ref(false);
-const captchaEnabled = ref(true);
 
 function handleRegister() {
   proxy.$refs.registerRef.validate(valid => {
@@ -224,24 +199,9 @@ function handleRegister() {
       setTimeout(() => {
         registerFailed.value = false;
       }, 3000);
-      if (captchaEnabled.value) {
-        getCode();
-      }
     });
   });
 }
-
-function getCode() {
-  getCodeImg().then(res => {
-    captchaEnabled.value = res.captchaEnabled === undefined ? true : res.captchaEnabled;
-    if (captchaEnabled.value) {
-      codeUrl.value = "data:image/gif;base64," + res.img;
-      registerForm.value.uuid = res.uuid;
-    }
-  });
-}
-
-getCode();
 </script>
 
 <style lang="scss" scoped>
@@ -406,15 +366,13 @@ getCode();
   font-weight: 700;
 }
 
-.password-field,
-.captcha-row {
+.password-field {
   width: 100%;
   display: flex;
   gap: 10px;
 }
 
-.password-field :deep(.el-input),
-.captcha-row :deep(.el-input) {
+.password-field :deep(.el-input) {
   flex: 1;
 }
 
@@ -435,8 +393,7 @@ getCode();
   color: #9ca3af;
 }
 
-.password-toggle,
-.captcha-image {
+.password-toggle {
   height: 48px;
   border: 1.5px solid rgba(209, 213, 219, 0.9);
   border-radius: 8px;
@@ -451,24 +408,10 @@ getCode();
   font-weight: 700;
 }
 
-.password-toggle:hover,
-.captcha-image:hover {
+.password-toggle:hover {
   border-color: #6c3ff5;
   color: #6c3ff5;
   transform: translateY(-1px);
-}
-
-.captcha-image {
-  width: 116px;
-  padding: 0;
-  overflow: hidden;
-}
-
-.captcha-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 
 .password-meter {
@@ -599,12 +542,5 @@ getCode();
     font-size: 28px;
   }
 
-  .captcha-row {
-    flex-direction: column;
-  }
-
-  .captcha-image {
-    width: 100%;
-  }
 }
 </style>

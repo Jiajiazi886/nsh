@@ -16,7 +16,7 @@ from common.enums import BusinessType, RedisInitKeyConfig
 from common.router import APIRouterPro
 from common.vo import CrudResponseModel, DataResponseModel, DynamicResponseModel, ResponseBaseModel
 from config.env import AppConfig, JwtConfig
-from module_admin.entity.vo.login_vo import LoginToken, RouterModel, Token, UserLogin, UserRegister
+from module_admin.entity.vo.login_vo import AuthConfig, LoginToken, RouterModel, Token, UserLogin, UserRegister
 from module_admin.entity.vo.user_vo import CurrentUserModel, EditUserModel
 from module_admin.service.login_service import CustomOAuth2PasswordRequestForm, LoginService, oauth2_scheme
 from module_admin.service.user_service import UserService
@@ -24,6 +24,20 @@ from utils.log_util import logger
 from utils.response_util import ResponseUtil
 
 login_controller = APIRouterPro(order_num=1, tags=['登录模块'])
+
+
+@login_controller.get(
+    '/authConfig',
+    summary='获取认证页配置接口',
+    description='用于获取登录页和注册页需要的公开配置',
+    response_model=DynamicResponseModel[AuthConfig],
+)
+async def get_auth_config(request: Request) -> Response:
+    register_enabled = (
+        await request.app.state.redis.get(f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.registerUser') == 'true'
+    )
+
+    return ResponseUtil.success(model_content=AuthConfig(registerEnabled=register_enabled))
 
 
 @login_controller.post(

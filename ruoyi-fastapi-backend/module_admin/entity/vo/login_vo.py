@@ -55,6 +55,12 @@ class CaptchaCode(BaseModel):
     uuid: str = Field(description='会话编号')
 
 
+class AuthConfig(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel)
+
+    register_enabled: bool = Field(description='是否启用注册')
+
+
 class SmsCode(BaseModel):
     is_success: bool | None = Field(default=None, description='操作是否成功')
     sms_code: str = Field(description='短信验证码')

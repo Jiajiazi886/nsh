@@ -166,3 +166,6 @@ ruoyi-fastapi-backend/vf_admin/
 ruoyi-fastapi-backend/build/
 ruoyi-fastapi-frontend/.vite/
 ruoyi-fastapi-frontend/dist/
+
+# Local UI reference project
+animated-characters-login-page-main/
