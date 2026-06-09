@@ -86,8 +86,8 @@
 	.el-table__header-wrapper, .el-table__fixed-header-wrapper {
 		th {
 			word-break: break-word;
-			background-color: #f8f8f9 !important;
-			color: #515a6e;
+			background-color: var(--app-charcoal) !important;
+			color: rgba(255, 255, 255, 0.9);
 			height: 40px !important;
 			font-size: 13px;
 		}
@@ -102,8 +102,8 @@
 /** 表单布局 **/
 .form-header {
     font-size:15px;
-	color:#6379bb;
-	border-bottom:1px solid #ddd;
+	color: var(--app-primary);
+	border-bottom:1px solid var(--app-border);
 	margin:8px 10px 25px 10px;
 	padding-bottom:5px
 }
@@ -144,9 +144,9 @@
 /* tree border */
 .tree-border {
     margin-top: 5px;
-    border: 1px solid var(--el-border-color-light, #e5e6e7);
-    background: var(--el-bg-color, #FFFFFF) none;
-    border-radius:4px;
+    border: 1px solid var(--app-border);
+    background: var(--app-panel-strong) none;
+    border-radius:18px;
     width: 100%;
 }
 
@@ -169,7 +169,7 @@
 /** 表格更多操作下拉样式 */
 .el-table .el-dropdown-link {
 	cursor: pointer;
-	color: #409EFF;
+	color: var(--app-primary);
 	margin-left: 10px;
 }
 
@@ -207,12 +207,14 @@
 }
 
 .el-card__header {
-	padding: 14px 15px 7px !important;
+	padding: 16px 18px 10px !important;
 	min-height: 40px;
+	color: var(--app-ink);
+	font-weight: 900;
 }
 
 .el-card__body {
-	padding: 15px 20px 20px 20px !important;
+	padding: 18px 22px 22px 22px !important;
 }
 
 .card-box {

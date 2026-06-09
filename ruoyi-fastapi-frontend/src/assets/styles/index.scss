@@ -4,14 +4,20 @@
 @use './sidebar.scss';
 @use './btn.scss';
 @use './ruoyi.scss';
+@use './liquid-glass.scss';
 
 body {
   height: 100%;
   margin: 0;
+  background:
+    radial-gradient(circle at 78% -12%, var(--app-yellow-soft), transparent 30%),
+    radial-gradient(circle at 18% 12%, var(--app-primary-soft), transparent 28%),
+    var(--app-bg);
+  color: var(--app-ink);
   -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-family: Helvetica Neue, Helvetica, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Arial, sans-serif;
+  font-family: "HarmonyOS Sans SC", "MiSans", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 label {
@@ -122,7 +128,21 @@ aside {
 
 //main-container全局样式
 .app-container {
-  padding: 20px;
+  min-height: 100%;
+  padding: 30px 32px 38px;
+  color: var(--app-ink);
+}
+
+.app-container::before {
+  content: "";
+  display: block;
+  height: 5px;
+  width: 154px;
+  margin-bottom: 22px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--app-orange), var(--app-yellow) 43%, var(--app-primary));
+  box-shadow: 0 14px 34px var(--app-orange-soft);
 }
 
 .components-container {
@@ -142,7 +162,7 @@ aside {
   text-align: right;
   padding-right: 20px;
   transition: 600ms ease position;
-  background: linear-gradient(90deg, rgba(32, 182, 249, 1) 0%, rgba(32, 182, 249, 1) 0%, rgba(33, 120, 241, 1) 100%, rgba(33, 120, 241, 1) 100%);
+  background: linear-gradient(90deg, var(--app-charcoal) 0%, var(--app-primary) 52%, var(--app-yellow) 100%);
 
   .subtitle {
     font-size: 20px;
@@ -160,11 +180,11 @@ aside {
 
 .link-type,
 .link-type:focus {
-  color: #337ab7;
+  color: var(--app-primary);
   cursor: pointer;
 
   &:hover {
-    color: rgb(32, 160, 255);
+    color: var(--app-primary-dark);
   }
 }
 
@@ -175,5 +195,21 @@ aside {
     display: inline-block;
     vertical-align: middle;
     margin-bottom: 10px;
+  }
+}
+
+::selection {
+  background: var(--app-yellow);
+  color: #111827;
+}
+
+@media (max-width: 991px) {
+  .app-container {
+    padding: 22px 18px 30px;
+  }
+
+  .app-container::before {
+    width: 120px;
+    margin-bottom: 18px;
   }
 }

@@ -87,8 +87,9 @@ function isActive(r) {
 function activeStyle(tag) {
   if (!isActive(tag)) return {};
   return {
-    "background-color": theme.value,
-    "border-color": theme.value
+    "background": "linear-gradient(92deg, var(--app-charcoal), var(--app-primary))",
+    "border-color": "rgba(255, 255, 255, 0.22)",
+    "box-shadow": "0 14px 30px rgba(17, 24, 39, 0.18)"
   };
 }
 function isAffix(tag) {
@@ -241,25 +242,39 @@ function handleScroll() {
 
 <style lang="scss" scoped>
 .tags-view-container {
-  height: 34px;
+  height: 48px;
   width: 100%;
-  background: var(--tags-bg, #fff);
+  background:
+    radial-gradient(circle at 12% -10%, var(--app-yellow-soft), transparent 36%),
+    linear-gradient(90deg, var(--app-primary-soft), transparent 38%),
+    var(--tags-bg, #fff);
+  border-top: 1px solid var(--app-border);
   border-bottom: 1px solid var(--tags-item-border, #d8dce5);
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, .12), 0 0 3px 0 rgba(0, 0, 0, .04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(18px);
   .tags-view-wrapper {
     .tags-view-item {
       display: inline-block;
       position: relative;
       cursor: pointer;
-      height: 26px;
-      line-height: 26px;
+      height: 30px;
+      line-height: 30px;
       border: 1px solid var(--tags-item-border, #d8dce5);
       color: var(--tags-item-text, #495060);
       background: var(--tags-item-bg, #fff);
-      padding: 0 8px;
+      padding: 0 12px;
       font-size: 12px;
-      margin-left: 5px;
-      margin-top: 4px;
+      font-weight: 800;
+      margin-left: 8px;
+      margin-top: 9px;
+      border-radius: 999px;
+      transition: all 0.18s ease;
+
+      &:hover {
+        background: var(--tags-item-hover, #eee);
+        color: var(--app-ink);
+        transform: translateY(-1px);
+      }
 
       &:first-of-type {
         margin-left: 15px;
@@ -270,13 +285,11 @@ function handleScroll() {
       }
 
       &.active {
-        background-color: #42b983;
         color: #fff;
-        border-color: #42b983;
 
         &::before {
           content: '';
-          background: #fff;
+          background: #E8D754;
           display: inline-block;
           width: 8px;
           height: 8px;
@@ -299,11 +312,11 @@ function handleScroll() {
     position: absolute;
     list-style-type: none;
     padding: 5px 0;
-    border-radius: 4px;
+    border-radius: 14px;
     font-size: 12px;
-    font-weight: 400;
+    font-weight: 800;
     color: var(--tags-item-text, #333);
-    box-shadow: 2px 2px 3px 0 rgba(0, 0, 0, .3);
+    box-shadow: 0 16px 34px rgba(17, 24, 39, 0.2);
     border: 1px solid var(--el-border-color-light, #e4e7ed);
 
     li {
@@ -313,8 +326,68 @@ function handleScroll() {
 
       &:hover {
         background: var(--tags-item-hover, #eee);
+        color: var(--app-ink);
       }
     }
+  }
+}
+
+:global(.themeLight) .tags-view-container {
+  height: 52px;
+  background:
+    linear-gradient(90deg, rgba(105, 71, 242, 0.07), transparent 42%),
+    rgba(255, 255, 255, 0.7);
+  border-color: rgba(38, 50, 69, 0.1);
+
+  .tags-view-wrapper .tags-view-item {
+    height: 32px;
+    line-height: 32px;
+    margin-top: 10px;
+    color: #334155;
+    background: rgba(255, 255, 255, 0.84);
+    border-color: rgba(38, 50, 69, 0.12);
+
+    &:hover {
+      color: #111827;
+      background: rgba(105, 71, 242, 0.08);
+    }
+
+    &.active {
+      color: #ffffff;
+    }
+  }
+}
+
+:global(.themeDark) .tags-view-container {
+  height: 42px;
+  background:
+    linear-gradient(90deg, rgba(155, 121, 255, 0.12), transparent 42%),
+    rgba(7, 12, 22, 0.64);
+  border-color: rgba(255, 255, 255, 0.1);
+
+  .tags-view-wrapper .tags-view-item {
+    height: 26px;
+    line-height: 26px;
+    margin-top: 8px;
+    color: #d8e0ec;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+
+    &:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    &.active {
+      color: #ffffff;
+    }
+  }
+}
+
+html.dark {
+  .tags-view-container .tags-view-wrapper .tags-view-item:hover,
+  .tags-view-container .contextmenu li:hover {
+    color: var(--app-ink);
   }
 }
 </style>

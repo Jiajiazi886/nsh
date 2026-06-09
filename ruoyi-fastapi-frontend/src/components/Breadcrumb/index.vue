@@ -87,11 +87,23 @@ getBreadcrumb()
 .app-breadcrumb.el-breadcrumb {
   display: inline-block;
   font-size: 14px;
-  line-height: 50px;
+  line-height: 66px;
+  color: var(--app-muted);
+  font-weight: 800;
 
   .no-redirect {
-    color: #97a8be;
+    color: var(--app-ink-soft);
     cursor: text;
+  }
+
+  :deep(.el-breadcrumb__inner a) {
+    color: var(--app-ink);
+    font-weight: 900;
+  }
+
+  :deep(.el-breadcrumb__separator) {
+    color: var(--app-primary);
+    font-weight: 900;
   }
 }
 </style>

@@ -28,27 +28,27 @@ import Sidebar from './components/Sidebar/index.vue'
 import { AppMain, Navbar, Settings, TagsView } from './components'
 import useAppStore from '@/store/modules/app'
 import useSettingsStore from '@/store/modules/settings'
-import useUserStore from '@/store/modules/user'
 import { checkPermi } from '@/utils/permission'
 import { listNotice } from '@/api/system/notice'
 
 const settingsStore = useSettingsStore()
-const theme = computed(() => settingsStore.theme);
-const sideTheme = computed(() => settingsStore.sideTheme);
-const sidebar = computed(() => useAppStore().sidebar);
-const device = computed(() => useAppStore().device);
-const needTagsView = computed(() => settingsStore.tagsView);
-const fixedHeader = computed(() => settingsStore.fixedHeader);
+const theme = computed(() => settingsStore.theme)
+const sidebar = computed(() => useAppStore().sidebar)
+const device = computed(() => useAppStore().device)
+const needTagsView = computed(() => settingsStore.tagsView)
+const fixedHeader = computed(() => settingsStore.fixedHeader)
 
 const classObj = computed(() => ({
   hideSidebar: !sidebar.value.opened,
   openSidebar: sidebar.value.opened,
   withoutAnimation: sidebar.value.withoutAnimation,
+  themeDark: settingsStore.isDark,
+  themeLight: !settingsStore.isDark,
   mobile: device.value === 'mobile'
 }))
 
-const { width, height } = useWindowSize();
-const WIDTH = 992; // refer to Bootstrap's responsive design
+const { width } = useWindowSize()
+const WIDTH = 992
 
 watch(() => device.value, () => {
   if (device.value === 'mobile' && sidebar.value.opened) {
@@ -69,9 +69,9 @@ function handleClickOutside() {
   useAppStore().closeSideBar({ withoutAnimation: false })
 }
 
-const settingRef = ref(null);
+const settingRef = ref(null)
 function setLayout() {
-  settingRef.value.openSetting();
+  settingRef.value.openSetting()
 }
 
 const noticeVisible = ref(false)
@@ -96,17 +96,36 @@ onMounted(async () => {
 <style lang="scss" scoped>
 @use "@/assets/styles/mixin.scss" as mix;
 @use "@/assets/styles/variables.module.scss" as vars;
+@use "@/assets/styles/liquid-glass.scss" as glass;
 
 .app-wrapper {
   @include mix.clearfix;
   position: relative;
   height: 100%;
   width: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 80% -16%, var(--app-yellow-soft), transparent 30%),
+    radial-gradient(circle at 18% 108%, var(--app-primary-soft), transparent 34%),
+    linear-gradient(rgba(38, 50, 69, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(38, 50, 69, 0.045) 1px, transparent 1px),
+    var(--app-shell-bg);
+  background-size: 100% 100%, 100% 100%, 24px 24px, 24px 24px, 100% 100%;
 
   &.mobile.openSidebar {
     position: fixed;
     top: 0;
   }
+}
+
+.themeDark.app-wrapper {
+  background:
+    radial-gradient(circle at 82% -16%, rgba(240, 223, 97, 0.14), transparent 30%),
+    radial-gradient(circle at 18% 108%, rgba(155, 121, 255, 0.22), transparent 34%),
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    var(--app-shell-bg);
+  background-size: 100% 100%, 100% 100%, 24px 24px, 24px 24px, 100% 100%;
 }
 
 .main-container:has(.fixed-header) {
@@ -115,22 +134,30 @@ onMounted(async () => {
 }
 
 .drawer-bg {
-  background: #000;
-  opacity: 0.3;
-  width: 100%;
-  top: 0;
-  height: 100%;
   position: absolute;
   z-index: 999;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  opacity: 0.3;
 }
 
 .fixed-header {
+  @include glass.liquid-glass(0 0 18px 18px, 18px, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.74), 0 14px 34px rgba(39, 53, 74, 0.12));
+
   position: fixed;
   top: 0;
   right: 0;
   z-index: 9;
   width: calc(100% - #{vars.$base-sidebar-width});
-  transition: width 0.28s;
+  transition: width 0.28s ease;
+}
+
+.themeDark .fixed-header {
+  background: rgba(7, 12, 22, 0.74);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 }
 
 .hideSidebar .fixed-header {
@@ -144,29 +171,35 @@ onMounted(async () => {
 .mobile .fixed-header {
   width: 100%;
 }
+
 .notice-item {
   border-bottom: 1px solid #ebeef5;
   padding: 12px 0;
 }
+
 .notice-item:last-child {
   border-bottom: none;
 }
+
 .notice-title {
   font-size: 16px;
   color: #303133;
   margin: 0 0 8px;
 }
+
 .notice-content {
   font-size: 14px;
   color: #606266;
   line-height: 1.8;
   word-break: break-all;
 }
+
 .notice-time {
   font-size: 12px;
   color: #909399;
   margin-top: 8px;
 }
+
 .notice-empty {
   text-align: center;
   color: #909399;

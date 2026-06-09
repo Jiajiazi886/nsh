@@ -15,8 +15,6 @@
 
 <script setup>
 import logo from '@/assets/logo/logo.png'
-import useSettingsStore from '@/store/modules/settings'
-import variables from '@/assets/styles/variables.module.scss'
 
 defineProps({
   collapse: {
@@ -26,29 +24,15 @@ defineProps({
 })
 
 const title = import.meta.env.VITE_APP_TITLE;
-const settingsStore = useSettingsStore();
-const sideTheme = computed(() => settingsStore.sideTheme);
 
 // 获取Logo背景色
 const getLogoBackground = computed(() => {
-  if (settingsStore.isDark) {
-    return 'var(--sidebar-bg)';
-  }
-  if (settingsStore.navType == 3) {
-    return variables.menuLightBg
-  }
-  return sideTheme.value === 'theme-dark' ? variables.menuBg : variables.menuLightBg;
+  return 'transparent';
 });
 
 // 获取Logo文字颜色
 const getLogoTextColor = computed(() => {
-  if (settingsStore.isDark) {
-    return 'var(--sidebar-text)';
-  }
-  if (settingsStore.navType == 3) {
-    return variables.menuLightText
-  }
-  return sideTheme.value === 'theme-dark' ? '#fff' : variables.menuLightText;
+  return 'var(--sidebar-text)';
 });
 </script>
 
@@ -64,31 +48,50 @@ const getLogoTextColor = computed(() => {
 
 .sidebar-logo-container {
   position: relative;
-  height: 50px;
-  line-height: 50px;
-  background: v-bind(getLogoBackground);
+  height: 82px;
+  line-height: 82px;
+  background:
+    radial-gradient(circle at 22% 10%, var(--app-yellow-soft), transparent 34%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12), transparent 72%),
+    v-bind(getLogoBackground);
   text-align: center;
   overflow: hidden;
+  border-bottom: 1px solid var(--app-sidebar-line);
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 28px;
+    right: 28px;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(232, 215, 84, 0.6), transparent);
+  }
 
   & .sidebar-logo-link {
     height: 100%;
     width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 
     & .sidebar-logo {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       vertical-align: middle;
       margin-right: 12px;
+      filter: drop-shadow(0 10px 14px rgba(17, 24, 39, 0.24));
     }
 
     & .sidebar-title {
       display: inline-block;
       margin: 0;
       color: v-bind(getLogoTextColor);
-      font-weight: 600;
-      line-height: 50px;
+      font-weight: 900;
+      line-height: 82px;
       font-size: 14px;
-      font-family: Avenir, Helvetica Neue, Arial, Helvetica, sans-serif;
+      letter-spacing: 0;
+      font-family: "HarmonyOS Sans SC", "MiSans", "PingFang SC", sans-serif;
       vertical-align: middle;
     }
   }
