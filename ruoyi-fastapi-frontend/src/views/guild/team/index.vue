@@ -92,28 +92,22 @@
 import { ref, reactive, onMounted } from 'vue'
 import { getMemberList, editMember } from '@/api/guild/member'
 import { getTeams, addTeam, deleteTeam } from '@/api/guild/team'
-import { getClassColors } from '@/api/guild/classColor'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useGuildClassColors } from '@/utils/guildClassColor'
 
 const loading = ref(false)
 const teamLoading = ref(false)
 const showTeamDialog = ref(false)
 const allMembers = ref([])
 const teams = ref([])
-const classColorMap = ref({})
+const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
 const teamForm = reactive({
   team_name: ''
 })
 
 function getClassStyle(className) {
-  if (!className) return {}
-  const c = classColorMap.value[className]
-  if (!c || c.bg_color === '#FFFFFF') return {}
-  return {
-    backgroundColor: c.bg_color,
-    color: c.text_color,
-  }
+  return getGuildClassStyle(className)
 }
 
 async function fetchMembers() {
@@ -142,11 +136,7 @@ async function fetchTeams() {
 
 async function fetchClassColors() {
   try {
-    const res = await getClassColors()
-    const data = res.data || res
-    const map = {}
-    ;(data || []).forEach(item => { map[item.class_name] = item })
-    classColorMap.value = map
+    await loadGuildClassColors()
   } catch {
     // 静默处理
   }
@@ -260,7 +250,10 @@ onMounted(() => {
 .class-tag {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
   font-size: 13px;
+  font-weight: 700;
+  background: var(--el-fill-color-light);
 }
 </style>

@@ -1,7 +1,11 @@
+from datetime import datetime
+
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel
 from exceptions.exception import ServiceException
+from module_admin.entity.do.user_do import SysUser
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_guild.dao.battle_dao import BattleDao
 from module_guild.dao.member_dao import MemberDao
@@ -15,6 +19,50 @@ from module_guild.entity.vo.member_vo import (
 
 
 class MemberService:
+    @classmethod
+    async def get_guild_info_service(cls, db: AsyncSession, current_user: CurrentUserModel) -> dict:
+        user_id = current_user.user.user_id
+        members = await MemberDao.query_member_list(db, user_id)
+        class_count_map: dict[str, int] = {}
+        for member in members:
+            class_name = (member.player_class or '未设置').strip() or '未设置'
+            class_count_map[class_name] = class_count_map.get(class_name, 0) + 1
+
+        class_stats = [
+            {'class_name': class_name, 'count': count}
+            for class_name, count in sorted(class_count_map.items(), key=lambda item: (-item[1], item[0]))
+        ]
+
+        return {
+            'guild_id': user_id,
+            'guild_name': current_user.user.nick_name or current_user.user.user_name or '',
+            'member_count': len(members),
+            'class_count': len(class_stats),
+            'class_stats': class_stats,
+        }
+
+    @classmethod
+    async def update_guild_name_service(
+        cls, db: AsyncSession, current_user: CurrentUserModel, guild_name: str
+    ) -> CrudResponseModel:
+        name = (guild_name or '').strip()
+        if not name:
+            raise ServiceException(message='帮会名称不能为空')
+        if len(name) > 30:
+            raise ServiceException(message='帮会名称长度不能超过30个字符')
+
+        await db.execute(
+            update(SysUser)
+            .where(SysUser.user_id == current_user.user.user_id)
+            .values(
+                nick_name=name,
+                update_by=current_user.user.user_name,
+                update_time=datetime.now(),
+            )
+        )
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='帮会名称保存成功')
+
     @classmethod
     async def query_member_list_service(cls, db: AsyncSession, current_user: CurrentUserModel) -> list:
         user_id = current_user.user.user_id

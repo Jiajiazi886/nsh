@@ -12,6 +12,7 @@ from module_guild.entity.vo.member_vo import (
     MemberBatchDeleteModel,
     MemberCreateModel,
     MemberEditModel,
+    GuildInfoUpdateModel,
     MemberImportModel,
     MemberProfileEditModel,
 )
@@ -33,6 +34,33 @@ async def get_member_list(
         return ResponseUtil.success(data=result)
     except Exception as e:
         logger.error(f'获取成员列表失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+@member_controller.get('/guild-info', summary='获取帮会信息', dependencies=[UserInterfaceAuthDependency('guild:member:list')])
+async def get_guild_info(
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await MemberService.get_guild_info_service(query_db, current_user)
+        return ResponseUtil.success(data=result)
+    except Exception as e:
+        logger.error(f'获取帮会信息失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+@member_controller.put('/guild-name', summary='修改帮会名称', dependencies=[UserInterfaceAuthDependency('guild:member:edit')])
+async def update_guild_name(
+    data: GuildInfoUpdateModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await MemberService.update_guild_name_service(query_db, current_user, data.guild_name)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'修改帮会名称失败: {str(e)}')
         return ResponseUtil.error(msg=str(e))
 
 @member_controller.post('', summary='添加帮会成员', dependencies=[UserInterfaceAuthDependency('guild:member:add')])

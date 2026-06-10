@@ -58,8 +58,21 @@
               <el-descriptions :column="1" border class="status-descriptions">
                 <el-descriptions-item label="申请帮会">{{ currentApplication.guild_name || '--' }}</el-descriptions-item>
                 <el-descriptions-item label="玩家名">{{ currentApplication.player_name || '--' }}</el-descriptions-item>
-                <el-descriptions-item label="主职业">{{ currentApplication.player_class || '未填写' }}</el-descriptions-item>
-                <el-descriptions-item label="副职">{{ currentApplication.secondary_class || '未填写' }}</el-descriptions-item>
+                <el-descriptions-item label="主职业">
+                  <span class="class-tag" :style="getGuildClassStyle(currentApplication.player_class)">
+                    {{ currentApplication.player_class || '未填写' }}
+                  </span>
+                </el-descriptions-item>
+                <el-descriptions-item label="副职">
+                  <span
+                    v-if="currentApplication.secondary_class"
+                    class="class-tag"
+                    :style="getGuildClassStyle(currentApplication.secondary_class)"
+                  >
+                    {{ currentApplication.secondary_class }}
+                  </span>
+                  <span v-else>未填写</span>
+                </el-descriptions-item>
                 <el-descriptions-item label="备注">{{ currentApplication.remark || '无' }}</el-descriptions-item>
                 <el-descriptions-item label="申请时间">{{ formatDateTime(currentApplication.apply_time) }}</el-descriptions-item>
               </el-descriptions>
@@ -223,8 +236,21 @@
             <el-table-column type="index" label="序号" width="60" />
             <el-table-column prop="guild_name" label="帮会名称" min-width="140" />
             <el-table-column prop="player_name" label="玩家名" min-width="120" />
-            <el-table-column prop="player_class" label="主职业" width="100" />
-            <el-table-column prop="secondary_class" label="副职" width="100" />
+            <el-table-column prop="player_class" label="主职业" width="100">
+              <template #default="{ row }">
+                <span class="class-tag" :style="getGuildClassStyle(row.player_class)">
+                  {{ row.player_class || '--' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="secondary_class" label="副职" width="100">
+              <template #default="{ row }">
+                <span v-if="row.secondary_class" class="class-tag" :style="getGuildClassStyle(row.secondary_class)">
+                  {{ row.secondary_class }}
+                </span>
+                <span v-else>--</span>
+              </template>
+            </el-table-column>
             <el-table-column label="状态" width="100" align="center">
               <template #default="{ row }">
                 <el-tag :type="getStatusTagType(row)">{{ getApplicationStatusText(row) }}</el-tag>
@@ -257,8 +283,8 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import useUserStore from '@/store/modules/user'
-import { getClassColors } from '@/api/guild/classColor'
 import { getMyJoinStatus, quitGuild, searchGuilds, submitJoinApplication } from '@/api/guild/join'
+import { useGuildClassColors } from '@/utils/guildClassColor'
 
 const DEFAULT_CLASS_OPTIONS = ['九灵', '沧澜', '潮光', '玄机', '碎梦', '神相', '素问', '血河', '铁衣', '鸿音', '龙吟']
 
@@ -277,6 +303,7 @@ const currentApplication = ref(null)
 const applications = ref([])
 const formRef = ref()
 const classOptions = ref([...DEFAULT_CLASS_OPTIONS])
+const { classColorMap, getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
 const joinForm = reactive({
   player_name: '',
@@ -373,14 +400,9 @@ function handleExternalGuildChange() {
 
 async function fetchClassOptions() {
   try {
-    const res = await getClassColors()
-    const data = res.data || res || []
+    await loadGuildClassColors()
     const merged = new Set(DEFAULT_CLASS_OPTIONS)
-    ;(data || []).forEach(item => {
-      if (item?.class_name) {
-        merged.add(item.class_name)
-      }
-    })
+    Object.keys(classColorMap.value).forEach(item => merged.add(item))
     classOptions.value = Array.from(merged)
   } catch {
     classOptions.value = [...DEFAULT_CLASS_OPTIONS]
@@ -555,6 +577,19 @@ onBeforeUnmount(() => {
 
 .block-alert {
   margin-bottom: 16px;
+}
+
+.class-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: var(--el-fill-color-light);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 @media (max-width: 768px) {

@@ -7,6 +7,21 @@ export function getMemberList() {
   })
 }
 
+export function getGuildInfo() {
+  return request({
+    url: '/guild/member/guild-info',
+    method: 'get'
+  })
+}
+
+export function updateGuildName(guildName) {
+  return request({
+    url: '/guild/member/guild-name',
+    method: 'put',
+    data: { guild_name: guildName }
+  })
+}
+
 export function getMyMemberProfile() {
   return request({
     url: '/guild/member/my-profile',

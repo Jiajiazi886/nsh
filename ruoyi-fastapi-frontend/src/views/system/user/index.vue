@@ -312,7 +312,6 @@
           </el-col>
           <el-col :span="12">
             <el-form-item
-              v-if="form.userId == undefined"
               label="用户名称"
               prop="userName"
             >
@@ -732,6 +731,24 @@ function reset() {
   };
   proxy.resetForm("userRef");
 }
+function buildUserPayload() {
+  const payload = {
+    userId: form.value.userId,
+    userName: form.value.userName?.trim(),
+    nickName: form.value.nickName?.trim(),
+    email: form.value.email || "",
+    sex: form.value.sex !== undefined && form.value.sex !== null ? String(form.value.sex) : undefined,
+    status: form.value.status !== undefined && form.value.status !== null ? String(form.value.status) : "0",
+    remark: form.value.remark || "",
+    roleIds: Array.isArray(form.value.roleIds)
+      ? form.value.roleIds.map((item) => Number(item)).filter((item) => !Number.isNaN(item))
+      : [],
+  };
+  if (form.value.password) {
+    payload.password = form.value.password;
+  }
+  return payload;
+}
 function cancel() {
   open.value = false;
   reset();
@@ -760,14 +777,15 @@ function handleUpdate(row) {
 function submitForm() {
   proxy.$refs["userRef"].validate((valid) => {
     if (valid) {
+      const payload = buildUserPayload();
       if (form.value.userId != undefined) {
-        updateUser(form.value).then((response) => {
+        updateUser(payload).then((response) => {
           proxy.$modal.msgSuccess("修改成功");
           open.value = false;
           getList();
         });
       } else {
-        addUser(form.value).then((response) => {
+        addUser(payload).then((response) => {
           proxy.$modal.msgSuccess("新增成功");
           open.value = false;
           getList();

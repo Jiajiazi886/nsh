@@ -312,10 +312,10 @@ class UserService:
         :return: None
         """
         if page_object.type not in ['status', 'avatar', 'pwd']:
-            del edit_user['role_ids']
-            del edit_user['role']
+            edit_user.pop('role_ids', None)
+            edit_user.pop('role', None)
         else:
-            del edit_user['type']
+            edit_user.pop('type', None)
 
     @classmethod
     async def edit_user_services(cls, query_db: AsyncSession, page_object: EditUserModel) -> CrudResponseModel:

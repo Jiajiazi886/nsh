@@ -39,7 +39,13 @@
               >
                 <el-table-column prop="guild_name" label="帮会" width="80" fixed />
                 <el-table-column prop="player_name" label="玩家" width="120" fixed sortable />
-                <el-table-column prop="player_class" label="职业" width="80" sortable />
+                <el-table-column prop="player_class" label="职业" width="90" sortable>
+                  <template #default="{ row: r }">
+                    <span class="class-tag" :style="getGuildClassStyle(r.player_class)">
+                      {{ r.player_class || '--' }}
+                    </span>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="kills" label="击败" width="70" sortable />
                 <el-table-column prop="qingquan_kills" label="清泉击败" width="90" sortable />
                 <el-table-column prop="assists" label="助攻" width="70" sortable />
@@ -136,11 +142,13 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBattleList, getBattleRecords, deleteBattle } from '@/api/guild/battle'
+import { useGuildClassColors } from '@/utils/guildClassColor'
 
 const loading = ref(false)
 const tableData = ref([])
 const total = ref(0)
 const guildNames = ref([])
+const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
 const queryParams = reactive({
   page: 1,
@@ -346,6 +354,7 @@ async function handleDelete(row) {
 
 onMounted(() => {
   fetchList()
+  loadGuildClassColors()
 })
 </script>
 
@@ -376,5 +385,18 @@ onMounted(() => {
 .compare-text {
   font-size: 13px;
   color: #606266;
+}
+
+.class-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: var(--el-fill-color-light);
+  font-size: 12px;
+  font-weight: 700;
 }
 </style>

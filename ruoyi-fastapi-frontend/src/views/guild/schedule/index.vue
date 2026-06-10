@@ -62,7 +62,12 @@
               </span>
             </div>
             <div class="member-meta">
-              <span v-if="member.secondary_class">副职：{{ member.secondary_class }}</span>
+              <span v-if="member.secondary_class" class="secondary-class-line">
+                副职：
+                <span class="class-tag mini-class-tag" :style="getClassStyle(member.secondary_class)">
+                  {{ member.secondary_class }}
+                </span>
+              </span>
               <span>{{ getAssignedText(member.member_id) || '未排表' }}</span>
             </div>
           </div>
@@ -216,7 +221,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMemberList } from '@/api/guild/member'
-import { getClassColors } from '@/api/guild/classColor'
 import { getApprovedBattleRegistrationsForSchedule } from '@/api/guild/battle'
 import {
   addScheduleSquad,
@@ -231,11 +235,12 @@ import {
   saveScheduleAssignment,
   saveScheduleSnapshot
 } from '@/api/guild/schedule'
+import { useGuildClassColors } from '@/utils/guildClassColor'
 
 const loading = ref(false)
 const members = ref([])
 const schedule = ref({ teams: [] })
-const classColorMap = ref({})
+const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 const keyword = ref('')
 const selectedClasses = ref([])
 const onlyApprovedBattleMembers = ref(true)
@@ -295,13 +300,7 @@ function getAssignedText(memberId) {
 }
 
 function getClassStyle(className) {
-  if (!className) return {}
-  const color = classColorMap.value[className]
-  if (!color || color.bg_color === '#FFFFFF') return {}
-  return {
-    backgroundColor: color.bg_color,
-    color: color.text_color
-  }
+  return getGuildClassStyle(className)
 }
 
 function getTeamMemberCount(team) {
@@ -508,12 +507,7 @@ async function fetchHistory() {
 }
 
 async function fetchClassColors() {
-  const res = await getClassColors()
-  const map = {}
-  ;((res.data || res) || []).forEach(item => {
-    map[item.class_name] = item
-  })
-  classColorMap.value = map
+  await loadGuildClassColors()
 }
 
 async function fetchData() {
@@ -671,11 +665,24 @@ onMounted(fetchData)
   justify-content: center;
   min-width: 42px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
   font-size: 12px;
   background: var(--el-fill-color-light);
   color: var(--el-text-color-regular);
   white-space: nowrap;
+}
+
+.mini-class-tag {
+  min-width: 0;
+  padding: 1px 7px;
+  font-size: 12px;
+}
+
+.secondary-class-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .schedule-actions,
@@ -782,7 +789,8 @@ onMounted(fetchData)
   min-height: 26px;
   margin-bottom: 6px;
   padding: 3px 6px 3px 8px;
-  border-radius: 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
   background: var(--el-fill-color-light);
   color: var(--el-text-color-regular);
   display: flex;
@@ -882,7 +890,8 @@ onMounted(fetchData)
 
 .preview-chip {
   padding: 2px 7px;
-  border-radius: 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
   background: var(--el-fill-color-light);
   color: var(--el-text-color-regular);
   font-size: 12px;

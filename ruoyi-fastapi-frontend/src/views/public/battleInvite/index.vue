@@ -17,6 +17,74 @@
 
       <el-card v-else shadow="never" class="action-card">
         <el-tabs v-model="activeTab">
+          <el-tab-pane label="约战报名" name="signup">
+            <div class="member-picker">
+              <el-input
+                v-model="memberKeyword"
+                placeholder="输入帮会内成员名字后自动搜索"
+                clearable
+                class="member-search"
+              />
+
+              <div v-if="showMemberDropdown" class="member-dropdown">
+                <div v-if="memberSearching" class="member-dropdown-status">搜索中...</div>
+                <div v-else-if="!memberList.length" class="member-dropdown-status">没有匹配的帮会成员</div>
+                <template v-else>
+                  <button
+                    v-for="member in memberList"
+                    :key="member.member_id"
+                    type="button"
+                    class="member-option"
+                    @click="handleMemberSelect(member)"
+                  >
+                    <span class="member-option-main">
+                      <strong>{{ member.player_name }}</strong>
+                      <span>{{ member.role_in_guild || '成员' }}</span>
+                    </span>
+                    <span class="member-option-meta">
+                      <span>主职业：{{ member.player_class || '未设置' }}</span>
+                      <span>副职：{{ member.secondary_class || '未设置' }}</span>
+                    </span>
+                    <span v-if="member.remark" class="member-option-remark">{{ member.remark }}</span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <el-form :model="signupForm" label-width="96px" class="signup-form">
+              <el-form-item label="已选择">
+                <el-input :model-value="selectedMember?.player_name || ''" placeholder="请先选择成员" disabled />
+              </el-form-item>
+              <el-form-item label="报名职业">
+                <el-select
+                  v-model="signupForm.player_class"
+                  placeholder="可临时调整本次约战职业"
+                  clearable
+                  filterable
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="item in professionOptions"
+                    :key="item.professionId"
+                    :label="item.professionName"
+                    :value="item.professionName"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="报名副职">
+                <el-input v-model="signupForm.secondary_class" placeholder="可临时调整本次约战副职" maxlength="20" />
+              </el-form-item>
+              <el-form-item label="备注">
+                <el-input v-model="signupForm.remark" type="textarea" :rows="3" maxlength="500" show-word-limit />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :disabled="!selectedMember" :loading="signupLoading" @click="submitSignup">
+                  确认报名
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
+
           <el-tab-pane label="申请加入帮会" name="join">
             <el-form ref="joinFormRef" :model="joinForm" :rules="joinRules" label-width="96px">
               <el-form-item label="玩家名" prop="player_name">
@@ -49,73 +117,6 @@
               </el-form-item>
             </el-form>
           </el-tab-pane>
-
-          <el-tab-pane label="约战报名" name="signup">
-            <el-input
-              v-model="memberKeyword"
-              placeholder="输入帮会内成员名字后自动搜索"
-              clearable
-              class="member-search"
-            />
-
-            <el-table
-              v-loading="memberLoading"
-              :data="memberList"
-              border
-              stripe
-              class="member-table"
-              highlight-current-row
-              @current-change="handleMemberSelect"
-            >
-              <el-table-column prop="player_name" label="玩家名" min-width="120" />
-              <el-table-column prop="player_class" label="主职业" width="100" />
-              <el-table-column prop="secondary_class" label="副职" width="100" />
-              <el-table-column prop="role_in_guild" label="帮会身份" width="110" />
-              <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
-              <template #empty>
-                <el-empty :description="memberKeyword ? '没有匹配的帮会成员' : '输入名字搜索帮会成员'" />
-              </template>
-            </el-table>
-
-            <el-form :model="signupForm" label-width="96px" class="signup-form">
-              <el-form-item label="已选择">
-                <el-input :model-value="selectedMember?.player_name || ''" placeholder="请先选择成员" disabled />
-              </el-form-item>
-              <el-form-item label="报名职业">
-                <el-select
-                  v-model="signupForm.player_class"
-                  placeholder="可临时调整本次约战职业"
-                  clearable
-                  filterable
-                  style="width: 100%"
-                >
-                  <el-option
-                    v-for="item in professionOptions"
-                    :key="item.professionId"
-                    :label="item.professionName"
-                    :value="item.professionName"
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="报名副职">
-                <el-input v-model="signupForm.secondary_class" placeholder="可临时调整本次约战副职" maxlength="20" />
-              </el-form-item>
-              <el-form-item label="报名人">
-                <el-input v-model="signupForm.applicant_name" placeholder="称呼，可选" maxlength="50" />
-              </el-form-item>
-              <el-form-item label="联系方式">
-                <el-input v-model="signupForm.applicant_contact" placeholder="QQ、微信或其他联系方式，可选" maxlength="100" />
-              </el-form-item>
-              <el-form-item label="备注">
-                <el-input v-model="signupForm.remark" type="textarea" :rows="3" maxlength="500" show-word-limit />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" :disabled="!selectedMember" :loading="signupLoading" @click="submitSignup">
-                  确认报名
-                </el-button>
-              </el-form-item>
-            </el-form>
-          </el-tab-pane>
         </el-tabs>
       </el-card>
     </main>
@@ -123,7 +124,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -138,16 +139,20 @@ const route = useRoute()
 const inviteCode = route.params.inviteCode
 const invite = ref({})
 const pageError = ref('')
-const activeTab = ref('join')
+const activeTab = ref('signup')
 const joinFormRef = ref(null)
 const joinLoading = ref(false)
 const signupLoading = ref(false)
 const memberLoading = ref(false)
+const memberPending = ref(false)
 const memberKeyword = ref('')
 const memberList = ref([])
 const selectedMember = ref(null)
 const professionOptions = ref([])
 let searchTimer = null
+
+const showMemberDropdown = computed(() => memberKeyword.value.trim().length > 0 && !selectedMember.value)
+const memberSearching = computed(() => memberPending.value || memberLoading.value)
 
 const joinForm = reactive({
   player_name: '',
@@ -161,8 +166,6 @@ const joinForm = reactive({
 const signupForm = reactive({
   player_class: '',
   secondary_class: '',
-  applicant_name: '',
-  applicant_contact: '',
   remark: ''
 })
 
@@ -203,8 +206,10 @@ async function searchMembers() {
   if (!keyword) {
     memberList.value = []
     selectedMember.value = null
+    memberPending.value = false
     return
   }
+  memberPending.value = false
   memberLoading.value = true
   try {
     const res = await searchPublicBattleMembers(inviteCode, keyword)
@@ -244,16 +249,17 @@ async function submitSignup() {
   try {
     await submitPublicBattleSignup(inviteCode, {
       member_id: selectedMember.value.member_id,
-      ...signupForm
+      player_class: signupForm.player_class,
+      secondary_class: signupForm.secondary_class,
+      remark: signupForm.remark
     })
     ElMessage.success('约战报名已提交，请等待审核')
     signupForm.player_class = ''
     signupForm.secondary_class = ''
-    signupForm.applicant_name = ''
-    signupForm.applicant_contact = ''
     signupForm.remark = ''
+    memberKeyword.value = ''
+    memberList.value = []
     selectedMember.value = null
-    await searchMembers()
   } finally {
     signupLoading.value = false
   }
@@ -261,6 +267,7 @@ async function submitSignup() {
 
 watch(memberKeyword, () => {
   if (searchTimer) clearTimeout(searchTimer)
+  memberPending.value = memberKeyword.value.trim().length > 0
   searchTimer = setTimeout(searchMembers, 300)
 })
 
@@ -328,11 +335,85 @@ onBeforeUnmount(() => {
   margin-top: 20px;
 }
 
-.member-search {
-  margin-bottom: 12px;
+.member-picker {
+  position: relative;
 }
 
-.member-table,
+.member-search {
+  margin-bottom: 0;
+}
+
+.member-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 268px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid rgba(38, 50, 69, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+}
+
+.member-dropdown-status {
+  padding: 14px 16px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.member-option {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #263245;
+  text-align: left;
+  cursor: pointer;
+}
+
+.member-option:hover {
+  background: linear-gradient(90deg, rgba(105, 71, 242, 0.12), rgba(232, 215, 84, 0.16));
+}
+
+.member-option-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-option-main strong {
+  font-size: 14px;
+}
+
+.member-option-main span {
+  color: #6947f2;
+  font-size: 12px;
+}
+
+.member-option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.member-option-remark {
+  overflow: hidden;
+  color: #526071;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .signup-form {
   margin-top: 14px;
 }

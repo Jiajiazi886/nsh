@@ -61,7 +61,13 @@
             >
               <el-table-column prop="guild_name" label="帮会" width="70" fixed />
               <el-table-column prop="player_name" label="玩家" width="90" fixed />
-              <el-table-column prop="player_class" label="职业" width="70" />
+              <el-table-column prop="player_class" label="职业" width="90">
+                <template #default="{ row }">
+                  <span class="class-tag" :style="getGuildClassStyle(row.player_class)">
+                    {{ row.player_class || '--' }}
+                  </span>
+                </template>
+              </el-table-column>
               <el-table-column label="击败/清泉" width="90">
                 <template #default="scope">
                   {{ scope.row.kills }}/{{ scope.row.qingquan_kills }}
@@ -154,12 +160,14 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { importBattle, checkFilename } from '@/api/guild/battle'
+import { useGuildClassColors } from '@/utils/guildClassColor'
 
 const fileList = ref([])
 const submitLoading = ref(false)
+const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
 const form = reactive({
   battle_date: '',
@@ -353,6 +361,10 @@ function handleReset() {
   form.records = []
   fileList.value = []
 }
+
+onMounted(() => {
+  loadGuildClassColors()
+})
 </script>
 
 <style scoped>
@@ -394,5 +406,18 @@ function handleReset() {
 
 .battle-form {
   max-width: 100%;
+}
+
+.class-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: var(--el-fill-color-light);
+  font-size: 12px;
+  font-weight: 700;
 }
 </style>

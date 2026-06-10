@@ -91,6 +91,23 @@
             <span class="header-tip">通过后会保留在约战报名表中，供约战排表使用。</span>
           </div>
           <div class="header-actions">
+            <el-button
+              type="primary"
+              :disabled="!selectedRegistrations.length || !!bulkActionType"
+              :loading="bulkActionType === 'approve'"
+              @click="handleBatchReview('approve')"
+            >
+              批量通过
+            </el-button>
+            <el-button
+              type="danger"
+              plain
+              :disabled="!selectedRegistrations.length || !!bulkActionType"
+              :loading="bulkActionType === 'reject'"
+              @click="handleBatchReview('reject')"
+            >
+              批量拒绝
+            </el-button>
             <el-radio-group v-model="statusFilter" size="small" @change="fetchRegistrations">
               <el-radio-button label="0">待审核</el-radio-button>
               <el-radio-button label="1">已通过</el-radio-button>
@@ -102,11 +119,32 @@
         </div>
       </template>
 
-      <el-table v-loading="registrationLoading" :data="registrationList" border stripe>
+      <el-table
+        ref="registrationTableRef"
+        v-loading="registrationLoading"
+        :data="registrationList"
+        border
+        stripe
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="50" :selectable="isPendingRegistration" />
         <el-table-column type="index" label="序号" width="60" />
         <el-table-column prop="player_name" label="玩家名" min-width="120" />
-        <el-table-column prop="player_class" label="主职业" width="100" />
-        <el-table-column prop="secondary_class" label="副职" width="100" />
+        <el-table-column prop="player_class" label="主职业" width="100">
+          <template #default="{ row }">
+            <span class="class-tag" :style="getGuildClassStyle(row.player_class)">
+              {{ row.player_class || '--' }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="secondary_class" label="副职" width="100">
+          <template #default="{ row }">
+            <span v-if="row.secondary_class" class="class-tag" :style="getGuildClassStyle(row.secondary_class)">
+              {{ row.secondary_class }}
+            </span>
+            <span v-else class="muted-text">--</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="role_in_guild" label="帮会身份" width="110" />
         <el-table-column prop="applicant_name" label="报名人" min-width="110" />
         <el-table-column prop="applicant_contact" label="联系方式" min-width="130" show-overflow-tooltip />
@@ -146,6 +184,7 @@ import {
   getBattleRegistrations,
   rejectBattleRegistration
 } from '@/api/guild/battle'
+import { useGuildClassColors } from '@/utils/guildClassColor'
 
 const inviteFormRef = ref(null)
 const createLoading = ref(false)
@@ -153,10 +192,14 @@ const inviteLoading = ref(false)
 const registrationLoading = ref(false)
 const actionId = ref(null)
 const actionType = ref('')
+const bulkActionType = ref('')
+const registrationTableRef = ref(null)
 const inviteList = ref([])
 const registrationList = ref([])
+const selectedRegistrations = ref([])
 const latestUrl = ref('')
 const statusFilter = ref('0')
+const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
 const inviteForm = reactive({
   battle_name: '',
@@ -186,6 +229,14 @@ function getStatusText(status) {
 
 function getStatusType(status) {
   return ({ 0: 'warning', 1: 'success', 2: 'danger' })[status] || 'info'
+}
+
+function isPendingRegistration(row) {
+  return row.approval_status === '0'
+}
+
+function handleSelectionChange(selection) {
+  selectedRegistrations.value = selection
 }
 
 async function copyText(text) {
@@ -230,9 +281,19 @@ async function fetchRegistrations() {
     const params = statusFilter.value === '' ? {} : { status: statusFilter.value }
     const res = await getBattleRegistrations(params)
     registrationList.value = res.data || []
+    selectedRegistrations.value = []
+    registrationTableRef.value?.clearSelection?.()
   } finally {
     registrationLoading.value = false
   }
+}
+
+async function reviewRegistration(row, type, comment = '') {
+  if (type === 'approve') {
+    await approveBattleRegistration(row.registration_id, comment)
+    return
+  }
+  await rejectBattleRegistration(row.registration_id, comment)
 }
 
 async function handleReview(row, type) {
@@ -253,13 +314,8 @@ async function handleReview(row, type) {
   actionId.value = row.registration_id
   actionType.value = type
   try {
-    if (isApprove) {
-      await approveBattleRegistration(row.registration_id, value || '')
-      ElMessage.success('约战报名已通过')
-    } else {
-      await rejectBattleRegistration(row.registration_id, value || '')
-      ElMessage.success('已拒绝约战报名')
-    }
+    await reviewRegistration(row, type, value || '')
+    ElMessage.success(isApprove ? '约战报名已通过' : '已拒绝约战报名')
     await fetchRegistrations()
     await fetchInvites()
   } finally {
@@ -268,9 +324,44 @@ async function handleReview(row, type) {
   }
 }
 
+async function handleBatchReview(type) {
+  const targets = selectedRegistrations.value.filter(isPendingRegistration)
+  if (!targets.length) {
+    ElMessage.warning('请先选择待审核的约战报名')
+    return
+  }
+
+  const isApprove = type === 'approve'
+  const actionLabel = isApprove ? '通过' : '拒绝'
+  try {
+    await ElMessageBox.confirm(
+      `确认批量${actionLabel}选中的 ${targets.length} 条约战报名吗？`,
+      `批量${actionLabel}约战报名`,
+      {
+        confirmButtonText: `批量${actionLabel}`,
+        cancelButtonText: '取消',
+        type: isApprove ? 'success' : 'warning'
+      }
+    )
+
+    bulkActionType.value = type
+    await Promise.all(targets.map(row => reviewRegistration(row, type)))
+    ElMessage.success(`已${actionLabel} ${targets.length} 条约战报名`)
+    await fetchRegistrations()
+    await fetchInvites()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      throw error
+    }
+  } finally {
+    bulkActionType.value = ''
+  }
+}
+
 onMounted(() => {
   fetchInvites()
   fetchRegistrations()
+  loadGuildClassColors()
 })
 </script>
 
@@ -324,6 +415,19 @@ onMounted(() => {
 
 .review-card {
   margin-top: 0;
+}
+
+.class-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: var(--el-fill-color-light);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {

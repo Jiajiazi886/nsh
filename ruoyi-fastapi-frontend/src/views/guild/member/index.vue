@@ -184,8 +184,8 @@
 import { reactive, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMemberList, addMember, editMember, batchDeleteMembers, importFromBattle, getBattleListForImport, getBattleGuilds } from '@/api/guild/member'
-import { getClassColors } from '@/api/guild/classColor'
 import { checkPermi } from '@/utils/permission'
+import { useGuildClassColors } from '@/utils/guildClassColor'
 
 const loading = ref(false)
 const memberList = ref([])
@@ -204,17 +204,11 @@ const guildNames = ref([])
 
 const showAll = ref(true)
 const selectedClasses = ref([])
-const classColorMap = ref({})
 const hasEditPermission = ref(checkPermi(['guild:member:edit']))
+const { classOptions, getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
 function getClassStyle(className) {
-  if (!className) return {}
-  const c = classColorMap.value[className]
-  if (!c || c.bg_color === '#FFFFFF') return {}
-  return {
-    backgroundColor: c.bg_color,
-    color: c.text_color,
-  }
+  return getGuildClassStyle(className)
 }
 
 function getSourceLabel(sourceType) {
@@ -254,10 +248,6 @@ const editForm = reactive({
   player_class: '',
   secondary_class: '',
   remark: ''
-})
-
-const classOptions = computed(() => {
-  return Object.keys(classColorMap.value).sort()
 })
 
 const availableClasses = computed(() => {
@@ -481,11 +471,7 @@ async function handleBatchDelete() {
 
 async function fetchClassColors() {
   try {
-    const res = await getClassColors()
-    const data = res.data || res
-    const map = {}
-    ;(data || []).forEach(item => { map[item.class_name] = item })
-    classColorMap.value = map
+    await loadGuildClassColors()
   } catch {
     // 静默处理
   }
@@ -545,8 +531,11 @@ onBeforeUnmount(() => {
 .class-tag {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
   font-size: 13px;
+  font-weight: 700;
+  background: var(--el-fill-color-light);
 }
 
 .editable-class-tag {

@@ -26,3 +26,6 @@ class MemberImportModel(BaseModel):
 
 class MemberBatchDeleteModel(BaseModel):
     member_ids: list[int] = Field(description='要删除的成员ID列表')
+
+class GuildInfoUpdateModel(BaseModel):
+    guild_name: str = Field(description='帮会名称')
