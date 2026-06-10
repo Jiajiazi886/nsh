@@ -1,11 +1,6 @@
 <template>
   <div class="auth-page">
     <section class="auth-visual">
-      <div class="brand-mark">
-        <span class="brand-leaf"></span>
-        <strong>{{ title }}</strong>
-      </div>
-
       <div class="visual-copy">
         <p>欢迎回来</p>
         <h1>帮会事务，从这里开始。</h1>
@@ -99,7 +94,6 @@ import useUserStore from "@/store/modules/user";
 import defaultSettings from "@/settings";
 import AnimatedCharacters from "@/components/AuthCharacters/AnimatedCharacters.vue";
 
-const title = import.meta.env.VITE_APP_TITLE;
 const footerContent = defaultSettings.footerContent;
 const userStore = useUserStore();
 const route = useRoute();
@@ -206,25 +200,6 @@ getCookie();
   color: #ffffff;
   background: linear-gradient(135deg, #9ca3af 0%, #6b7280 42%, #2d2d2d 100%);
   overflow: hidden;
-}
-
-.brand-mark {
-  position: relative;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 18px;
-  letter-spacing: 0;
-}
-
-.brand-leaf {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px 12px 2px 12px;
-  background: linear-gradient(135deg, #6c3ff5, #ff9b6b);
-  transform: rotate(-24deg);
-  box-shadow: 0 12px 30px rgba(17, 24, 39, 0.25);
 }
 
 .visual-copy {
