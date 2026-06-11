@@ -148,10 +148,10 @@ onMounted(async () => {
 
   position: fixed;
   top: 0;
-  right: 0;
+  right: 32px;
   z-index: 9;
-  width: calc(100% - #{vars.$base-sidebar-width});
-  transition: width 0.28s ease;
+  width: calc(100% - (#{vars.$base-sidebar-width} + 88px));
+  transition: width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), right 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .themeDark .fixed-header {
@@ -161,14 +161,15 @@ onMounted(async () => {
 }
 
 .hideSidebar .fixed-header {
-  width: calc(100% - 54px);
+  width: calc(100% - 142px);
 }
 
 .sidebarHide .fixed-header {
-  width: 100%;
+  width: calc(100% - 64px);
 }
 
 .mobile .fixed-header {
+  right: 0;
   width: 100%;
 }
 

@@ -8,14 +8,47 @@ import { isRelogin } from '@/utils/request'
 import useUserStore from '@/store/modules/user'
 import useSettingsStore from '@/store/modules/settings'
 import usePermissionStore from '@/store/modules/permission'
+import useGuildMemberStore from '@/store/modules/guildMember'
 
 NProgress.configure({ showSpinner: false })
 
 const whiteList = ['/login', '/register', '/public/battle/*']
+let guildMemberChangeListenerInstalled = false
+const guildMemberWarmRoutes = [
+  '/index',
+  '/guild/info',
+  '/guild/member',
+  '/guild/team',
+  '/guild/group',
+  '/guild/schedule'
+]
 
 const isWhiteList = (path) => {
   return whiteList.some(pattern => isPathMatch(pattern, path))
 }
+
+function shouldWarmGuildMemberCache(path) {
+  return guildMemberWarmRoutes.some(routePath => path === routePath || path.startsWith(`${routePath}/`))
+}
+
+function warmGuildMemberCache(to, preloadPromise) {
+  if (!shouldWarmGuildMemberCache(to.path)) return
+  const guildMemberStore = useGuildMemberStore()
+  if (!guildMemberStore.hasReadyCache) {
+    ;(preloadPromise || guildMemberStore.preloadAfterLogin(useUserStore().permissions)).catch(() => {})
+  }
+}
+
+function installGuildMemberChangeListener() {
+  if (guildMemberChangeListenerInstalled) return
+  guildMemberChangeListenerInstalled = true
+  window.addEventListener('guild-member-data-changed', event => {
+    if (event?.detail?.membersAlreadyRefreshed) return
+    useGuildMemberStore().handleMembersChanged()
+  })
+}
+
+installGuildMemberChangeListener()
 
 router.beforeEach((to, from, next) => {
   NProgress.start()
@@ -33,6 +66,8 @@ router.beforeEach((to, from, next) => {
         // 判断当前用户是否已拉取完user_info信息
         useUserStore().getInfo().then(() => {
           isRelogin.show = false
+          const memberPreloadPromise = useGuildMemberStore().preloadAfterLogin(useUserStore().permissions)
+          warmGuildMemberCache(to, memberPreloadPromise)
           usePermissionStore().generateRoutes().then(accessRoutes => {
             // 根据roles权限生成可访问的路由表
             accessRoutes.forEach(route => {
@@ -49,6 +84,7 @@ router.beforeEach((to, from, next) => {
           })
         })
       } else {
+        warmGuildMemberCache(to)
         next()
       }
     }

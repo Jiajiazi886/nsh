@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from common.vo import CrudResponseModel
+from module_guild.constants.class_color_defaults import DEFAULT_GUILD_CLASS_COLORS, DEFAULT_GUILD_CLASS_COLOR_MAP
 from module_guild.dao.class_color_dao import ClassColorDao
 from module_guild.dao.profession_dao import ProfessionDao
 from module_guild.entity.vo.class_color_vo import ClassColorSaveModel
@@ -7,26 +8,48 @@ from utils.log_util import logger
 
 class ClassColorService:
     @classmethod
+    def _is_legacy_empty_color(cls, saved, default: dict) -> bool:
+        return (
+            saved.bg_color.upper() == '#FFFFFF'
+            and saved.text_color.upper() == '#000000'
+            and default.get('bg_color', '#FFFFFF').upper() != '#FFFFFF'
+        )
+
+    @classmethod
+    def _resolve_color(cls, class_name: str, saved_map: dict) -> dict:
+        saved = saved_map.get(class_name)
+        default = DEFAULT_GUILD_CLASS_COLOR_MAP.get(class_name, {})
+        if saved and not cls._is_legacy_empty_color(saved, default):
+            return {
+                'class_name': class_name,
+                'bg_color': saved.bg_color,
+                'text_color': saved.text_color,
+            }
+
+        return {
+            'class_name': class_name,
+            'bg_color': default.get('bg_color', '#FFFFFF'),
+            'text_color': default.get('text_color', '#000000'),
+        }
+
+    @classmethod
     async def get_colors_service(cls, db: AsyncSession, current_user) -> list[dict]:
         user_id = current_user.user.user_id
         items = await ClassColorDao.query_by_user(db, user_id)
         saved_map = {i.class_name: i for i in items}
         professions = await ProfessionDao.get_enabled_profession_list(db)
         if not professions:
-            return [
-                {'class_name': i.class_name, 'bg_color': i.bg_color, 'text_color': i.text_color}
-                for i in items
-            ]
+            result_map = {item['class_name']: dict(item) for item in DEFAULT_GUILD_CLASS_COLORS}
+            for item in items:
+                result_map[item.class_name] = {
+                    'class_name': item.class_name,
+                    'bg_color': item.bg_color,
+                    'text_color': item.text_color,
+                }
+            return list(result_map.values())
+
         return [
-            {
-                'class_name': profession.profession_name,
-                'bg_color': saved_map.get(profession.profession_name).bg_color
-                if profession.profession_name in saved_map
-                else '#FFFFFF',
-                'text_color': saved_map.get(profession.profession_name).text_color
-                if profession.profession_name in saved_map
-                else '#000000',
-            }
+            cls._resolve_color(profession.profession_name, saved_map)
             for profession in professions
         ]
 

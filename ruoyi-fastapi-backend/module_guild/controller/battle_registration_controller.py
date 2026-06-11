@@ -72,6 +72,46 @@ async def list_invites(
         return ResponseUtil.error(msg=f'{e!s}')
 
 
+@battle_registration_controller.post(
+    '/invite/{invite_id}/disable',
+    summary='强制失效约战链接',
+    dependencies=[UserInterfaceAuthDependency('guild:review:battle:list')],
+)
+async def disable_invite(
+    invite_id: int,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[CurrentUserModel | None, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await BattleRegistrationService.disable_invite_service(query_db, current_user, invite_id)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'强制失效约战链接失败: {e!s}')
+        return ResponseUtil.error(msg=f'{e!s}')
+
+
+@battle_registration_controller.delete(
+    '/invite/{invite_id}',
+    summary='删除约战链接',
+    dependencies=[UserInterfaceAuthDependency('guild:review:battle:list')],
+)
+async def delete_invite(
+    invite_id: int,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[CurrentUserModel | None, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await BattleRegistrationService.delete_invite_service(query_db, current_user, invite_id)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'删除约战链接失败: {e!s}')
+        return ResponseUtil.error(msg=f'{e!s}')
+
+
 @battle_registration_controller.get(
     '/list',
     summary='查看约战报名审核列表',

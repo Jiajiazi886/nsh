@@ -1,15 +1,20 @@
 import defaultSettings from '@/settings'
-import { useDark, useToggle } from '@vueuse/core'
 import { useDynamicTitle } from '@/utils/dynamicTitle'
-
-const isDark = useDark()
-const toggleDark = useToggle(isDark)
 
 const { sideTheme, showSettings, navType, tagsView, tagsIcon, fixedHeader, sidebarLogo, dynamicTitle, footerVisible, footerContent } = defaultSettings
 
+const DARK_MODE_STORAGE_KEY = 'vueuse-color-scheme'
 const storageSetting = JSON.parse(localStorage.getItem('layout-setting')) || ''
 const defaultTheme = '#6C3FF5'
 const savedTheme = storageSetting.theme === '#409EFF' ? defaultTheme : storageSetting.theme
+const savedSideTheme = storageSetting.sideTheme === 'theme-dark' ? 'theme-light' : storageSetting.sideTheme
+
+function applyLightMode() {
+  document.documentElement.classList.remove('dark')
+  localStorage.setItem(DARK_MODE_STORAGE_KEY, 'light')
+}
+
+applyLightMode()
 
 const useSettingsStore = defineStore(
   'settings',
@@ -17,7 +22,7 @@ const useSettingsStore = defineStore(
     state: () => ({
       title: '',
       theme: savedTheme || defaultTheme,
-      sideTheme: storageSetting.sideTheme || sideTheme,
+      sideTheme: savedSideTheme || sideTheme,
       showSettings: showSettings,
       navType: storageSetting.navType === undefined ? navType : storageSetting.navType,
       tagsView: storageSetting.tagsView === undefined ? tagsView : storageSetting.tagsView,
@@ -27,7 +32,7 @@ const useSettingsStore = defineStore(
       dynamicTitle: storageSetting.dynamicTitle === undefined ? dynamicTitle : storageSetting.dynamicTitle,
       footerVisible: storageSetting.footerVisible === undefined ? footerVisible : storageSetting.footerVisible,
       footerContent: footerContent,
-      isDark: isDark.value
+      isDark: false
     }),
     actions: {
       // 修改布局设置
@@ -42,10 +47,11 @@ const useSettingsStore = defineStore(
         this.title = title
         useDynamicTitle()
       },
-      // 切换暗黑模式
+      // 保持浅色模式
       toggleTheme() {
-        this.isDark = !this.isDark
-        toggleDark()
+        this.isDark = false
+        this.sideTheme = 'theme-light'
+        applyLightMode()
       }
     }
   })

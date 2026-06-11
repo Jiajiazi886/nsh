@@ -9,6 +9,7 @@ from module_admin.entity.do.user_do import SysUser
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_guild.dao.battle_dao import BattleDao
 from module_guild.dao.member_dao import MemberDao
+from module_guild.service.profession_service import ProfessionService
 from module_guild.entity.vo.member_vo import (
     MemberBatchDeleteModel,
     MemberCreateModel,
@@ -23,13 +24,29 @@ class MemberService:
     async def get_guild_info_service(cls, db: AsyncSession, current_user: CurrentUserModel) -> dict:
         user_id = current_user.user.user_id
         members = await MemberDao.query_member_list(db, user_id)
+        profession_options = await ProfessionService.get_enabled_profession_options_service(db)
+        profession_names = {item['professionName'] for item in profession_options}
         class_count_map: dict[str, int] = {}
+        class_players_map: dict[str, list[dict]] = {}
+        unmatched_count = 0
         for member in members:
-            class_name = (member.player_class or '未设置').strip() or '未设置'
+            class_name = (member.player_class or '').strip()
+            if class_name not in profession_names:
+                unmatched_count += 1
+                continue
             class_count_map[class_name] = class_count_map.get(class_name, 0) + 1
+            class_players_map.setdefault(class_name, []).append(
+                {
+                    'member_id': member.member_id,
+                    'player_name': member.player_name,
+                    'player_class': member.player_class or '',
+                    'secondary_class': member.secondary_class or '',
+                    'role_in_guild': member.role_in_guild or '',
+                }
+            )
 
         class_stats = [
-            {'class_name': class_name, 'count': count}
+            {'class_name': class_name, 'count': count, 'players': class_players_map.get(class_name, [])}
             for class_name, count in sorted(class_count_map.items(), key=lambda item: (-item[1], item[0]))
         ]
 
@@ -39,6 +56,7 @@ class MemberService:
             'member_count': len(members),
             'class_count': len(class_stats),
             'class_stats': class_stats,
+            'unmatched_count': unmatched_count,
         }
 
     @classmethod
@@ -66,23 +84,23 @@ class MemberService:
     @classmethod
     async def query_member_list_service(cls, db: AsyncSession, current_user: CurrentUserModel) -> list:
         user_id = current_user.user.user_id
-        members = await MemberDao.query_member_list(db, user_id)
+        members = await MemberDao.query_member_list_payload(db, user_id)
         return [
             {
-                'member_id': m.member_id,
-                'guild_id': m.guild_id,
-                'user_id': m.user_id,
-                'member_user_id': m.member_user_id,
-                'player_name': m.player_name,
-                'player_class': m.player_class or '',
-                'secondary_class': m.secondary_class or '',
-                'role_in_guild': m.role_in_guild,
-                'is_active': m.is_active,
-                'source_type': m.source_type or 'manual',
-                'join_time': m.join_time,
-                'remark': m.remark or '',
-                'team_id': m.team_id,
-                'squad_number': m.squad_number,
+                'member_id': m['member_id'],
+                'guild_id': m['guild_id'],
+                'user_id': m['user_id'],
+                'member_user_id': m['member_user_id'] or 0,
+                'player_name': m['player_name'],
+                'player_class': m['player_class'] or '',
+                'secondary_class': m['secondary_class'] or '',
+                'role_in_guild': m['role_in_guild'] or '成员',
+                'is_active': m['is_active'],
+                'source_type': m['source_type'] or 'manual',
+                'join_time': m['join_time'],
+                'remark': m['remark'] or '',
+                'team_id': m['team_id'],
+                'squad_number': m['squad_number'],
             }
             for m in members
         ]

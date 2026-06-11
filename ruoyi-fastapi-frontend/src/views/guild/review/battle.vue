@@ -5,7 +5,7 @@
         <el-card shadow="never">
           <template #header>
             <div class="card-header">
-              <span>创建约战链接</span>
+              <span>创建报名链接</span>
             </div>
           </template>
 
@@ -48,7 +48,7 @@
         <el-card shadow="never">
           <template #header>
             <div class="card-header">
-              <span>临时链接</span>
+              <span>报名链接</span>
               <el-button text type="primary" :loading="inviteLoading" @click="fetchInvites">刷新</el-button>
             </div>
           </template>
@@ -64,19 +64,40 @@
             </el-table-column>
             <el-table-column label="状态" width="90" align="center">
               <template #default="{ row }">
-                <el-tag :type="row.expired || row.status === '1' ? 'info' : 'success'">
-                  {{ row.expired || row.status === '1' ? '已失效' : '可访问' }}
+                <el-tag :type="getInviteStatusType(row)">
+                  {{ getInviteStatusText(row) }}
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column prop="registration_count" label="报名人数" width="90" align="center" />
             <el-table-column prop="approved_count" label="通过人数" width="90" align="center" />
-            <el-table-column label="操作" width="120" align="center" fixed="right">
+            <el-table-column label="操作" width="190" align="center" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" @click="copyText(buildPublicUrl(row.public_path))">复制链接</el-button>
+                <el-button v-if="isActiveInvite(row)" link type="primary" @click="copyText(buildPublicUrl(row.public_path))">复制链接</el-button>
+                <el-button
+                  v-if="isActiveInvite(row)"
+                  link
+                  type="danger"
+                  :loading="disableInviteId === row.invite_id"
+                  @click="handleDisableInvite(row)"
+                >
+                  强制失效
+                </el-button>
+                <template v-else>
+                  <el-button
+                    link
+                    type="danger"
+                    :loading="deleteInviteId === row.invite_id"
+                    @click="handleDeleteInvite(row)"
+                  >
+                    删除
+                  </el-button>
+                  <span class="muted-text">保留</span>
+                </template>
               </template>
             </el-table-column>
             <template #empty>
-              <el-empty description="还没有创建约战链接" />
+              <el-empty description="暂无报名链接记录" />
             </template>
           </el-table>
         </el-card>
@@ -180,6 +201,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   approveBattleRegistration,
   createBattleInvite,
+  deleteBattleInvite,
+  disableBattleInvite,
   getBattleInvites,
   getBattleRegistrations,
   rejectBattleRegistration
@@ -194,6 +217,8 @@ const actionId = ref(null)
 const actionType = ref('')
 const bulkActionType = ref('')
 const registrationTableRef = ref(null)
+const disableInviteId = ref(null)
+const deleteInviteId = ref(null)
 const inviteList = ref([])
 const registrationList = ref([])
 const selectedRegistrations = ref([])
@@ -231,6 +256,20 @@ function getStatusType(status) {
   return ({ 0: 'warning', 1: 'success', 2: 'danger' })[status] || 'info'
 }
 
+function isActiveInvite(row) {
+  return !row.expired && row.status !== '1'
+}
+
+function getInviteStatusText(row) {
+  if (row.expired) return '已过期'
+  return row.status === '1' ? '已失效' : '当前生效'
+}
+
+function getInviteStatusType(row) {
+  if (row.expired) return 'warning'
+  return row.status === '1' ? 'info' : 'success'
+}
+
 function isPendingRegistration(row) {
   return row.approval_status === '0'
 }
@@ -257,11 +296,64 @@ async function handleCreateInvite() {
   try {
     const res = await createBattleInvite({ ...inviteForm })
     latestUrl.value = buildPublicUrl(res.data.public_path)
-    ElMessage.success('约战链接已生成')
+    ElMessage.success('报名链接已生成，旧的生效链接已自动失效')
     resetInviteForm()
     await fetchInvites()
+    await fetchRegistrations()
   } finally {
     createLoading.value = false
+  }
+}
+
+async function handleDisableInvite(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确认让「${row.battle_name || '未命名约战'}」的报名链接立即失效吗？`,
+      '强制失效报名链接',
+      {
+        confirmButtonText: '强制失效',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    throw error
+  }
+  disableInviteId.value = row.invite_id
+  try {
+    await disableBattleInvite(row.invite_id)
+    ElMessage.success('报名链接已失效')
+    await fetchInvites()
+    await fetchRegistrations()
+  } finally {
+    disableInviteId.value = null
+  }
+}
+
+async function handleDeleteInvite(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除「${row.battle_name || '未命名约战'}」的报名链接记录吗？删除后不会再显示在列表里。`,
+      '删除报名链接',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '保留',
+        type: 'warning'
+      }
+    )
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    throw error
+  }
+  deleteInviteId.value = row.invite_id
+  try {
+    await deleteBattleInvite(row.invite_id)
+    ElMessage.success('报名链接记录已删除')
+    await fetchInvites()
+    await fetchRegistrations()
+  } finally {
+    deleteInviteId.value = null
   }
 }
 

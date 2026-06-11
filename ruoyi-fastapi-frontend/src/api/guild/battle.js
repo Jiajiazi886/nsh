@@ -53,6 +53,20 @@ export function getBattleInvites() {
   })
 }
 
+export function disableBattleInvite(inviteId) {
+  return request({
+    url: `/guild/battle-registration/invite/${inviteId}/disable`,
+    method: 'post'
+  })
+}
+
+export function deleteBattleInvite(inviteId) {
+  return request({
+    url: `/guild/battle-registration/invite/${inviteId}`,
+    method: 'delete'
+  })
+}
+
 export function getBattleRegistrations(params) {
   return request({
     url: '/guild/battle-registration/list',

@@ -1,11 +1,11 @@
 <template>
-  <div class="app-container">
-    <el-card>
+  <div ref="pageRef" class="app-container guild-member-page">
+    <el-card class="roster-panel" shadow="never" data-guild-motion="hero">
       <template #header>
         <div class="card-header">
           <div class="header-left">
-            <span>帮会成员管理（共 {{ totalCount }} 人）</span>
-            <span class="class-summary">{{ classSummary }}</span>
+            <span class="title">帮会成员管理</span>
+            <span class="subtitle">共 {{ totalCount }} 人，按主职业维护成员名册</span>
           </div>
           <div class="header-actions">
             <el-button v-hasPermi="['guild:member:add']" type="primary" @click="openAddDialog">添加帮会成员</el-button>
@@ -31,48 +31,36 @@
         </el-checkbox-group>
       </div>
 
-      <el-table :data="filteredMemberList" @selection-change="handleSelectionChange" v-loading="loading" border stripe>
+      <el-table
+        :data="filteredMemberList"
+        row-key="member_id"
+        height="calc(100vh - 430px)"
+        @selection-change="handleSelectionChange"
+        v-loading="loading"
+        border
+        stripe
+      >
         <el-table-column type="selection" width="50" />
         <el-table-column type="index" label="序号" width="60" />
         <el-table-column prop="player_name" label="玩家名" min-width="120" />
         <el-table-column prop="player_class" label="主职业" width="100">
           <template #default="scope">
-            <el-dropdown
-              trigger="click"
-              :disabled="quickClassLoading || !hasEditPermission"
-              @command="value => handleQuickClassChange(scope.row, 'player_class', value)"
-            >
-              <span
-                class="class-tag editable-class-tag"
-                :style="getClassStyle(scope.row.player_class)"
-              >{{ scope.row.player_class || '未设置' }}</span>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="">未设置</el-dropdown-item>
-                  <el-dropdown-item v-for="c in classOptions" :key="c" :command="c">{{ c }}</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <span
+              class="class-tag"
+              :class="{ 'editable-class-tag': hasEditPermission }"
+              :style="getClassStyle(scope.row.player_class)"
+              @click="openClassEdit(scope.row)"
+            >{{ scope.row.player_class || '未设置' }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="secondary_class" label="副职" width="100">
           <template #default="scope">
-            <el-dropdown
-              trigger="click"
-              :disabled="quickClassLoading || !hasEditPermission"
-              @command="value => handleQuickClassChange(scope.row, 'secondary_class', value)"
-            >
-              <span
-                class="class-tag editable-class-tag"
-                :style="getClassStyle(scope.row.secondary_class)"
-              >{{ scope.row.secondary_class || '未设置' }}</span>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="">未设置</el-dropdown-item>
-                  <el-dropdown-item v-for="c in classOptions" :key="c" :command="c">{{ c }}</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <span
+              class="class-tag"
+              :class="{ 'editable-class-tag': hasEditPermission }"
+              :style="getClassStyle(scope.row.secondary_class)"
+              @click="openClassEdit(scope.row)"
+            >{{ scope.row.secondary_class || '未设置' }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="source_type" label="来源" width="110" align="center">
@@ -181,14 +169,18 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMemberList, addMember, editMember, batchDeleteMembers, importFromBattle, getBattleListForImport, getBattleGuilds } from '@/api/guild/member'
+import { addMember, editMember, batchDeleteMembers, importFromBattle, getBattleListForImport, getBattleGuilds } from '@/api/guild/member'
 import { checkPermi } from '@/utils/permission'
+import useGuildMemberStore from '@/store/modules/guildMember'
 import { useGuildClassColors } from '@/utils/guildClassColor'
+import { useGuildPageMotion } from '@/composables/useGuildPageMotion'
 
-const loading = ref(false)
-const memberList = ref([])
+const guildMemberStore = useGuildMemberStore()
+const pageRef = ref(null)
+const loading = computed(() => guildMemberStore.loading)
+const memberList = computed(() => guildMemberStore.members)
 const selectedMembers = ref([])
 
 const showAddDialog = ref(false)
@@ -197,7 +189,6 @@ const showEditDialog = ref(false)
 const addLoading = ref(false)
 const importLoading = ref(false)
 const editLoading = ref(false)
-const quickClassLoading = ref(false)
 
 const battleList = ref([])
 const guildNames = ref([])
@@ -206,6 +197,8 @@ const showAll = ref(true)
 const selectedClasses = ref([])
 const hasEditPermission = ref(checkPermi(['guild:member:edit']))
 const { classOptions, getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
+
+useGuildPageMotion(pageRef)
 
 function getClassStyle(className) {
   return getGuildClassStyle(className)
@@ -270,12 +263,6 @@ const classCountMap = computed(() => {
   return map
 })
 
-const classSummary = computed(() => {
-  return availableClasses.value
-    .map(c => `${c} ${classCountMap.value[c] || 0}`)
-    .join(' | ')
-})
-
 const filteredMemberList = computed(() => {
   if (showAll.value || selectedClasses.value.length === 0) {
     return memberList.value
@@ -305,20 +292,33 @@ function handleSelectionChange(selection) {
   selectedMembers.value = selection
 }
 
-async function fetchMemberList() {
-  loading.value = true
+async function fetchMemberList(options = {}) {
   try {
-    const res = await getMemberList()
-    memberList.value = res.data || []
+    await guildMemberStore.load({
+      force: options.force === true,
+      silent: options.silent === true,
+      throwOnError: options.throwOnError === true
+    })
+    return true
   } catch {
     ElMessage.error('加载失败')
-  } finally {
-    loading.value = false
+    return false
   }
 }
 
-function handleExternalMemberRefresh() {
-  fetchMemberList()
+function emitMemberDataChanged() {
+  window.dispatchEvent(new CustomEvent('guild-member-data-changed', {
+    detail: { membersAlreadyRefreshed: true }
+  }))
+}
+
+async function refreshAfterMemberChange() {
+  const refreshed = await fetchMemberList({ force: true, silent: true, throwOnError: true })
+  if (refreshed) {
+    emitMemberDataChanged()
+  } else {
+    window.dispatchEvent(new CustomEvent('guild-member-data-changed'))
+  }
 }
 
 async function fetchBattleList() {
@@ -368,7 +368,7 @@ async function handleAdd() {
     const data = res.data || res
     ElMessage.success(data.msg || '添加成功')
     showAddDialog.value = false
-    await fetchMemberList()
+    await refreshAfterMemberChange()
   } catch {
     ElMessage.error('添加失败')
   } finally {
@@ -387,7 +387,7 @@ async function handleImport() {
     const data = res.data || res
     ElMessage.success(data.msg || '导入成功')
     showImportDialog.value = false
-    await fetchMemberList()
+    await refreshAfterMemberChange()
   } catch {
     ElMessage.error('导入失败')
   } finally {
@@ -404,6 +404,11 @@ function handleEdit(row) {
   showEditDialog.value = true
 }
 
+function openClassEdit(row) {
+  if (!hasEditPermission.value) return
+  handleEdit(row)
+}
+
 async function handleSaveEdit() {
   editLoading.value = true
   try {
@@ -415,34 +420,11 @@ async function handleSaveEdit() {
     })
     ElMessage.success('保存成功')
     showEditDialog.value = false
-    await fetchMemberList()
+    await refreshAfterMemberChange()
   } catch {
     ElMessage.error('保存失败')
   } finally {
     editLoading.value = false
-  }
-}
-
-async function handleQuickClassChange(row, field, value) {
-  if (quickClassLoading.value || row[field] === value) {
-    return
-  }
-  const oldValue = row[field]
-  row[field] = value
-  quickClassLoading.value = true
-  try {
-    await editMember({
-      member_id: row.member_id,
-      player_class: field === 'player_class' ? value : row.player_class,
-      secondary_class: field === 'secondary_class' ? value : row.secondary_class,
-      remark: row.remark || ''
-    })
-    ElMessage.success('保存成功')
-  } catch {
-    row[field] = oldValue
-    ElMessage.error('保存失败')
-  } finally {
-    quickClassLoading.value = false
   }
 }
 
@@ -461,7 +443,7 @@ async function handleBatchDelete() {
     const res = await batchDeleteMembers(ids)
     const data = res.data || res
     ElMessage.success(data.msg || '删除成功')
-    await fetchMemberList()
+    await refreshAfterMemberChange()
   } catch (err) {
     if (err !== 'cancel') {
       ElMessage.error('删除失败')
@@ -478,37 +460,58 @@ async function fetchClassColors() {
 }
 
 onMounted(() => {
-  fetchMemberList()
-  fetchClassColors()
-  window.addEventListener('guild-member-data-changed', handleExternalMemberRefresh)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('guild-member-data-changed', handleExternalMemberRefresh)
+  fetchMemberList({ silent: guildMemberStore.hasReadyCache })
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(fetchClassColors, { timeout: 1200 })
+  } else {
+    window.setTimeout(fetchClassColors, 120)
+  }
 })
 </script>
 
 <style scoped>
+.guild-member-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.roster-panel {
+  border: 1px solid rgba(38, 50, 69, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 42px rgba(38, 50, 69, 0.08);
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .header-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .header-left {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.class-summary {
+.title {
+  color: #111827;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.subtitle {
+  color: #64748b;
   font-size: 13px;
-  color: #909399;
 }
 
 .page-alert {
@@ -521,6 +524,10 @@ onBeforeUnmount(() => {
   gap: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+  padding: 12px;
+  border: 1px solid rgba(38, 50, 69, 0.08);
+  border-radius: 12px;
+  background: #fbfcfd;
 }
 
 .class-checkboxes {
@@ -546,5 +553,15 @@ onBeforeUnmount(() => {
 
 .editable-class-tag:hover {
   box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+
+@media (max-width: 900px) {
+  .card-header {
+    flex-direction: column;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
 }
 </style>

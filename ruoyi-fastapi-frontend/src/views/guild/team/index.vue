@@ -1,6 +1,6 @@
 <template>
-  <div class="app-container">
-    <el-card>
+  <div ref="pageRef" class="app-container">
+    <el-card data-guild-motion="hero">
       <template #header>
         <div class="card-header">
           <div class="header-left">
@@ -89,18 +89,24 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { getMemberList, editMember } from '@/api/guild/member'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { editMember } from '@/api/guild/member'
 import { getTeams, addTeam, deleteTeam } from '@/api/guild/team'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import useGuildMemberStore from '@/store/modules/guildMember'
 import { useGuildClassColors } from '@/utils/guildClassColor'
+import { useGuildPageMotion } from '@/composables/useGuildPageMotion'
 
-const loading = ref(false)
+const guildMemberStore = useGuildMemberStore()
+const pageRef = ref(null)
+const loading = computed(() => guildMemberStore.loading)
 const teamLoading = ref(false)
 const showTeamDialog = ref(false)
 const allMembers = ref([])
 const teams = ref([])
 const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
+
+useGuildPageMotion(pageRef)
 
 const teamForm = reactive({
   team_name: ''
@@ -110,18 +116,32 @@ function getClassStyle(className) {
   return getGuildClassStyle(className)
 }
 
-async function fetchMembers() {
-  loading.value = true
+function syncMembersFromCache(list = guildMemberStore.members) {
+  const currentRows = new Map(allMembers.value.map(row => [row.member_id, row]))
+  allMembers.value = (list || []).map(member => {
+    const current = currentRows.get(member.member_id)
+    return {
+      ...member,
+      squad_number: current?.squad_number || member.squad_number || 1
+    }
+  })
+}
+
+function emitMemberDataChanged() {
+  window.dispatchEvent(new CustomEvent('guild-member-data-changed', {
+    detail: { membersAlreadyRefreshed: true }
+  }))
+}
+
+async function fetchMembers(options = {}) {
   try {
-    const res = await getMemberList()
-    allMembers.value = (res.data || []).map(m => ({
-      ...m,
-      squad_number: m.squad_number || 1
-    }))
+    const list = await guildMemberStore.load({
+      force: options.force === true,
+      silent: options.silent === true
+    })
+    syncMembersFromCache(list)
   } catch {
     ElMessage.error('加载成员列表失败')
-  } finally {
-    loading.value = false
   }
 }
 
@@ -177,7 +197,7 @@ async function handleDeleteTeam(team) {
     await deleteTeam(team.id)
     ElMessage.success('删除成功')
     await fetchTeams()
-    await fetchMembers()
+    await fetchMembers({ force: true })
   } catch (err) {
     if (err !== 'cancel') {
       ElMessage.error('删除团队失败')
@@ -194,6 +214,8 @@ async function onTeamChange(row, teamId) {
     })
     row.team_id = newTeamId
     ElMessage.success('团队分配已更新')
+    await guildMemberStore.refresh({ silent: true })
+    emitMemberDataChanged()
   } catch {
     ElMessage.error('更新团队分配失败')
   }
@@ -216,16 +238,24 @@ async function onSquadBlur(row) {
       squad_number: row.squad_number
     })
     ElMessage.success('队内序号已更新')
+    await guildMemberStore.refresh({ silent: true })
+    emitMemberDataChanged()
   } catch {
     ElMessage.error('更新队内序号失败')
   }
 }
 
 onMounted(() => {
-  fetchMembers()
+  fetchMembers({ silent: guildMemberStore.hasReadyCache })
   fetchTeams()
   fetchClassColors()
 })
+
+watch(
+  () => guildMemberStore.members,
+  list => syncMembersFromCache(list),
+  { immediate: true }
+)
 </script>
 
 <style scoped>

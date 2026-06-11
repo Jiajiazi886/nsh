@@ -31,7 +31,6 @@
 <script setup>
 import { computed, ref } from "vue";
 import { MarkdownRender } from "markstream-vue";
-import { useDark } from "@vueuse/core";
 import { enableKatex, enableMermaid } from "markstream-vue";
 import "markstream-vue/index.css";
 import "katex/dist/katex.min.css";
@@ -39,7 +38,7 @@ import "katex/dist/katex.min.css";
 enableMermaid();
 enableKatex();
 
-const isDark = useDark();
+const isDark = false;
 
 const props = defineProps({
   content: {

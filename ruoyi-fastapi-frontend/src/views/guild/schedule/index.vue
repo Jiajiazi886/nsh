@@ -1,7 +1,7 @@
 <template>
-  <div class="app-container schedule-page">
+  <div ref="pageRef" class="app-container schedule-page">
     <div class="schedule-layout">
-      <section class="member-panel">
+      <section class="member-panel" data-guild-motion="hero">
         <div class="panel-header">
           <div>
             <h3>帮会成员</h3>
@@ -20,63 +20,79 @@
             仅显示约战审核通过
           </el-checkbox>
 
-          <div class="class-filter">
-            <div class="filter-title">
-              <span>职业</span>
-              <el-button
-                v-if="selectedClasses.length"
-                text
-                type="primary"
-                @click="selectedClasses = []"
-              >
-                清空
-              </el-button>
+          <div class="tree-toolbar">
+            <span>职业文件夹</span>
+            <div>
+              <el-button text type="primary" @click="expandAllFolders">展开</el-button>
+              <el-button text type="primary" @click="collapseAllFolders">收起</el-button>
             </div>
-            <el-checkbox-group v-model="selectedClasses" class="class-options">
-              <el-checkbox-button
-                v-for="className in availableClasses"
-                :key="className"
-                :label="className"
-              >
-                {{ className }}
-              </el-checkbox-button>
-            </el-checkbox-group>
-            <span v-if="!availableClasses.length" class="empty-filter">暂无职业</span>
           </div>
         </div>
 
         <div class="member-list">
           <div
-            v-for="member in filteredMembers"
-            :key="member.member_id"
-            class="member-card"
-            :class="{ assigned: getMemberAssignment(member.member_id) }"
-            draggable="true"
-            @dragstart="onDragStart(member, $event)"
-            @dragend="onDragEnd"
+            v-for="folder in groupedMemberFolders"
+            :key="folder.className"
+            class="class-folder"
+            :class="{ collapsed: isClassFolderCollapsed(folder.className) }"
           >
-            <div class="member-name-row">
-              <span class="member-name">{{ member.player_name }}</span>
-              <span class="class-tag" :style="getClassStyle(member.player_class)">
-                {{ member.player_class || '未设置' }}
+            <button
+              type="button"
+              class="folder-header"
+              :aria-expanded="!isClassFolderCollapsed(folder.className)"
+              @click="toggleClassFolder(folder.className)"
+            >
+              <span class="folder-left">
+                <el-icon class="folder-caret"><ArrowRightBold /></el-icon>
+                <el-icon class="folder-icon">
+                  <Folder v-if="isClassFolderCollapsed(folder.className)" />
+                  <FolderOpened v-else />
+                </el-icon>
+                <span class="folder-name">{{ folder.className }}</span>
               </span>
-            </div>
-            <div class="member-meta">
-              <span v-if="member.secondary_class" class="secondary-class-line">
-                副职：
-                <span class="class-tag mini-class-tag" :style="getClassStyle(member.secondary_class)">
-                  {{ member.secondary_class }}
+              <span class="folder-right">
+                <span class="folder-progress">{{ folder.assignedCount }} / {{ folder.members.length }}</span>
+                <span class="folder-swatch" :style="getClassStyle(folder.className)"></span>
+              </span>
+            </button>
+
+            <div
+              v-show="!isClassFolderCollapsed(folder.className)"
+              :ref="el => setFolderBodyRef(el, folder.className)"
+              class="folder-body"
+            >
+              <div
+                v-for="member in folder.members"
+                :key="member.member_id"
+                class="folder-member-row"
+                :class="{ assigned: getMemberAssignment(member.member_id) }"
+                draggable="true"
+                @dragstart="onDragStart(member, $event)"
+                @dragend="onDragEnd"
+              >
+                <span class="member-file-dot" :style="getClassStyle(member.player_class)"></span>
+                <span class="member-file-main">
+                  <span class="member-name">{{ member.player_name }}</span>
+                  <span class="member-meta-line">
+                    <span>{{ getAssignedText(member.member_id) || '未排表' }}</span>
+                    <template v-if="member.secondary_class">
+                      <span class="member-meta-divider">·</span>
+                      <span>副职 {{ member.secondary_class }}</span>
+                    </template>
+                  </span>
                 </span>
-              </span>
-              <span>{{ getAssignedText(member.member_id) || '未排表' }}</span>
+                <span class="member-file-status" :class="{ assigned: getMemberAssignment(member.member_id) }">
+                  {{ getMemberAssignment(member.member_id) ? '已排' : '待排' }}
+                </span>
+              </div>
             </div>
           </div>
 
-          <el-empty v-if="!filteredMembers.length" description="暂无成员" />
+          <el-empty v-if="!groupedMemberFolders.length" description="暂无成员" />
         </div>
       </section>
 
-      <section class="schedule-panel">
+      <section class="schedule-panel" data-guild-reveal>
         <div class="panel-header">
           <div>
             <h3>约战排表</h3>
@@ -218,9 +234,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMemberList } from '@/api/guild/member'
+import { ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import { getApprovedBattleRegistrationsForSchedule } from '@/api/guild/battle'
 import {
   addScheduleSquad,
@@ -235,14 +251,27 @@ import {
   saveScheduleAssignment,
   saveScheduleSnapshot
 } from '@/api/guild/schedule'
+import useGuildMemberStore from '@/store/modules/guildMember'
 import { useGuildClassColors } from '@/utils/guildClassColor'
+import { useGuildPageMotion } from '@/composables/useGuildPageMotion'
 
+let scheduleGsapLoader = null
+function loadScheduleGsap() {
+  if (!scheduleGsapLoader) {
+    scheduleGsapLoader = import('gsap').then(gsapModule => gsapModule.gsap || gsapModule.default || gsapModule)
+  }
+  return scheduleGsapLoader
+}
+
+const guildMemberStore = useGuildMemberStore()
+const pageRef = ref(null)
 const loading = ref(false)
-const members = ref([])
+const members = computed(() => guildMemberStore.members)
 const schedule = ref({ teams: [] })
 const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
+
+useGuildPageMotion(pageRef)
 const keyword = ref('')
-const selectedClasses = ref([])
 const onlyApprovedBattleMembers = ref(true)
 const approvedBattleMemberIds = ref([])
 const draggingMember = ref(null)
@@ -250,10 +279,10 @@ const dragOverKey = ref('')
 const historyVisible = ref(false)
 const historyRows = ref([])
 const historyPreview = ref(null)
+const collapsedClassFolders = ref(new Set())
+const folderBodyRefs = new Map()
 
-const availableClasses = computed(() => {
-  return [...new Set(members.value.map(member => member.player_class).filter(Boolean))].sort()
-})
+const UNSET_CLASS_NAME = '未设置'
 
 const assignedByMemberId = computed(() => {
   const map = {}
@@ -279,10 +308,37 @@ const filteredMembers = computed(() => {
     const matchesKeyword = !value || [member.player_name, member.player_class, member.secondary_class]
       .filter(Boolean)
       .some(text => String(text).toLowerCase().includes(value))
-    const matchesClass = !selectedClasses.value.length || selectedClasses.value.includes(member.player_class)
     const matchesBattle = !onlyApprovedBattleMembers.value || approvedSet.has(member.member_id)
-    return matchesKeyword && matchesClass && matchesBattle
+    return matchesKeyword && matchesBattle
   })
+})
+
+const groupedMemberFolders = computed(() => {
+  const assignedMap = assignedByMemberId.value
+  const groups = new Map()
+  filteredMembers.value.forEach(member => {
+    const className = String(member.player_class || '').trim() || UNSET_CLASS_NAME
+    if (!groups.has(className)) {
+      groups.set(className, [])
+    }
+    groups.get(className).push(member)
+  })
+
+  return Array.from(groups.entries())
+    .sort(([classA], [classB]) => classA.localeCompare(classB, 'zh-Hans-CN'))
+    .map(([className, groupMembers]) => {
+      const sortedMembers = [...groupMembers].sort((memberA, memberB) => {
+        const assignedA = assignedMap[memberA.member_id] ? 1 : 0
+        const assignedB = assignedMap[memberB.member_id] ? 1 : 0
+        if (assignedA !== assignedB) return assignedA - assignedB
+        return String(memberA.player_name || '').localeCompare(String(memberB.player_name || ''), 'zh-Hans-CN')
+      })
+      return {
+        className,
+        members: sortedMembers,
+        assignedCount: sortedMembers.reduce((total, member) => total + (assignedMap[member.member_id] ? 1 : 0), 0)
+      }
+    })
 })
 
 function getSquadKey(teamId, squadId) {
@@ -301,6 +357,65 @@ function getAssignedText(memberId) {
 
 function getClassStyle(className) {
   return getGuildClassStyle(className)
+}
+
+function setFolderBodyRef(el, className) {
+  if (el) {
+    folderBodyRefs.set(className, el)
+  } else {
+    folderBodyRefs.delete(className)
+  }
+}
+
+function isClassFolderCollapsed(className) {
+  return collapsedClassFolders.value.has(className)
+}
+
+async function toggleClassFolder(className) {
+  const nextCollapsed = new Set(collapsedClassFolders.value)
+  const willOpen = nextCollapsed.has(className)
+  if (willOpen) {
+    nextCollapsed.delete(className)
+  } else {
+    nextCollapsed.add(className)
+  }
+  collapsedClassFolders.value = nextCollapsed
+
+  if (willOpen) {
+    await nextTick()
+    animateFolderOpen(className)
+  }
+}
+
+async function animateFolderOpen(className) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  const body = folderBodyRefs.get(className)
+  if (!body) return
+  const gsap = await loadScheduleGsap()
+  const rows = gsap.utils.toArray('.folder-member-row', body).slice(0, 32)
+  const staggerStep = gsap.utils.clamp(0.012, 0.035, rows.length ? 0.18 / rows.length : 0.018)
+  gsap.fromTo(
+    rows,
+    { autoAlpha: 0, y: -4 },
+    {
+      autoAlpha: 1,
+      y: 0,
+      duration: 0.22,
+      ease: 'power2.out',
+      stagger: staggerStep,
+      overwrite: true
+    }
+  )
+}
+
+async function expandAllFolders() {
+  collapsedClassFolders.value = new Set()
+  await nextTick()
+  groupedMemberFolders.value.slice(0, 8).forEach(folder => animateFolderOpen(folder.className))
+}
+
+function collapseAllFolders() {
+  collapsedClassFolders.value = new Set(groupedMemberFolders.value.map(folder => folder.className))
 }
 
 function getTeamMemberCount(team) {
@@ -487,8 +602,7 @@ async function useHistoryConfiguration() {
 }
 
 async function fetchMembers() {
-  const res = await getMemberList()
-  members.value = res.data || []
+  await guildMemberStore.load({ silent: guildMemberStore.hasReadyCache })
 }
 
 async function fetchApprovedBattleMembers() {
@@ -575,88 +689,207 @@ onMounted(fetchData)
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
-.class-filter {
+.tree-toolbar {
+  min-height: 28px;
   margin-top: 10px;
-}
-
-.filter-title {
-  min-height: 24px;
-  margin-bottom: 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
 
-.class-options {
+.tree-toolbar > div {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.class-options :deep(.el-checkbox-button__inner) {
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
-  padding: 5px 9px;
-  box-shadow: none;
-}
-
-.empty-filter {
-  color: var(--el-text-color-placeholder);
-  font-size: 12px;
+  align-items: center;
+  gap: 2px;
 }
 
 .member-list {
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: 8px 10px 12px;
+  background:
+    linear-gradient(90deg, rgba(99, 102, 241, 0.07) 1px, transparent 1px) 0 0 / 18px 18px,
+    linear-gradient(180deg, rgba(99, 102, 241, 0.04) 1px, transparent 1px) 0 0 / 18px 18px;
 }
 
-.member-card {
-  border: 1px solid var(--el-border-color);
+.class-folder {
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.folder-header {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid transparent;
   border-radius: 6px;
-  padding: 10px;
-  margin-bottom: 8px;
-  cursor: grab;
-  background: var(--el-fill-color-blank);
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.member-card:hover {
-  border-color: var(--el-color-primary);
-}
-
-.member-card:active {
-  cursor: grabbing;
-}
-
-.member-card.assigned {
-  border-style: dashed;
-}
-
-.member-name-row {
+  padding: 0 7px 0 5px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--el-text-color-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  will-change: transform;
 }
 
-.member-name {
-  font-weight: 600;
+.folder-header:hover {
+  border-color: rgba(99, 102, 241, 0.28);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(88, 99, 122, 0.08);
+  transform: translateY(-1px);
+}
+
+.folder-left,
+.folder-right {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.folder-caret {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  transform: rotate(90deg);
+  transition: transform 0.18s ease;
+}
+
+.class-folder.collapsed .folder-caret {
+  transform: rotate(0deg);
+}
+
+.folder-icon {
+  color: #7c5cff;
+  font-size: 16px;
+  filter: drop-shadow(0 4px 8px rgba(124, 92, 255, 0.18));
+}
+
+.folder-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.member-meta {
-  margin-top: 6px;
+.folder-progress {
+  color: var(--el-text-color-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+}
+
+.folder-swatch,
+.member-file-dot {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.folder-swatch {
+  width: 13px;
+  height: 13px;
+}
+
+.folder-body {
+  position: relative;
+  margin: 2px 0 6px 17px;
+  padding-left: 10px;
+}
+
+.folder-body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 6px;
+  left: 0;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.28), rgba(124, 92, 255, 0.04));
+}
+
+.folder-member-row {
+  min-height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 5px;
+  cursor: grab;
+  background: rgba(255, 255, 255, 0.86);
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  will-change: transform, opacity;
+}
+
+.folder-member-row:hover {
+  border-color: rgba(124, 92, 255, 0.35);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 8px 18px rgba(88, 99, 122, 0.08);
+  transform: translateX(2px);
+}
+
+.folder-member-row:active {
+  cursor: grabbing;
+}
+
+.folder-member-row.assigned {
+  border-style: solid;
+  background: rgba(245, 247, 251, 0.78);
+}
+
+.member-file-dot {
+  width: 10px;
+  height: 10px;
+}
+
+.member-file-main {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
+}
+
+.member-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.member-meta-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: 11px;
+}
+
+.member-meta-divider {
+  margin: 0 4px;
+  color: var(--el-text-color-placeholder);
+}
+
+.member-file-status {
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: rgba(124, 92, 255, 0.09);
+  color: #5b45d9;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.member-file-status.assigned {
+  background: rgba(34, 197, 94, 0.12);
+  color: #168a45;
 }
 
 .class-tag {

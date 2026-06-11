@@ -37,6 +37,7 @@ class BattleRegistrationService:
         guild_name = current_user.user.nick_name or current_user.user.user_name or ''
         invite_code = await cls._new_invite_code(db)
         create_time = datetime.now()
+        await BattleRegistrationDao.disable_active_invites_for_owner(db, owner_user_id)
         invite = await BattleRegistrationDao.create_invite(
             db,
             {
@@ -79,8 +80,45 @@ class BattleRegistrationService:
         for invite in invites:
             row = cls._format_invite(invite)
             row['approved_count'] = await BattleRegistrationDao.count_approved_for_invite(db, invite.invite_id)
+            row['registration_count'] = await BattleRegistrationDao.count_registrations_for_invite(db, invite.invite_id)
             rows.append(row)
         return rows
+
+    @classmethod
+    async def disable_invite_service(
+        cls, db: AsyncSession, current_user: CurrentUserModel, invite_id: int
+    ) -> CrudResponseModel:
+        role_scope = cls._get_role_scope(current_user)
+        if role_scope == 'user':
+            raise ServiceException(message='当前角色无权停用约战链接')
+        invite = await BattleRegistrationDao.get_invite_by_id(db, invite_id)
+        if not invite:
+            raise ServiceException(message='链接不存在')
+        if role_scope == 'common' and invite.owner_user_id != current_user.user.user_id:
+            raise ServiceException(message='只能停用自己帮会的约战链接')
+        if invite.status == '1':
+            return CrudResponseModel(is_success=True, message='链接已是失效状态')
+        await BattleRegistrationDao.disable_invite(db, invite_id)
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='约战链接已失效')
+
+    @classmethod
+    async def delete_invite_service(
+        cls, db: AsyncSession, current_user: CurrentUserModel, invite_id: int
+    ) -> CrudResponseModel:
+        role_scope = cls._get_role_scope(current_user)
+        if role_scope == 'user':
+            raise ServiceException(message='当前角色无权删除约战链接')
+        invite = await BattleRegistrationDao.get_invite_by_id(db, invite_id)
+        if not invite:
+            raise ServiceException(message='链接不存在')
+        if role_scope == 'common' and invite.owner_user_id != current_user.user.user_id:
+            raise ServiceException(message='只能删除自己帮会的约战链接')
+        if invite.status == '0' and invite.expire_time >= datetime.now():
+            raise ServiceException(message='生效中的链接不能删除，请先强制失效')
+        await BattleRegistrationDao.delete_invite(db, invite_id)
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='约战链接已删除')
 
     @classmethod
     async def list_registrations_service(
@@ -90,7 +128,12 @@ class BattleRegistrationService:
         if role_scope == 'user':
             raise ServiceException(message='当前角色无权查看约战审核列表')
         owner_user_id = None if role_scope == 'admin' else current_user.user.user_id
-        rows = await BattleRegistrationDao.list_registrations(db, owner_user_id, status)
+        await BattleRegistrationDao.mark_expired_invites(db)
+        await db.commit()
+        active_invite = await BattleRegistrationDao.get_latest_active_invite(db, owner_user_id)
+        if not active_invite:
+            return []
+        rows = await BattleRegistrationDao.list_registrations(db, owner_user_id, status, active_invite.invite_id)
         return [cls._format_registration(item) for item in rows]
 
     @classmethod
@@ -235,6 +278,11 @@ class BattleRegistrationService:
         if not registration:
             raise ServiceException(message='报名不存在或已处理')
         if role_scope == 'common' and registration.owner_user_id != current_user.user.user_id:
+            raise ServiceException(message='只能处理自己帮会的约战报名')
+        invite = await BattleRegistrationDao.get_invite_by_id(db, registration.invite_id or 0)
+        if not invite or invite.status != '0' or invite.expire_time < datetime.now():
+            raise ServiceException(message='报名链接已失效，不能继续审核')
+        if role_scope == 'common' and invite.owner_user_id != current_user.user.user_id:
             raise ServiceException(message='只能处理自己帮会的约战报名')
         return registration
 

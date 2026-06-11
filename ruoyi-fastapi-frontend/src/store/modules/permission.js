@@ -4,9 +4,13 @@ import { getRouters } from '@/api/menu'
 import Layout from '@/layout/index'
 import ParentView from '@/components/ParentView'
 import InnerLink from '@/layout/components/InnerLink'
+import GuildMember from '@/views/guild/member/index.vue'
 
 // 匹配views里面所有的.vue文件
-const modules = import.meta.glob('./../../views/**/*.vue')
+const modules = import.meta.glob([
+  './../../views/**/*.vue',
+  '!./../../views/guild/member/index.vue'
+])
 
 const usePermissionStore = defineStore(
   'permission',
@@ -143,6 +147,10 @@ export function filterDynamicRoutes(routes) {
 }
 
 export const loadView = (view) => {
+  if (view === 'guild/member/index') {
+    return GuildMember
+  }
+
   let res;
   for (const path in modules) {
     const dir = path.split('views/')[1].split('.vue')[0];

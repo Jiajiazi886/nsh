@@ -1,6 +1,7 @@
 import { createWebHistory, createRouter } from 'vue-router'
 /* Layout */
 import Layout from '@/layout'
+import GuildMember from '@/views/guild/member/index.vue'
 
 /**
  * Note: 路由配置项
@@ -97,7 +98,7 @@ export const constantRoutes = [
     children: [
       {
         path: 'member',
-        component: () => import('@/views/guild/member/index'),
+        component: GuildMember,
         name: 'GuildMember',
         meta: { title: '成员管理' }
       },

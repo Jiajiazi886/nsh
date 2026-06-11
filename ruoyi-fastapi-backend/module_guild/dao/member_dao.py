@@ -43,13 +43,17 @@ class MemberDao:
                 statements.append(
                     "ALTER TABLE guild_member ADD COLUMN source_type varchar(20) DEFAULT 'manual' COMMENT '成员来源' AFTER is_active"
                 )
-        for statement in statements:
-            await db.execute(text(statement))
-        if statements or 'member_user_id' in columns:
-            await db.execute(text('UPDATE guild_member SET member_user_id = COALESCE(member_user_id, 0) WHERE member_user_id IS NULL'))
-        if statements or 'source_type' in columns:
-            await db.execute(text("UPDATE guild_member SET source_type = 'manual' WHERE source_type IS NULL OR source_type = ''"))
         if statements:
+            for statement in statements:
+                await db.execute(text(statement))
+            if 'member_user_id' not in columns:
+                await db.execute(
+                    text('UPDATE guild_member SET member_user_id = COALESCE(member_user_id, 0) WHERE member_user_id IS NULL')
+                )
+            if 'source_type' not in columns:
+                await db.execute(
+                    text("UPDATE guild_member SET source_type = 'manual' WHERE source_type IS NULL OR source_type = ''")
+                )
             await db.commit()
         cls._schema_checked = True
 
@@ -63,6 +67,32 @@ class MemberDao:
         )
         result = await db.execute(stmt)
         return result.scalars().all()
+
+    @classmethod
+    async def query_member_list_payload(cls, db: AsyncSession, user_id: int) -> list[dict]:
+        await cls._ensure_member_schema(db)
+        stmt = (
+            select(
+                GuildMember.member_id,
+                GuildMember.guild_id,
+                GuildMember.user_id,
+                GuildMember.member_user_id,
+                GuildMember.player_name,
+                GuildMember.player_class,
+                GuildMember.secondary_class,
+                GuildMember.role_in_guild,
+                GuildMember.is_active,
+                GuildMember.source_type,
+                GuildMember.join_time,
+                GuildMember.remark,
+                GuildMember.team_id,
+                GuildMember.squad_number,
+            )
+            .where(GuildMember.user_id == user_id, GuildMember.is_active == '1')
+            .order_by(GuildMember.member_id)
+        )
+        result = await db.execute(stmt)
+        return [dict(row._mapping) for row in result.all()]
 
     @classmethod
     async def get_member_by_id(cls, db: AsyncSession, member_id: int) -> GuildMember | None:

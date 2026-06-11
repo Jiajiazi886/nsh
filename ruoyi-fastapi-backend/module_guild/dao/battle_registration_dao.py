@@ -16,6 +16,26 @@ class BattleRegistrationDao:
         return invite
 
     @classmethod
+    async def disable_active_invites_for_owner(cls, db: AsyncSession, owner_user_id: int) -> None:
+        stmt = update(GuildBattleInvite).where(
+            GuildBattleInvite.owner_user_id == owner_user_id,
+            GuildBattleInvite.status == '0',
+            GuildBattleInvite.expire_time >= datetime.now(),
+            GuildBattleInvite.del_flag == '0',
+        ).values(status='1')
+        await db.execute(stmt)
+        await db.flush()
+
+    @classmethod
+    async def get_invite_by_id(cls, db: AsyncSession, invite_id: int) -> GuildBattleInvite | None:
+        stmt = select(GuildBattleInvite).where(
+            GuildBattleInvite.invite_id == invite_id,
+            GuildBattleInvite.del_flag == '0',
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
     async def get_invite_by_code(cls, db: AsyncSession, invite_code: str) -> GuildBattleInvite | None:
         stmt = select(GuildBattleInvite).where(
             GuildBattleInvite.invite_code == invite_code,
@@ -32,6 +52,21 @@ class BattleRegistrationDao:
         stmt = stmt.order_by(GuildBattleInvite.create_time.desc(), GuildBattleInvite.invite_id.desc()).limit(100)
         result = await db.execute(stmt)
         return result.scalars().all()
+
+    @classmethod
+    async def get_latest_active_invite(
+        cls, db: AsyncSession, owner_user_id: int | None = None
+    ) -> GuildBattleInvite | None:
+        stmt = select(GuildBattleInvite).where(
+            GuildBattleInvite.status == '0',
+            GuildBattleInvite.expire_time >= datetime.now(),
+            GuildBattleInvite.del_flag == '0',
+        )
+        if owner_user_id is not None:
+            stmt = stmt.where(GuildBattleInvite.owner_user_id == owner_user_id)
+        stmt = stmt.order_by(GuildBattleInvite.create_time.desc(), GuildBattleInvite.invite_id.desc()).limit(1)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
 
     @classmethod
     async def search_members(cls, db: AsyncSession, owner_user_id: int, keyword: str) -> list[GuildMember]:
@@ -90,13 +125,19 @@ class BattleRegistrationDao:
 
     @classmethod
     async def list_registrations(
-        cls, db: AsyncSession, owner_user_id: int | None = None, status: str | None = None
+        cls,
+        db: AsyncSession,
+        owner_user_id: int | None = None,
+        status: str | None = None,
+        invite_id: int | None = None,
     ) -> list[GuildBattleRegistration]:
         stmt = select(GuildBattleRegistration).where(GuildBattleRegistration.del_flag == '0')
         if owner_user_id is not None:
             stmt = stmt.where(GuildBattleRegistration.owner_user_id == owner_user_id)
         if status is not None:
             stmt = stmt.where(GuildBattleRegistration.approval_status == status)
+        if invite_id is not None:
+            stmt = stmt.where(GuildBattleRegistration.invite_id == invite_id)
         stmt = stmt.order_by(GuildBattleRegistration.apply_time.desc(), GuildBattleRegistration.registration_id.desc())
         result = await db.execute(stmt)
         return result.scalars().all()
@@ -118,6 +159,33 @@ class BattleRegistrationDao:
         )
         result = await db.execute(stmt)
         return result.scalar() or 0
+
+    @classmethod
+    async def count_registrations_for_invite(cls, db: AsyncSession, invite_id: int) -> int:
+        stmt = select(func.count()).select_from(GuildBattleRegistration).where(
+            GuildBattleRegistration.invite_id == invite_id,
+            GuildBattleRegistration.del_flag == '0',
+        )
+        result = await db.execute(stmt)
+        return result.scalar() or 0
+
+    @classmethod
+    async def disable_invite(cls, db: AsyncSession, invite_id: int) -> None:
+        stmt = update(GuildBattleInvite).where(
+            GuildBattleInvite.invite_id == invite_id,
+            GuildBattleInvite.del_flag == '0',
+        ).values(status='1')
+        await db.execute(stmt)
+        await db.flush()
+
+    @classmethod
+    async def delete_invite(cls, db: AsyncSession, invite_id: int) -> None:
+        stmt = update(GuildBattleInvite).where(
+            GuildBattleInvite.invite_id == invite_id,
+            GuildBattleInvite.del_flag == '0',
+        ).values(del_flag='1')
+        await db.execute(stmt)
+        await db.flush()
 
     @classmethod
     async def mark_expired_invites(cls, db: AsyncSession) -> None:

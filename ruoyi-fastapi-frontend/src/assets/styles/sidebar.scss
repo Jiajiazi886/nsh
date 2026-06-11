@@ -1,12 +1,18 @@
 @use './variables.module.scss' as vars;
 @use './liquid-glass.scss' as glass;
 
+$sidebar-shell-inset: 12px;
+$sidebar-shell-gap: 12px;
+$sidebar-shell-offset: calc(#{vars.$base-sidebar-width} + #{$sidebar-shell-inset + $sidebar-shell-gap});
+$sidebar-collapse-offset: calc(54px + #{$sidebar-shell-inset + $sidebar-shell-gap});
+$sidebar-motion: 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+
 #app {
   .main-container {
     min-height: 100%;
-    margin-left: vars.$base-sidebar-width;
+    margin-left: $sidebar-shell-offset;
     position: relative;
-    transition: margin-left 0.28s ease;
+    transition: margin-left $sidebar-motion;
   }
 
   .sidebarHide {
@@ -14,18 +20,25 @@
   }
 
   .sidebar-container {
-    @include glass.liquid-glass(0 26px 26px 0, 20px, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.74), 14px 0 42px rgba(39, 53, 74, 0.18));
+    @include glass.liquid-glass(26px, 20px, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.74), 14px 0 42px rgba(39, 53, 74, 0.18));
     @include glass.liquid-highlight;
 
     width: vars.$base-sidebar-width !important;
-    height: 100%;
+    height: auto;
     position: fixed;
-    top: 0;
-    bottom: 0;
-    left: 0;
+    top: $sidebar-shell-inset;
+    bottom: $sidebar-shell-inset;
+    left: $sidebar-shell-inset;
     z-index: 1001;
     font-size: 0;
     color: var(--sidebar-text);
+    overflow: hidden;
+    will-change: width, transform;
+    transition:
+      width $sidebar-motion,
+      border-radius $sidebar-motion,
+      box-shadow $sidebar-motion,
+      transform $sidebar-motion;
 
     &::before {
       background:
@@ -40,7 +53,7 @@
     &::after {
       content: "";
       position: absolute;
-      right: -34px;
+      right: -24px;
       bottom: 34px;
       width: 102px;
       height: 154px;
@@ -52,7 +65,7 @@
     }
 
     .horizontal-collapse-transition {
-      transition: 0s width ease-in-out, 0s padding-left ease-in-out, 0s padding-right ease-in-out;
+      transition: width $sidebar-motion, padding-left $sidebar-motion, padding-right $sidebar-motion;
     }
 
     .scrollbar-wrapper {
@@ -104,6 +117,13 @@
       color: var(--sidebar-text) !important;
       font-weight: 800;
       letter-spacing: 0;
+      transition:
+        background-color 0.2s ease,
+        color 0.2s ease,
+        margin $sidebar-motion,
+        width $sidebar-motion,
+        min-width $sidebar-motion,
+        border-radius $sidebar-motion;
     }
 
     .el-menu-item .el-menu-tooltip__trigger {
@@ -181,6 +201,7 @@
   .hideSidebar {
     .sidebar-container {
       width: 54px !important;
+      border-radius: 18px;
 
       a,
       .el-menu,
@@ -215,7 +236,7 @@
     }
 
     .main-container {
-      margin-left: 54px;
+      margin-left: $sidebar-collapse-offset;
     }
 
     .sub-menu-title-noDropdown {
@@ -244,10 +265,12 @@
         > span,
         > i {
           width: 0;
-          height: 0;
           overflow: hidden;
           visibility: hidden;
+          opacity: 0;
+          transform: translate3d(-6px, 0, 0);
           display: inline-block;
+          transition: opacity 0.18s ease, transform 0.18s ease;
         }
       }
     }
@@ -260,7 +283,12 @@
 
     .sidebar-container {
       width: vars.$base-sidebar-width !important;
-      transition: transform 0.28s ease;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      height: auto;
+      border-radius: 0 24px 24px 0;
+      transition: transform $sidebar-motion;
     }
 
     &.hideSidebar .sidebar-container {

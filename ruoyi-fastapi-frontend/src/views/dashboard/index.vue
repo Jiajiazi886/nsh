@@ -1,752 +1,1026 @@
 <template>
-  <div>
-    <AConfigProvider
-      :theme="{
-        algorithm: settingsStore.isDark
-          ? theme.darkAlgorithm
-          : theme.defaultAlgorithm,
-      }"
-    >
-      <div class="pageHeaderContent">
-        <div class="avatar">
-          <a-avatar size="large" :src="currentUser.avatar" />
+  <div ref="pageRef" class="app-container guild-dashboard" v-loading="loading">
+    <section class="signup-command" data-guild-motion="hero">
+      <div class="command-main">
+        <div class="section-kicker">
+          <el-icon><Flag /></el-icon>
+          <span>{{ scopeLabel }}</span>
         </div>
-        <div class="content">
-          <div class="contentTitle">
-            早安，
-            {{ currentUser.name }}
-            ，祝你开心每一天！
+        <template v-if="activeInvite">
+          <h1>约战报名人数</h1>
+          <div class="invite-meta">
+            <span>{{ activeInvite.guild_name || guildName || '当前帮会' }}</span>
+            <span>{{ formatDateTime(activeInvite.battle_time) }}</span>
+            <el-tag type="success" effect="light">当前生效链接</el-tag>
           </div>
-          <div>{{ currentUser.title }} |{{ currentUser.group }}</div>
-        </div>
-        <div class="extraContent">
-          <div class="statItem">
-            <a-statistic title="项目数" :value="56" />
+          <div class="invite-actions">
+            <el-button type="primary" :icon="DocumentCopy" @click="copyInviteLink">复制报名链接</el-button>
+            <el-button :icon="Refresh" @click="fetchDashboard">刷新</el-button>
           </div>
-          <div class="statItem">
-            <a-statistic title="团队内排名" :value="8" suffix="/ 24" />
-          </div>
-          <div class="statItem">
-            <a-statistic title="项目访问" :value="2223" />
-          </div>
-        </div>
+        </template>
+        <template v-else>
+          <h1>当前没有生效报名链接</h1>
+          <p class="empty-copy">创建新的约战报名链接后，这里会显示真实报名人数、职业分布和申请信息。</p>
+          <el-button type="primary" :icon="Link" @click="goTo('/guild/review/battle')">创建报名链接</el-button>
+        </template>
       </div>
 
-      <div style="padding: 10px">
-        <a-row :gutter="24">
-          <a-col :xl="16" :lg="24" :md="24" :sm="24" :xs="24">
-            <a-card
-              class="projectList"
-              :style="{ marginBottom: '24px' }"
-              title="进行中的项目"
-              :bordered="false"
-              :loading="false"
-              :body-style="{ padding: 0 }"
-            >
-              <template #extra>
-                <a href="">
-                  <span style="color: var(--el-color-primary)">全部项目</span>
-                </a>
-              </template>
-              <a-card-grid
-                v-for="item in projectNotice"
-                :key="item.id"
-                class="projectGrid"
-              >
-                <a-card
-                  :body-style="{ padding: 0 }"
-                  style="box-shadow: none"
-                  :bordered="false"
-                >
-                  <a-card-meta :description="item.description" class="w-full">
-                    <template #title>
-                      <div class="cardTitle">
-                        <a-avatar size="small" :src="item.logo" />
-                        <a :href="item.href">
-                          {{ item.title }}
-                        </a>
-                      </div>
-                    </template>
-                  </a-card-meta>
-                  <div class="projectItemContent">
-                    <a :href="item.memberLink">
-                      {{ item.member || "" }}
-                    </a>
-                    <span class="datetime" ml-2 :title="item.updatedAt">
-                      {{ item.updatedAt }}
-                    </span>
-                  </div>
-                </a-card>
-              </a-card-grid>
-            </a-card>
-            <a-card
-              :body-style="{ padding: 0 }"
-              :bordered="false"
-              class="activeCard"
-              title="动态"
-              :loading="false"
-            >
-              <a-list :data-source="activities" class="activitiesList">
-                <template #renderItem="{ item }">
-                  <a-list-item :key="item.id">
-                    <a-list-item-meta>
-                      <template #title>
-                        <span>
-                          <a class="username">{{ item.user.name }}</a
-                          >&nbsp;
-                          <span class="event">
-                            <span>{{ item.template1 }}</span
-                            >&nbsp;
-                            <a href="" style="color: var(--el-color-primary)">
-                              {{ item?.group?.name }} </a
-                            >&nbsp; <span>{{ item.template2 }}</span
-                            >&nbsp;
-                            <a href="" style="color: var(--el-color-primary)">
-                              {{ item?.project?.name }}
-                            </a>
-                          </span>
-                        </span>
-                      </template>
-                      <template #avatar>
-                        <a-avatar :src="item.user.avatar" />
-                      </template>
-                      <template #description>
-                        <span class="datetime" :title="item.updatedAt">
-                          {{ item.updatedAt }}
-                        </span>
-                      </template>
-                    </a-list-item-meta>
-                  </a-list-item>
-                </template>
-              </a-list>
-            </a-card>
-          </a-col>
-          <a-col :xl="8" :lg="24" :md="24" :sm="24" :xs="24">
-            <a-card
-              :style="{ marginBottom: '24px' }"
-              title="快速开始 / 便捷导航"
-              :bordered="false"
-              :body-style="{ padding: 0 }"
-            >
-              <EditableLinkGroup />
-            </a-card>
-            <a-card
-              :style="{ marginBottom: '24px' }"
-              :bordered="false"
-              title="XX 指数"
-            >
-              <div class="chart">
-                <div ref="radarContainer" />
-              </div>
-            </a-card>
-            <a-card
-              :body-style="{ paddingTop: '12px', paddingBottom: '12px' }"
-              :bordered="false"
-              title="团队"
-            >
-              <div class="members">
-                <a-row :gutter="48">
-                  <a-col
-                    v-for="item in projectNotice"
-                    :key="`members-item-${item.id}`"
-                    :span="12"
-                  >
-                    <a :href="item.href">
-                      <a-avatar :src="item.logo" size="small" />
-                      <span class="member">{{ item.member }}</span>
-                    </a>
-                  </a-col>
-                </a-row>
-              </div>
-            </a-card>
-          </a-col>
-        </a-row>
+      <div class="command-number">
+        <span>已报名</span>
+        <strong>{{ formatNumber(activeInvite?.registration_count) }}</strong>
+        <small>包含待审核、已通过、已拒绝</small>
       </div>
-    </AConfigProvider>
+    </section>
+
+    <section class="signup-grid">
+      <article class="panel signup-classes" data-guild-reveal>
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Signup Classes</span>
+            <h2>报名职业人数</h2>
+          </div>
+          <span class="panel-note">{{ formatNumber(activeInvite?.registration_count) }} 人</span>
+        </div>
+        <div v-if="signupClasses.length" class="class-card-grid compact">
+          <el-popover
+            v-for="item in signupClasses"
+            :key="item.class_name"
+            placement="top"
+            trigger="hover"
+            :width="240"
+            popper-class="guild-player-popover"
+          >
+            <template #reference>
+              <div class="class-card signup-class-card">
+                <span class="class-chip" :style="getGuildClassStyle(item.class_name)">{{ item.class_name }}</span>
+                <strong>{{ formatNumber(item.count) }}</strong>
+                <small>{{ item.percent || 0 }}%</small>
+                <div class="class-meter">
+                  <i :style="{ width: classWidth(item.percent), ...getGuildClassBarStyle(item.class_name) }"></i>
+                </div>
+              </div>
+            </template>
+            <div class="player-popover">
+              <div class="popover-title">{{ item.class_name }} · {{ formatNumber(item.count) }} 人</div>
+              <div v-if="item.players?.length" class="player-list">
+                <span v-for="player in item.players" :key="player.registration_id">{{ player.player_name }}</span>
+              </div>
+              <span v-else class="muted-text">暂无报名玩家明细</span>
+            </div>
+          </el-popover>
+        </div>
+        <el-empty v-else description="当前链接还没有报名记录" :image-size="90" />
+      </article>
+
+      <article class="panel guild-classes" data-guild-reveal>
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Guild Roster</span>
+            <h2>帮会主职分布</h2>
+          </div>
+          <span class="panel-note">悬浮卡片查看玩家</span>
+        </div>
+        <div v-if="guildClasses.length" class="class-card-grid">
+          <el-popover
+            v-for="item in guildClasses"
+            :key="item.class_name"
+            placement="top"
+            trigger="hover"
+            :width="260"
+            popper-class="guild-player-popover"
+          >
+            <template #reference>
+              <div class="class-card roster-card">
+                <span class="class-chip" :style="getGuildClassStyle(item.class_name)">{{ item.class_name }}</span>
+                <strong>{{ formatNumber(item.count) }}</strong>
+                <small>{{ item.percent || 0 }}%</small>
+                <div class="class-meter">
+                  <i :style="{ width: classWidth(item.percent), ...getGuildClassBarStyle(item.class_name) }"></i>
+                </div>
+              </div>
+            </template>
+            <div class="player-popover">
+              <div class="popover-title">{{ item.class_name }} · {{ formatNumber(item.count) }} 人</div>
+              <div v-if="item.players?.length" class="player-list">
+                <span v-for="player in item.players" :key="player.member_id">{{ player.player_name }}</span>
+              </div>
+              <span v-else class="muted-text">暂无玩家明细</span>
+            </div>
+          </el-popover>
+        </div>
+        <el-empty v-else description="当前帮会还没有可统计的主职成员" :image-size="90" />
+      </article>
+    </section>
+
+    <section class="detail-grid">
+      <article class="panel" data-guild-reveal>
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Battle Signup</span>
+            <h2>约战审核</h2>
+          </div>
+          <el-button
+            text
+            type="primary"
+            :icon="Check"
+            :disabled="!pendingRegistrations.length"
+            :loading="battleActionId === 'bulk'"
+            @click="approveAllPendingRegistrations"
+          >
+            同意
+          </el-button>
+        </div>
+        <div v-if="registrations.length" class="detail-list">
+          <div v-for="item in registrations" :key="item.registration_id" class="detail-row">
+            <div>
+              <strong>{{ item.player_name }}</strong>
+              <span>{{ item.applicant_name || '未填写称呼' }} · {{ formatDateTime(item.apply_time) }}</span>
+            </div>
+            <span class="class-chip" :style="getGuildClassStyle(item.player_class)">{{ item.player_class || '未设置' }}</span>
+            <el-tag :type="reviewTagType(item.approval_status)" effect="light">
+              {{ reviewStatusLabel(item.approval_status) }}
+            </el-tag>
+            <div v-if="item.approval_status === '0'" class="row-actions">
+              <el-button
+                link
+                type="primary"
+                :loading="battleActionId === `approve-${item.registration_id}`"
+                @click="reviewBattleRegistration(item, 'approve')"
+              >
+                同意
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :loading="battleActionId === `reject-${item.registration_id}`"
+                @click="reviewBattleRegistration(item, 'reject')"
+              >
+                拒绝
+              </el-button>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else description="当前链接暂无报名明细" :image-size="90" />
+      </article>
+
+      <article class="panel" data-guild-reveal>
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Join Review</span>
+            <h2>入帮申请</h2>
+          </div>
+          <div class="panel-head-actions">
+            <div class="stacked-count">
+              <strong>{{ formatNumber(activeInvite?.pending_join_count ?? reviewSummary.pending_join_count) }}</strong>
+              <span>待审核</span>
+            </div>
+            <el-button
+              text
+              type="primary"
+              :icon="Check"
+              :disabled="!pendingJoinApplications.length"
+              :loading="joinActionId === 'bulk'"
+              @click="approveAllPendingJoinApplications"
+            >
+              同意
+            </el-button>
+          </div>
+        </div>
+        <div v-if="joinApplications.length" class="detail-list">
+          <div v-for="item in joinApplications" :key="item.application_id" class="detail-row application-row">
+            <div>
+              <strong>{{ item.player_name }}</strong>
+              <span>{{ item.guild_name || activeInvite?.guild_name || '当前帮会' }} · {{ formatDateTime(item.apply_time) }}</span>
+            </div>
+            <span class="class-chip" :style="getGuildClassStyle(item.player_class)">{{ item.player_class || '未设置' }}</span>
+            <el-tag :type="reviewTagType(item.review_status)" effect="light">
+              {{ reviewStatusLabel(item.review_status) }}
+            </el-tag>
+            <div v-if="item.review_status === '0'" class="row-actions">
+              <el-button
+                link
+                type="primary"
+                :loading="joinActionId === `approve-${item.application_id}`"
+                @click="reviewJoinApplication(item, 'approve')"
+              >
+                同意
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :loading="joinActionId === `reject-${item.application_id}`"
+                @click="reviewJoinApplication(item, 'reject')"
+              >
+                拒绝
+              </el-button>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else description="当前帮会暂无入帮申请" :image-size="90" />
+      </article>
+    </section>
+
+    <section class="ops-grid">
+      <article class="metric-card" data-guild-reveal>
+        <div class="metric-icon green"><el-icon><UserFilled /></el-icon></div>
+        <div>
+          <span>活跃成员</span>
+          <strong>{{ formatNumber(memberSummary.active_count) }}</strong>
+          <small>成员总数 {{ formatNumber(memberSummary.total_count) }}</small>
+        </div>
+      </article>
+      <article class="metric-card" data-guild-reveal>
+        <div class="metric-icon amber"><el-icon><Bell /></el-icon></div>
+        <div>
+          <span>入帮待审</span>
+          <strong>{{ formatNumber(reviewSummary.pending_join_count) }}</strong>
+          <small>当前权限范围</small>
+        </div>
+      </article>
+      <article class="metric-card" data-guild-reveal>
+        <div class="metric-icon red"><el-icon><Tickets /></el-icon></div>
+        <div>
+          <span>报名待审</span>
+          <strong>{{ formatNumber(reviewSummary.pending_battle_registration_count) }}</strong>
+          <small>约战报名审核</small>
+        </div>
+      </article>
+      <article class="metric-card" data-guild-reveal>
+        <div class="metric-icon blue"><el-icon><Grid /></el-icon></div>
+        <div>
+          <span>当前排表</span>
+          <strong>{{ formatNumber(scheduleSummary.assignment_count || scheduleSummary.total_assignment_count) }}</strong>
+          <small>{{ scheduleLabel }}</small>
+        </div>
+      </article>
+    </section>
+
+    <section class="detail-grid history-grid">
+      <article class="panel" data-guild-reveal>
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Recent Battle</span>
+            <h2>最近复盘</h2>
+          </div>
+          <el-button text type="primary" :icon="Right" @click="goTo('/guild/battle/list')">历史</el-button>
+        </div>
+        <div v-if="latestBattle" class="battle-line">
+          <div class="battle-date">
+            <strong>{{ battleDay(latestBattle) }}</strong>
+            <span>{{ battleMonth(latestBattle) }}</span>
+          </div>
+          <div>
+            <strong>{{ latestBattle.battle_name || '未命名约战' }}</strong>
+            <span>{{ latestBattle.my_guild_name || guildName || '己方帮会' }} vs {{ latestBattle.opponent_name || '未记录对手' }}</span>
+          </div>
+          <el-tag :type="resultTagType(latestBattle.battle_result)" effect="light">
+            {{ latestBattle.battle_result || statusLabel(latestBattle.status) }}
+          </el-tag>
+        </div>
+        <el-empty v-else description="当前范围暂无约战复盘" :image-size="90" />
+      </article>
+
+      <article class="panel" data-guild-reveal>
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Battle Review</span>
+            <h2>复盘指标</h2>
+          </div>
+          <span class="panel-note">胜率 {{ battleSummary.win_rate || 0 }}%</span>
+        </div>
+        <div v-if="battleRecordSummary" class="record-metrics">
+          <div v-for="item in recordMetricItems" :key="item.key" class="record-metric">
+            <span>{{ item.label }}</span>
+            <strong>{{ formatCompactNumber(item.value) }}</strong>
+          </div>
+        </div>
+        <el-empty v-else description="最近约战还没有复盘明细" :image-size="90" />
+      </article>
+    </section>
   </div>
 </template>
 
-<script>
-import {
-  Statistic,
-  Row,
-  Col,
-  Card,
-  CardGrid,
-  CardMeta,
-  List,
-  ListItem,
-  ListItemMeta,
-  Avatar,
-  ConfigProvider,
-  theme,
-} from "ant-design-vue";
-import "ant-design-vue/dist/reset.css";
-
-export default {
-  components: {
-    AStatistic: Statistic,
-    ARow: Row,
-    ACol: Col,
-    ACard: Card,
-    ACardGrid: CardGrid,
-    ACardMeta: CardMeta,
-    AList: List,
-    AListItem: ListItem,
-    AListItemMeta: ListItemMeta,
-    AAvatar: Avatar,
-    AConfigProvider: ConfigProvider,
-  },
-};
-</script>
-
 <script setup>
-import { Radar } from "@antv/g2plot";
-import EditableLinkGroup from "./editable-link-group.vue";
-import useSettingsStore from "@/store/modules/settings";
-
-const settingsStore = useSettingsStore();
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import {
+  Bell,
+  Check,
+  DocumentCopy,
+  Flag,
+  Grid,
+  Link,
+  Refresh,
+  Right,
+  Tickets,
+  UserFilled
+} from '@element-plus/icons-vue'
+import { getGuildDashboardSummary } from '@/api/guild/dashboard'
+import { approveBattleRegistration, rejectBattleRegistration } from '@/api/guild/battle'
+import { approveJoinApplication, rejectJoinApplication } from '@/api/guild/join'
+import useGuildMemberStore from '@/store/modules/guildMember'
+import useUserStore from '@/store/modules/user'
+import { useGuildClassColors } from '@/utils/guildClassColor'
+import { useGuildPageMotion } from '@/composables/useGuildPageMotion'
 
 defineOptions({
-  name: "DashBoard",
-});
+  name: 'DashBoard'
+})
 
-const currentUser = {
-  avatar: "https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxka.png",
-  name: "吴彦祖",
-  userid: "00000001",
-  email: "antdesign@alipay.com",
-  signature: "海纳百川，有容乃大",
-  title: "交互专家",
-  group: "蚂蚁金服－某某某事业群－某某平台部－某某技术部－UED",
-};
+const router = useRouter()
+const guildMemberStore = useGuildMemberStore()
+const userStore = useUserStore()
+const pageRef = ref(null)
+const loading = ref(false)
+const battleActionId = ref('')
+const joinActionId = ref('')
+const dashboard = ref({})
+const { getGuildClassBarStyle, getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
-const projectNotice = [
-  {
-    id: "xxx1",
-    title: "Alipay",
-    logo: "https://gw.alipayobjects.com/zos/rmsportal/WdGqmHpayyMjiEhcKoVE.png",
-    description: "那是一种内在的东西，他们到达不了，也无法触及的",
-    updatedAt: "几秒前",
-    member: "科学搬砖组",
-    href: "",
-    memberLink: "",
-  },
-  {
-    id: "xxx2",
-    title: "Angular",
-    logo: "https://gw.alipayobjects.com/zos/rmsportal/zOsKZmFRdUtvpqCImOVY.png",
-    description: "希望是一个好东西，也许是最好的，好东西是不会消亡的",
-    updatedAt: "6 年前",
-    member: "全组都是吴彦祖",
-    href: "",
-    memberLink: "",
-  },
-  {
-    id: "xxx3",
-    title: "Ant Design",
-    logo: "https://gw.alipayobjects.com/zos/rmsportal/dURIMkkrRFpPgTuzkwnB.png",
-    description: "城镇中有那么多的酒馆，她却偏偏走进了我的酒馆",
-    updatedAt: "几秒前",
-    member: "中二少女团",
-    href: "",
-    memberLink: "",
-  },
-  {
-    id: "xxx4",
-    title: "Ant Design Pro",
-    logo: "https://gw.alipayobjects.com/zos/rmsportal/sfjbOqnsXXJgNCjCzDBL.png",
-    description: "那时候我只会想自己想要什么，从不想自己拥有什么",
-    updatedAt: "6 年前",
-    member: "程序员日常",
-    href: "",
-    memberLink: "",
-  },
-  {
-    id: "xxx5",
-    title: "Bootstrap",
-    logo: "https://gw.alipayobjects.com/zos/rmsportal/siCrBXXhmvTQGWPNLBow.png",
-    description: "凛冬将至",
-    updatedAt: "6 年前",
-    member: "高逼格设计天团",
-    href: "",
-    memberLink: "",
-  },
-  {
-    id: "xxx6",
-    title: "React",
-    logo: "https://gw.alipayobjects.com/zos/rmsportal/kZzEzemZyKLKFsojXItE.png",
-    description: "生命就像一盒巧克力，结果往往出人意料",
-    updatedAt: "6 年前",
-    member: "骗你来学计算机",
-    href: "",
-    memberLink: "",
-  },
-];
+useGuildPageMotion(pageRef)
 
-const activities = [
-  {
-    id: "trend-1",
-    updatedAt: "几秒前",
-    user: {
-      name: "曲丽丽",
-      avatar:
-        "https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxka.png",
-    },
-    group: {
-      name: "高逼格设计天团",
-      link: "http://github.com/",
-    },
-    project: {
-      name: "六月迭代",
-      link: "http://github.com/",
-    },
-    template1: "在",
-    template2: "新建项目",
-  },
-  {
-    id: "trend-2",
-    updatedAt: "几秒前",
-    user: {
-      name: "付小小",
-      avatar:
-        "https://gw.alipayobjects.com/zos/rmsportal/cnrhVkzwxjPwAaCfPbdc.png",
-    },
-    group: {
-      name: "高逼格设计天团",
-      link: "http://github.com/",
-    },
-    project: {
-      name: "六月迭代",
-      link: "http://github.com/",
-    },
-    template1: "在",
-    template2: "新建项目",
-  },
-  {
-    id: "trend-3",
-    updatedAt: "几秒前",
-    user: {
-      name: "林东东",
-      avatar:
-        "https://gw.alipayobjects.com/zos/rmsportal/gaOngJwsRYRaVAuXXcmB.png",
-    },
-    group: {
-      name: "中二少女团",
-      link: "http://github.com/",
-    },
-    project: {
-      name: "六月迭代",
-      link: "http://github.com/",
-    },
-    template1: "在",
-    template2: "新建项目",
-  },
-  {
-    id: "trend-4",
-    updatedAt: "几秒前",
-    user: {
-      name: "周星星",
-      avatar:
-        "https://gw.alipayobjects.com/zos/rmsportal/WhxKECPNujWoWEFNdnJE.png",
-    },
-    group: {
-      name: "5 月日常迭代",
-      link: "http://github.com/",
-    },
-    template1: "将",
-    template2: "更新至已发布状态",
-  },
-  {
-    id: "trend-5",
-    updatedAt: "几秒前",
-    user: {
-      name: "朱偏右",
-      avatar:
-        "https://gw.alipayobjects.com/zos/rmsportal/ubnKSIfAJTxIgXOKlciN.png",
-    },
-    group: {
-      name: "工程效能",
-      link: "http://github.com/",
-    },
-    project: {
-      name: "留言",
-      link: "http://github.com/",
-    },
-    template1: "在",
-    template2: "发布了",
-  },
-  {
-    id: "trend-6",
-    updatedAt: "几秒前",
-    user: {
-      name: "乐哥",
-      avatar:
-        "https://gw.alipayobjects.com/zos/rmsportal/jZUIxmJycoymBprLOUbT.png",
-    },
-    group: {
-      name: "程序员日常",
-      link: "http://github.com/",
-    },
-    project: {
-      name: "品牌迭代",
-      link: "http://github.com/",
-    },
-    template1: "在",
-    template2: "新建项目",
-  },
-];
+const scope = computed(() => dashboard.value.scope || {})
+const scopeLabel = computed(() => scope.value.label || '当前数据')
+const guild = computed(() => dashboard.value.guild || {})
+const guildName = computed(() => guild.value.guild_name || '')
+const activeInvite = computed(() => dashboard.value.active_invite_summary || null)
+const signupClasses = computed(() => activeInvite.value?.registration_class_distribution || [])
+const cachedGuildClasses = computed(() => buildClassDistributionFromMembers(guildMemberStore.members))
+const guildClasses = computed(() => {
+  if (scope.value.type === 'common' && guildMemberStore.hasReadyCache && cachedGuildClasses.value.length) {
+    return cachedGuildClasses.value
+  }
+  return activeInvite.value?.guild_class_distribution || dashboard.value.class_distribution || []
+})
+const registrations = computed(() => activeInvite.value?.registrations || [])
+const pendingRegistrations = computed(() => registrations.value.filter(item => item.approval_status === '0'))
+const joinApplications = computed(() => activeInvite.value?.join_applications || [])
+const pendingJoinApplications = computed(() => joinApplications.value.filter(item => item.review_status === '0'))
+const battleSummary = computed(() => dashboard.value.battle_summary || {})
+const latestBattles = computed(() => dashboard.value.latest_battles || [])
+const latestBattle = computed(() => latestBattles.value[0] || null)
+const battleRecordSummary = computed(() => latestBattle.value?.my_guild_summary || dashboard.value.latest_battle_record_summary || null)
+const memberSummary = computed(() => dashboard.value.member_summary || {})
+const reviewSummary = computed(() => dashboard.value.review_summary || {})
+const scheduleSummary = computed(() => dashboard.value.schedule_summary || {})
 
-const radarContainer = ref();
-const radarData = [
-  {
-    name: "个人",
-    label: "引用",
-    value: 10,
-  },
-  {
-    name: "个人",
-    label: "口碑",
-    value: 8,
-  },
-  {
-    name: "个人",
-    label: "产量",
-    value: 4,
-  },
-  {
-    name: "个人",
-    label: "贡献",
-    value: 5,
-  },
-  {
-    name: "个人",
-    label: "热度",
-    value: 7,
-  },
-  {
-    name: "团队",
-    label: "引用",
-    value: 3,
-  },
-  {
-    name: "团队",
-    label: "口碑",
-    value: 9,
-  },
-  {
-    name: "团队",
-    label: "产量",
-    value: 6,
-  },
-  {
-    name: "团队",
-    label: "贡献",
-    value: 3,
-  },
-  {
-    name: "团队",
-    label: "热度",
-    value: 1,
-  },
-  {
-    name: "部门",
-    label: "引用",
-    value: 4,
-  },
-  {
-    name: "部门",
-    label: "口碑",
-    value: 1,
-  },
-  {
-    name: "部门",
-    label: "产量",
-    value: 6,
-  },
-  {
-    name: "部门",
-    label: "贡献",
-    value: 5,
-  },
-  {
-    name: "部门",
-    label: "热度",
-    value: 7,
-  },
-];
-let radar;
+const scheduleLabel = computed(() => {
+  if (!scheduleSummary.value.schedule_id) return '暂无启用排表'
+  return `${scheduleSummary.value.team_count || 0} 队 / ${scheduleSummary.value.squad_count || 0} 小队`
+})
+
+const recordMetricItems = computed(() => {
+  const record = battleRecordSummary.value || {}
+  return [
+    { key: 'participants', label: '参战', value: record.participants },
+    { key: 'kills', label: '击杀', value: record.kills },
+    { key: 'assists', label: '助攻', value: record.assists },
+    { key: 'damage', label: '伤害', value: record.damage },
+    { key: 'healing', label: '治疗', value: record.healing },
+    { key: 'deaths', label: '死亡', value: record.deaths }
+  ]
+})
+
+async function fetchDashboard() {
+  loading.value = true
+  try {
+    const res = await getGuildDashboardSummary()
+    dashboard.value = res.data || {}
+  } finally {
+    loading.value = false
+  }
+}
+
+function warmGuildMemberCache() {
+  if (guildMemberStore.hasReadyCache) return
+  guildMemberStore.preloadAfterLogin(userStore.permissions)
+}
+
+function buildClassDistributionFromMembers(members = []) {
+  const grouped = new Map()
+  members.forEach(member => {
+    const className = (member.player_class || '').trim()
+    if (!className) return
+    const group = grouped.get(className) || {
+      class_name: className,
+      count: 0,
+      percent: 0,
+      players: []
+    }
+    group.count += 1
+    group.players.push({
+      member_id: member.member_id,
+      player_name: member.player_name,
+      player_class: member.player_class || '',
+      secondary_class: member.secondary_class || '',
+      role_in_guild: member.role_in_guild || ''
+    })
+    grouped.set(className, group)
+  })
+  const total = Array.from(grouped.values()).reduce((sum, item) => sum + item.count, 0)
+  return Array.from(grouped.values())
+    .map(item => ({
+      ...item,
+      percent: total ? Math.round((item.count / total) * 1000) / 10 : 0
+    }))
+    .sort((a, b) => b.count - a.count || a.class_name.localeCompare(b.class_name, 'zh-CN'))
+}
+
+function goTo(path) {
+  router.push(path)
+}
+
+async function copyInviteLink() {
+  if (!activeInvite.value?.public_path) return
+  await navigator.clipboard.writeText(`${window.location.origin}${activeInvite.value.public_path}`)
+  ElMessage.success('报名链接已复制')
+}
+
+async function reviewBattleRegistration(item, type) {
+  const isApprove = type === 'approve'
+  battleActionId.value = `${type}-${item.registration_id}`
+  try {
+    if (isApprove) {
+      await approveBattleRegistration(item.registration_id)
+      ElMessage.success(`${item.player_name} 已同意`)
+    } else {
+      await rejectBattleRegistration(item.registration_id)
+      ElMessage.success(`${item.player_name} 已拒绝`)
+    }
+    await fetchDashboard()
+  } finally {
+    battleActionId.value = ''
+  }
+}
+
+async function approveAllPendingRegistrations() {
+  if (!pendingRegistrations.value.length) return
+  battleActionId.value = 'bulk'
+  try {
+    await Promise.all(pendingRegistrations.value.map(item => approveBattleRegistration(item.registration_id)))
+    ElMessage.success(`已同意 ${pendingRegistrations.value.length} 条约战报名`)
+    await fetchDashboard()
+  } finally {
+    battleActionId.value = ''
+  }
+}
+
+async function approveAllPendingJoinApplications() {
+  if (!pendingJoinApplications.value.length) return
+  joinActionId.value = 'bulk'
+  try {
+    await Promise.all(pendingJoinApplications.value.map(item => approveJoinApplication(item.application_id)))
+    ElMessage.success(`已同意 ${pendingJoinApplications.value.length} 条入帮申请`)
+    await fetchDashboard()
+    window.dispatchEvent(new Event('guild-member-data-changed'))
+  } finally {
+    joinActionId.value = ''
+  }
+}
+
+async function reviewJoinApplication(item, type) {
+  const isApprove = type === 'approve'
+  joinActionId.value = `${type}-${item.application_id}`
+  try {
+    if (isApprove) {
+      await approveJoinApplication(item.application_id)
+      ElMessage.success(`${item.player_name} 已同意入帮`)
+    } else {
+      await rejectJoinApplication(item.application_id)
+      ElMessage.success(`${item.player_name} 已拒绝入帮`)
+    }
+    await fetchDashboard()
+    window.dispatchEvent(new Event('guild-member-data-changed'))
+  } finally {
+    joinActionId.value = ''
+  }
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('zh-CN')
+}
+
+function formatCompactNumber(value) {
+  const number = Number(value || 0)
+  if (number >= 100000000) return `${(number / 100000000).toFixed(1)}亿`
+  if (number >= 10000) return `${(number / 10000).toFixed(1)}万`
+  return formatNumber(number)
+}
+
+function normalizeDate(value) {
+  if (!value) return null
+  if (/^\d{8}$/.test(String(value))) {
+    const raw = String(value)
+    return new Date(`${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}T00:00:00`)
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatDateTime(value) {
+  const date = normalizeDate(value)
+  if (!date) return '未记录时间'
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function battleDay(battle) {
+  const date = normalizeDate(battle.battle_time || battle.battle_date || battle.create_time)
+  return date ? String(date.getDate()).padStart(2, '0') : '--'
+}
+
+function battleMonth(battle) {
+  const date = normalizeDate(battle.battle_time || battle.battle_date || battle.create_time)
+  return date ? `${date.getMonth() + 1}月` : '未知'
+}
+
+function statusLabel(status) {
+  return { 0: '待开始', 1: '进行中', 2: '已完成' }[String(status)] || '未记录'
+}
+
+function resultTagType(result) {
+  if (!result) return 'info'
+  if (String(result).includes('胜')) return 'success'
+  if (String(result).includes('负') || String(result).includes('败')) return 'danger'
+  return 'warning'
+}
+
+function reviewStatusLabel(status) {
+  return { 0: '待审核', 1: '已通过', 2: '已拒绝' }[String(status)] || '未记录'
+}
+
+function reviewTagType(status) {
+  return { 0: 'warning', 1: 'success', 2: 'danger' }[String(status)] || 'info'
+}
+
+function classWidth(percent) {
+  const value = Number(percent || 0)
+  if (!value) return '0%'
+  return `${Math.max(7, value)}%`
+}
+
 onMounted(() => {
-  radar = new Radar(radarContainer.value, {
-    data: radarData,
-    xField: "label",
-    yField: "value",
-    seriesField: "name",
-    point: {
-      size: 4,
-    },
-    legend: {
-      layout: "horizontal",
-      position: "bottom",
-    },
-  });
-  radar.render();
-});
-
-onBeforeUnmount(() => {
-  radar?.destroy?.();
-});
+  warmGuildMemberCache()
+  fetchDashboard()
+  loadGuildClassColors()
+})
 </script>
 
-<style scoped lang="less">
-.textOverflow() {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  word-break: break-all;
-}
-
-// mixins for clearfix
-// ------------------------
-.clearfix() {
-  zoom: 1;
-  &::before,
-  &::after {
-    display: table;
-    content: " ";
-  }
-  &::after {
-    clear: both;
-    height: 0;
-    font-size: 0;
-    visibility: hidden;
-  }
-}
-
-.activitiesList {
-  padding: 0 24px 8px 24px;
-  .username {
-    color: var(--el-text-color-regular);
-  }
-  .event {
-    font-weight: normal;
-  }
-}
-
-.pageHeaderContent {
+<style scoped lang="scss">
+.guild-dashboard {
   display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: #172033;
+  background:
+    linear-gradient(180deg, rgba(250, 252, 255, 0.97), rgba(244, 248, 250, 0.97)),
+    repeating-linear-gradient(90deg, rgba(23, 32, 51, 0.025) 0, rgba(23, 32, 51, 0.025) 1px, transparent 1px, transparent 84px);
+}
+
+.signup-command,
+.panel,
+.metric-card {
+  border: 1px solid rgba(23, 32, 51, 0.09);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 252, 253, 0.9));
+  box-shadow: 0 18px 42px rgba(23, 32, 51, 0.08);
+}
+
+.signup-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 22px;
+  min-height: 220px;
+  padding: 30px;
+  overflow: hidden;
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.96), rgba(247, 251, 249, 0.92)),
+    linear-gradient(90deg, rgba(47, 111, 99, 0.08), rgba(232, 215, 84, 0.08));
+}
+
+.command-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.section-kicker,
+.eyebrow {
+  color: #2f6f63;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.section-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.command-main h1 {
+  margin: 14px 0 12px;
+  color: #121826;
+  font-size: 36px;
+  line-height: 1.14;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.empty-copy {
+  max-width: 620px;
+  margin: 0 0 18px;
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.invite-meta,
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.invite-meta {
+  color: #5f6f86;
+  font-weight: 700;
+}
+
+.invite-actions {
+  margin-top: 20px;
+}
+
+.command-number {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 22px;
+  border-radius: 13px;
+  background:
+    linear-gradient(135deg, #11261f, #1e473d),
+    #11261f;
+  color: #e8fff5;
+}
+
+.command-number span,
+.command-number small,
+.metric-card span,
+.metric-card small {
+  display: block;
+}
+
+.command-number strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 56px;
+  line-height: 1;
+}
+
+.command-number small {
+  margin-top: 12px;
+  color: rgba(232, 255, 245, 0.72);
+}
+
+.signup-grid,
+.detail-grid,
+.history-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.detail-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 0.9fr);
+}
+
+.panel {
+  min-width: 0;
+  padding: 22px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.panel-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.panel-head h2 {
+  margin: 5px 0 0;
+  color: #121826;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.panel-note,
+.muted-text,
+.detail-row span,
+.battle-line span,
+.metric-card span,
+.metric-card small {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.class-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 12px;
+}
+
+.class-card-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+}
+
+.class-card {
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 12px;
+  background: #fbfcfd;
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.class-card:hover {
+  border-color: rgba(47, 111, 99, 0.28);
+  box-shadow: 0 14px 28px rgba(23, 32, 51, 0.09);
+  transform: translate3d(0, -2px, 0);
+}
+
+.class-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid rgba(23, 32, 51, 0.12);
+  border-radius: 999px;
+  background: #eef5f1;
+  color: #25443b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.class-card strong {
+  display: block;
+  margin-top: 12px;
+  color: #121826;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.class-card small {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+}
+
+.class-meter {
+  height: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9eef2;
+}
+
+.class-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2f6f63, #7bb99f);
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
   padding: 12px;
-  margin-bottom: 24px;
-  box-shadow: var(--el-box-shadow-light);
-  .avatar {
-    flex: 0 1 72px;
-    & > span {
-      display: block;
-      width: 72px;
-      height: 72px;
-      border-radius: 72px;
-    }
-  }
-  .content {
-    position: relative;
-    top: 4px;
-    flex: 1 1 auto;
-    margin-left: 24px;
-    color: var(--el-text-color-secondary);
-    line-height: 22px;
-    .contentTitle {
-      margin-bottom: 12px;
-      color: var(--el-text-color-primary);
-      font-weight: 500;
-      font-size: 20px;
-      line-height: 28px;
-    }
-  }
+  border: 1px solid rgba(23, 32, 51, 0.07);
+  border-radius: 12px;
+  background: #fbfcfd;
 }
 
-.extraContent {
-  .clearfix();
-
-  float: right;
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   white-space: nowrap;
-  .statItem {
-    position: relative;
-    display: inline-block;
-    padding: 0 32px;
-    > p:first-child {
-      margin-bottom: 4px;
-      color: var(--el-text-color-secondary);
-      font-size: 14px;
-      line-height: 22px;
-    }
-    > p {
-      margin: 0;
-      color: var(--el-text-color-primary);
-      font-size: 30px;
-      line-height: 38px;
-      > span {
-        color: var(--el-text-color-secondary);
-        font-size: 20px;
-      }
-    }
-    &::after {
-      position: absolute;
-      top: 8px;
-      right: 0;
-      width: 1px;
-      height: 40px;
-      background-color: var(--el-border-color);
-      content: "";
-    }
-    &:last-child {
-      padding-right: 0;
-      &::after {
-        display: none;
-      }
-    }
+}
+
+.detail-row strong,
+.battle-line strong {
+  display: block;
+  color: #121826;
+  overflow-wrap: anywhere;
+}
+
+.stacked-count {
+  display: grid;
+  justify-items: end;
+  line-height: 1.1;
+}
+
+.stacked-count strong {
+  color: #121826;
+  font-size: 24px;
+}
+
+.ops-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.metric-card {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-height: 112px;
+  padding: 18px;
+}
+
+.metric-card strong {
+  display: block;
+  margin: 5px 0;
+  color: #121826;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.metric-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 20px;
+}
+
+.metric-icon.green {
+  background: #e4f5ee;
+  color: #23765e;
+}
+
+.metric-icon.amber {
+  background: #fff4d7;
+  color: #9a6a00;
+}
+
+.metric-icon.red {
+  background: #ffe8e2;
+  color: #b94d32;
+}
+
+.metric-icon.blue {
+  background: #e7f0ff;
+  color: #2d5caa;
+}
+
+.battle-line {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid rgba(23, 32, 51, 0.07);
+  border-radius: 12px;
+  background: #fbfcfd;
+}
+
+.battle-date {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 12px;
+  background: #11261f;
+  color: #f5fff9;
+}
+
+.battle-date strong {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.battle-date span {
+  color: rgba(245, 255, 249, 0.72);
+  font-size: 12px;
+}
+
+.record-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.record-metric {
+  min-height: 82px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f4f8f7;
+}
+
+.record-metric span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.record-metric strong {
+  display: block;
+  margin-top: 10px;
+  color: #121826;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.player-popover {
+  display: grid;
+  gap: 10px;
+}
+
+.popover-title {
+  color: #121826;
+  font-weight: 800;
+}
+
+.player-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.player-list span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f2f5f7;
+  color: #334155;
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .signup-command,
+  .signup-grid,
+  .detail-grid,
+  .history-grid,
+  .ops-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-.members {
-  a {
-    display: block;
-    height: 24px;
-    margin: 12px 0;
-    color: var(--el-text-color-regular);
-    transition: all 0.3s;
-    .textOverflow();
-    .member {
-      margin-left: 12px;
-      font-size: 14px;
-      line-height: 24px;
-      vertical-align: top;
-    }
-    &:hover {
-      color: var(--el-color-primary);
-    }
+@media (max-width: 720px) {
+  .signup-command,
+  .panel {
+    padding: 18px;
   }
-}
 
-.projectList {
-  :deep(.ant-card-meta-description) {
-    height: 44px;
-    overflow: hidden;
-    color: var(--el-text-color-secondary);
-    line-height: 22px;
+  .command-main h1 {
+    font-size: 28px;
   }
-  .cardTitle {
-    font-size: 0;
-    a {
-      display: inline-block;
-      height: 24px;
-      margin-left: 12px;
-      color: var(--el-text-color-primary);
-      font-size: 14px;
-      line-height: 24px;
-      vertical-align: top;
-      &:hover {
-        color: var(--el-color-primary);
-      }
-    }
-  }
-  .projectGrid {
-    width: 33.33%;
-  }
-  .projectItemContent {
-    display: flex;
-    flex-basis: 100%;
-    height: 20px;
-    margin-top: 8px;
-    overflow: hidden;
-    font-size: 12px;
-    line-height: 20px;
-    .textOverflow();
-    a {
-      display: inline-block;
-      flex: 1 1 0;
-      color: var(--el-text-color-secondary);
-      .textOverflow();
-      &:hover {
-        color: var(--el-color-primary);
-      }
-    }
-    .datetime {
-      flex: 0 0 auto;
-      float: right;
-      color: var(--el-text-color-placeholder);
-    }
-  }
-}
 
-.datetime {
-  color: var(--el-text-color-placeholder);
-}
+  .command-number strong {
+    font-size: 42px;
+  }
 
-@media screen and (max-width: 1200px) and (min-width: 992px) {
-  .activeCard {
-    margin-bottom: 24px;
+  .detail-row,
+  .battle-line {
+    grid-template-columns: 1fr;
+    align-items: start;
   }
-  .members {
-    margin-bottom: 0;
-  }
-  .extraContent {
-    margin-left: -44px;
-    .statItem {
-      padding: 0 16px;
-    }
-  }
-}
 
-@media screen and (max-width: 992px) {
-  .activeCard {
-    margin-bottom: 24px;
-  }
-  .members {
-    margin-bottom: 0;
-  }
-  .extraContent {
-    float: none;
-    margin-right: 0;
-    .statItem {
-      padding: 0 16px;
-      text-align: left;
-      &::after {
-        display: none;
-      }
-    }
-  }
-}
-
-@media screen and (max-width: 768px) {
-  .extraContent {
-    margin-left: -16px;
-  }
-  .projectList {
-    .projectGrid {
-      width: 50%;
-    }
-  }
-}
-
-@media screen and (max-width: 576px) {
-  .pageHeaderContent {
-    display: block;
-    .content {
-      margin-left: 0;
-    }
-  }
-  .extraContent {
-    .statItem {
-      float: none;
-    }
-  }
-}
-
-@media screen and (max-width: 480px) {
-  .projectList {
-    .projectGrid {
-      width: 100%;
-    }
+  .record-metrics,
+  .ops-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

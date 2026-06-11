@@ -328,6 +328,8 @@ class LoginService:
                 row
                 for row in query_user.get('user_menu_info')
                 if row.menu_type in [MenuConstant.TYPE_DIR, MenuConstant.TYPE_MENU]
+                and row.component != 'guild/battle/registration'
+                and row.menu_name != '约战报名'
             ],
             key=lambda x: x.order_num,
         )
