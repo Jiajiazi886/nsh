@@ -1,7 +1,9 @@
 from sqlalchemy import delete, func, inspect, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from module_guild.dao.battle_registration_dao import BattleRegistrationDao
 from module_guild.entity.do.battle_do import GuildBattle, GuildBattleRecord
+from module_guild.entity.do.battle_registration_do import GuildBattleInvite, GuildBattleRegistration
 from module_guild.entity.do.member_do import GuildMember
 
 
@@ -93,6 +95,33 @@ class MemberDao:
         )
         result = await db.execute(stmt)
         return [dict(row._mapping) for row in result.all()]
+
+    @classmethod
+    async def list_leave_records_for_members(cls, db: AsyncSession, user_id: int, member_ids: list[int]) -> list:
+        await BattleRegistrationDao.ensure_registration_schema(db)
+        if not member_ids:
+            return []
+        stmt = (
+            select(
+                GuildBattleRegistration.member_id,
+                GuildBattleRegistration.registration_id,
+                GuildBattleRegistration.approval_status,
+                GuildBattleInvite.battle_name,
+                GuildBattleInvite.battle_time,
+            )
+            .select_from(GuildBattleRegistration)
+            .join(GuildBattleInvite, GuildBattleInvite.invite_id == GuildBattleRegistration.invite_id, isouter=True)
+            .where(
+                GuildBattleRegistration.owner_user_id == user_id,
+                GuildBattleRegistration.member_id.in_(member_ids),
+                GuildBattleRegistration.registration_type == 'leave',
+                GuildBattleRegistration.approval_status.in_(['0', '1']),
+                GuildBattleRegistration.del_flag == '0',
+            )
+            .order_by(GuildBattleInvite.battle_time.desc(), GuildBattleRegistration.apply_time.desc())
+        )
+        result = await db.execute(stmt)
+        return result.all()
 
     @classmethod
     async def get_member_by_id(cls, db: AsyncSession, member_id: int) -> GuildMember | None:

@@ -24,6 +24,11 @@ class PublicBattleRegistrationModel(BaseModel):
     remark: Optional[str] = Field(default='', description='备注')
 
 
+class PublicBattleLeaveApplicationModel(BaseModel):
+    member_id: int = Field(description='帮会成员ID')
+    remark: Optional[str] = Field(default='', description='请假说明')
+
+
 class PublicBattleJoinApplicationModel(BaseModel):
     player_name: str = Field(description='玩家角色名')
     player_class: Optional[str] = Field(default='', description='主职业')

@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import Request
 from redis import asyncio as aioredis
+from redis.exceptions import ResponseError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel, PageModel
@@ -372,10 +373,19 @@ class LogAggregatorService:
                 id='0-0',
                 mkstream=True,
             )
+        except ResponseError as exc:
+            message = str(exc)
+            if 'BUSYGROUP' in message:
+                return
+            if 'unknown command' in message.lower():
+                logger.warning('当前 Redis 不支持 Stream/XGROUP，已停用异步日志聚合消费')
+                return False
+            raise
         except Exception as exc:
             if 'BUSYGROUP' in str(exc):
                 return
             raise
+        return True
 
     @classmethod
     async def _acquire_dedup(cls, redis: aioredis.Redis, event_id: str) -> bool:
@@ -442,7 +452,8 @@ class LogAggregatorService:
         :param redis: Redis连接对象
         :return: None
         """
-        await cls._ensure_group(redis)
+        if await cls._ensure_group(redis) is False:
+            return
         consumer_name = f'{LogConfig.log_stream_consumer_prefix}-{os.getpid()}-{uuid.uuid4().hex[:6]}'
         last_claim_time = 0.0
         while True:

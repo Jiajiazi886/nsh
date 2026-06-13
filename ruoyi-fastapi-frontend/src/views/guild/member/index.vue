@@ -71,9 +71,17 @@
           </template>
         </el-table-column>
         <el-table-column prop="role_in_guild" label="帮会身份" width="100" />
-        <el-table-column label="加入时间" min-width="170">
+        <el-table-column label="请假次数" width="120" align="center">
           <template #default="scope">
-            {{ formatDateTime(scope.row.join_time) }}
+            <el-tooltip
+              v-if="scope.row.leave_count > 0"
+              placement="top"
+              effect="dark"
+              :content="formatLeaveBattleTimes(scope.row.leave_battle_times)"
+            >
+              <span class="leave-count is-active">{{ scope.row.leave_count }}</span>
+            </el-tooltip>
+            <span v-else class="leave-count">0</span>
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
@@ -221,6 +229,17 @@ function formatDateTime(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '--'
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function formatLeaveBattleTimes(records = []) {
+  const lines = records
+    .map(item => {
+      const time = formatDateTime(item.battle_time)
+      const name = item.battle_name ? `${item.battle_name}：` : ''
+      return `${name}${time}`
+    })
+    .filter(Boolean)
+  return lines.length ? lines.join('\n') : '暂无约战时间'
 }
 
 const addForm = reactive({
@@ -553,6 +572,23 @@ onMounted(() => {
 
 .editable-class-tag:hover {
   box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+
+.leave-count {
+  display: inline-grid;
+  min-width: 28px;
+  height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  background: #f2f5f7;
+  color: #526071;
+  font-weight: 800;
+}
+
+.leave-count.is-active {
+  background: #fff4d7;
+  color: #9a6a00;
+  cursor: help;
 }
 
 @media (max-width: 900px) {

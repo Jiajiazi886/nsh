@@ -205,20 +205,52 @@ class DashboardService:
         if not invite:
             return None
 
-        registration_total = await DashboardDao.count_registrations_for_invite(db, invite.invite_id)
-        registration_rows = await DashboardDao.list_registration_class_distribution(db, invite.invite_id)
-        registrations = await DashboardDao.list_registrations_for_invite(db, invite.invite_id, limit=12)
-        registration_roster = await DashboardDao.list_registrations_for_invite(db, invite.invite_id, limit=500)
+        registration_total = await DashboardDao.count_registrations_for_invite(db, invite.invite_id, 'signup')
+        leave_total = await DashboardDao.count_registrations_for_invite(db, invite.invite_id, 'leave')
+        registration_rows = await DashboardDao.list_registration_class_distribution(db, invite.invite_id, 'signup')
+        leave_rows = await DashboardDao.list_registration_class_distribution(db, invite.invite_id, 'leave')
+        registrations = await DashboardDao.list_registrations_for_invite(db, invite.invite_id, limit=12, registration_type='signup')
+        leave_registrations = await DashboardDao.list_registrations_for_invite(
+            db, invite.invite_id, limit=12, registration_type='leave'
+        )
+        registration_roster = await DashboardDao.list_registrations_for_invite(
+            db, invite.invite_id, limit=500, registration_type='signup'
+        )
+        leave_roster = await DashboardDao.list_registrations_for_invite(
+            db, invite.invite_id, limit=500, registration_type='leave'
+        )
         join_applications = await DashboardDao.list_join_applications(db, guild_id=invite.owner_user_id)
         guild_class_distribution = await cls._build_class_distribution(
             db, invite.owner_user_id, None, profession_names
         )
 
-        registration_class_distribution = []
-        registration_players_by_class = defaultdict(list)
-        for registration in registration_roster:
+        registration_class_distribution = cls._build_registration_class_distribution(
+            registration_rows, registration_roster, registration_total
+        )
+        leave_class_distribution = cls._build_registration_class_distribution(leave_rows, leave_roster, leave_total)
+
+        pending_join_count = sum(1 for item in join_applications if item.review_status == '0')
+        return {
+            **cls._format_invite(invite),
+            'registration_count': registration_total,
+            'leave_count': leave_total,
+            'registration_class_distribution': registration_class_distribution,
+            'leave_class_distribution': leave_class_distribution,
+            'registrations': [cls._format_registration(item) for item in registrations],
+            'leave_registrations': [cls._format_registration(item) for item in leave_registrations],
+            'guild_class_distribution': guild_class_distribution,
+            'join_application_count': len(join_applications),
+            'pending_join_count': pending_join_count,
+            'join_applications': [cls._format_application(item) for item in join_applications],
+        }
+
+    @classmethod
+    def _build_registration_class_distribution(cls, rows: list, roster: list[GuildBattleRegistration], total: int) -> list[dict]:
+        distribution = []
+        players_by_class = defaultdict(list)
+        for registration in roster:
             class_name = (registration.player_class or '').strip() or '未设置'
-            registration_players_by_class[class_name].append(
+            players_by_class[class_name].append(
                 {
                     'registration_id': registration.registration_id,
                     'player_name': registration.player_name,
@@ -226,31 +258,18 @@ class DashboardService:
                     'approval_status': registration.approval_status,
                 }
             )
-        for row in registration_rows:
+        for row in rows:
             class_name = (row.class_name or '').strip()
             class_label = class_name or '未设置'
-            registration_class_distribution.append(
+            distribution.append(
                 {
                     'class_name': class_label,
                     'count': cls._to_int(row.item_count),
-                    'percent': round((cls._to_float(row.item_count) / registration_total) * 100, 1)
-                    if registration_total
-                    else 0,
-                    'players': registration_players_by_class.get(class_label, []),
+                    'percent': round((cls._to_float(row.item_count) / total) * 100, 1) if total else 0,
+                    'players': players_by_class.get(class_label, []),
                 }
             )
-
-        pending_join_count = sum(1 for item in join_applications if item.review_status == '0')
-        return {
-            **cls._format_invite(invite),
-            'registration_count': registration_total,
-            'registration_class_distribution': registration_class_distribution,
-            'registrations': [cls._format_registration(item) for item in registrations],
-            'guild_class_distribution': guild_class_distribution,
-            'join_application_count': len(join_applications),
-            'pending_join_count': pending_join_count,
-            'join_applications': [cls._format_application(item) for item in join_applications],
-        }
+        return distribution
 
     @classmethod
     async def _build_battle_payload(cls, db: AsyncSession, scope: str, owner_user_id: int | None):
@@ -512,6 +531,7 @@ class DashboardService:
             'guild_id': item.guild_id,
             'owner_user_id': item.owner_user_id,
             'member_id': item.member_id,
+            'registration_type': item.registration_type or 'signup',
             'player_name': item.player_name,
             'player_class': item.player_class or '',
             'secondary_class': item.secondary_class or '',

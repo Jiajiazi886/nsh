@@ -108,8 +108,8 @@
       <template #header>
         <div class="card-header">
           <div>
-            <span>约战报名审核</span>
-            <span class="header-tip">通过后会保留在约战报名表中，供约战排表使用。</span>
+            <span>约战申请审核</span>
+            <span class="header-tip">可审核约战报名与请假申请；排表可按请假申请排除成员。</span>
           </div>
           <div class="header-actions">
             <el-button
@@ -135,6 +135,11 @@
               <el-radio-button label="2">已拒绝</el-radio-button>
               <el-radio-button label="">全部</el-radio-button>
             </el-radio-group>
+            <el-radio-group v-model="typeFilter" size="small" @change="fetchRegistrations">
+              <el-radio-button label="signup">约战报名</el-radio-button>
+              <el-radio-button label="leave">请假申请</el-radio-button>
+              <el-radio-button label="">全部类型</el-radio-button>
+            </el-radio-group>
             <el-button text type="primary" :loading="registrationLoading" @click="fetchRegistrations">刷新</el-button>
           </div>
         </div>
@@ -150,6 +155,13 @@
       >
         <el-table-column type="selection" width="50" :selectable="isPendingRegistration" />
         <el-table-column type="index" label="序号" width="60" />
+        <el-table-column label="类型" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.registration_type === 'leave' ? 'info' : 'primary'" effect="light">
+              {{ row.registration_type === 'leave' ? '请假申请' : '约战报名' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="player_name" label="玩家名" min-width="120" />
         <el-table-column prop="player_class" label="主职业" width="100">
           <template #default="{ row }">
@@ -188,7 +200,7 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="当前没有约战报名记录" />
+          <el-empty description="当前没有约战申请记录" />
         </template>
       </el-table>
     </el-card>
@@ -224,6 +236,7 @@ const registrationList = ref([])
 const selectedRegistrations = ref([])
 const latestUrl = ref('')
 const statusFilter = ref('0')
+const typeFilter = ref('')
 const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
 const inviteForm = reactive({
@@ -370,7 +383,9 @@ async function fetchInvites() {
 async function fetchRegistrations() {
   registrationLoading.value = true
   try {
-    const params = statusFilter.value === '' ? {} : { status: statusFilter.value }
+    const params = {}
+    if (statusFilter.value !== '') params.status = statusFilter.value
+    if (typeFilter.value !== '') params.registration_type = typeFilter.value
     const res = await getBattleRegistrations(params)
     registrationList.value = res.data || []
     selectedRegistrations.value = []
@@ -391,10 +406,11 @@ async function reviewRegistration(row, type, comment = '') {
 async function handleReview(row, type) {
   const isApprove = type === 'approve'
   const actionLabel = isApprove ? '通过' : '拒绝'
+  const subjectLabel = row.registration_type === 'leave' ? '请假申请' : '约战报名'
   const commentPlaceholder = isApprove ? '可填写排表备注' : '可填写拒绝原因'
   const { value } = await ElMessageBox.prompt(
-    `确认${actionLabel} ${row.player_name} 的约战报名吗？`,
-    `${actionLabel}约战报名`,
+    `确认${actionLabel} ${row.player_name} 的${subjectLabel}吗？`,
+    `${actionLabel}${subjectLabel}`,
     {
       confirmButtonText: actionLabel,
       cancelButtonText: '取消',
@@ -407,7 +423,7 @@ async function handleReview(row, type) {
   actionType.value = type
   try {
     await reviewRegistration(row, type, value || '')
-    ElMessage.success(isApprove ? '约战报名已通过' : '已拒绝约战报名')
+    ElMessage.success(isApprove ? `${subjectLabel}已通过` : `已拒绝${subjectLabel}`)
     await fetchRegistrations()
     await fetchInvites()
   } finally {
@@ -419,7 +435,7 @@ async function handleReview(row, type) {
 async function handleBatchReview(type) {
   const targets = selectedRegistrations.value.filter(isPendingRegistration)
   if (!targets.length) {
-    ElMessage.warning('请先选择待审核的约战报名')
+    ElMessage.warning('请先选择待审核的申请记录')
     return
   }
 
@@ -427,8 +443,8 @@ async function handleBatchReview(type) {
   const actionLabel = isApprove ? '通过' : '拒绝'
   try {
     await ElMessageBox.confirm(
-      `确认批量${actionLabel}选中的 ${targets.length} 条约战报名吗？`,
-      `批量${actionLabel}约战报名`,
+      `确认批量${actionLabel}选中的 ${targets.length} 条申请记录吗？`,
+      `批量${actionLabel}申请记录`,
       {
         confirmButtonText: `批量${actionLabel}`,
         cancelButtonText: '取消',
@@ -438,7 +454,7 @@ async function handleBatchReview(type) {
 
     bulkActionType.value = type
     await Promise.all(targets.map(row => reviewRegistration(row, type)))
-    ElMessage.success(`已${actionLabel} ${targets.length} 条约战报名`)
+    ElMessage.success(`已${actionLabel} ${targets.length} 条申请记录`)
     await fetchRegistrations()
     await fetchInvites()
   } catch (error) {

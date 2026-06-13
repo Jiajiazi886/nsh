@@ -17,6 +17,7 @@ import directive from './directive' // directive
 // 注册指令
 import plugins from './plugins' // plugins
 import { download } from '@/utils/request'
+import { installPageErrorRecovery } from '@/utils/pageErrorRecovery'
 
 // svg图标
 import 'virtual:svg-icons-register'
@@ -45,6 +46,8 @@ import ImagePreview from "@/components/ImagePreview"
 import DictTag from '@/components/DictTag'
 
 const app = createApp(App)
+
+installPageErrorRecovery(app, router)
 
 // 全局方法挂载
 app.config.globalProperties.useDict = useDict

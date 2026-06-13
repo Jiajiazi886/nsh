@@ -47,6 +47,26 @@ function normalizeColorItem(item = {}) {
   }
 }
 
+function hexToRgb(color) {
+  if (!color || typeof color !== 'string') return null
+  const normalized = color.trim().replace('#', '')
+  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(normalized)) return null
+  const full = normalized.length === 3
+    ? normalized.split('').map(char => `${char}${char}`).join('')
+    : normalized
+  return {
+    r: parseInt(full.slice(0, 2), 16),
+    g: parseInt(full.slice(2, 4), 16),
+    b: parseInt(full.slice(4, 6), 16)
+  }
+}
+
+function rgba(color, alpha) {
+  const rgb = hexToRgb(color)
+  if (!rgb) return `rgba(47, 111, 99, ${alpha})`
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`
+}
+
 export function normalizeClassColorList(list = []) {
   return list
     .map(normalizeColorItem)
@@ -86,11 +106,23 @@ export function getGuildClassStyle(className) {
   }
 }
 
+export function getGuildClassTokenStyle(className) {
+  if (!className) return {}
+  const item = classColorMap.value[className]
+  if (!item) return {}
+  return {
+    '--guild-class-accent': item.bg_color,
+    '--guild-class-accent-soft': rgba(item.bg_color, 0.14),
+    '--guild-class-accent-ring': rgba(item.bg_color, 0.24),
+    '--guild-class-accent-bar': `linear-gradient(90deg, ${rgba(item.bg_color, 0.36)}, ${item.bg_color})`
+  }
+}
+
 export function getGuildClassBarStyle(className) {
   const item = classColorMap.value[className]
   if (!item) return {}
   return {
-    background: `linear-gradient(90deg, ${item.text_color}, ${item.bg_color})`
+    background: `linear-gradient(90deg, ${rgba(item.bg_color, 0.36)}, ${item.bg_color})`
   }
 }
 
@@ -101,6 +133,7 @@ export function useGuildClassColors() {
     classOptions,
     getGuildClassBarStyle,
     getGuildClassStyle,
+    getGuildClassTokenStyle,
     loadGuildClassColors,
     setGuildClassColors
   }

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS guild_battle_registration (
   applicant_user_id BIGINT NOT NULL DEFAULT 0 COMMENT '报名账号用户ID，公开报名为0',
   member_id BIGINT NULL COMMENT '成员ID',
   team_id BIGINT NULL COMMENT '团队ID',
+  registration_type VARCHAR(20) DEFAULT 'signup' COMMENT '申请类型(signup/leave)',
   player_name VARCHAR(30) NOT NULL DEFAULT '' COMMENT '玩家名快照',
   player_class VARCHAR(20) DEFAULT '' COMMENT '主职业',
   secondary_class VARCHAR(20) DEFAULT '' COMMENT '副职',

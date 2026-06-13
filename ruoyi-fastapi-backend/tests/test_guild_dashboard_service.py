@@ -263,6 +263,7 @@ async def test_battle_registration_list_uses_current_active_invite(monkeypatch):
         registration_id=1,
         invite_id=555,
         invite_code='active',
+        registration_type='signup',
         guild_id=101,
         owner_user_id=101,
         member_id=9,
@@ -306,8 +307,8 @@ async def test_battle_registration_list_uses_current_active_invite(monkeypatch):
         calls.append(('latest_active', owner_user_id))
         return ExpiringInvite(db)
 
-    async def fake_list_registrations(db, owner_user_id, status, invite_id):
-        calls.append(('list', owner_user_id, status, invite_id))
+    async def fake_list_registrations(db, owner_user_id, status, invite_id, registration_type='signup', status_list=None):
+        calls.append(('list', owner_user_id, status, invite_id, registration_type, status_list))
         return [registration]
 
     monkeypatch.setattr(
@@ -329,5 +330,269 @@ async def test_battle_registration_list_uses_current_active_invite(monkeypatch):
     assert ('mark_expired', None) in calls
     assert ('latest_active', 101) in calls
     assert ('commit', None) in calls
-    assert ('list', 101, '0', 555) in calls
+    assert ('list', 101, '0', 555, 'signup', None) in calls
     assert result[0]['registration_id'] == 1
+
+
+@pytest.mark.asyncio
+async def test_public_leave_submission_creates_leave_registration(monkeypatch):
+    calls = []
+    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101)
+    member = SimpleNamespace(
+        member_id=9,
+        player_name='测试玩家',
+        player_class='素问',
+        secondary_class='',
+        role_in_guild='成员',
+    )
+
+    class FakeDb:
+        async def commit(self):
+            calls.append(('commit', None))
+
+    async def fake_get_invite_or_raise(db, invite_code):
+        return invite
+
+    async def fake_get_member_for_invite(db, owner_user_id, member_id):
+        return member
+
+    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None):
+        calls.append(('exists', invite_id, member_id, registration_type))
+        return None
+
+    async def fake_create_registration(db, payload):
+        calls.append(('create', payload))
+        return SimpleNamespace(registration_id=1)
+
+    monkeypatch.setattr(BattleRegistrationService, '_get_active_invite_or_raise', fake_get_invite_or_raise)
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_member_for_invite',
+        fake_get_member_for_invite,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_effective_registration',
+        fake_get_effective_registration,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.create_registration',
+        fake_create_registration,
+    )
+
+    result = await BattleRegistrationService.submit_public_leave_service(
+        FakeDb(),
+        'code001',
+        SimpleNamespace(member_id=9, remark='周四加班'),
+    )
+
+    assert result.message == '请假申请已提交，请等待审核'
+    assert ('exists', 88, 9, None) in calls
+    assert calls[1][0] == 'create'
+    assert calls[1][1]['registration_type'] == 'leave'
+    assert calls[1][1]['remark'] == '周四加班'
+    assert calls[2] == ('commit', None)
+
+
+@pytest.mark.asyncio
+async def test_public_signup_submission_auto_cancels_existing_leave(monkeypatch):
+    calls = []
+    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101)
+    member = SimpleNamespace(
+        member_id=9,
+        player_name='测试玩家',
+        player_class='素问',
+        secondary_class='',
+        role_in_guild='成员',
+    )
+    existing = SimpleNamespace(registration_type='leave')
+
+    class FakeDb:
+        async def commit(self):
+            calls.append(('commit', None))
+
+    async def fake_get_invite_or_raise(db, invite_code):
+        return invite
+
+    async def fake_get_member_for_invite(db, owner_user_id, member_id):
+        return member
+
+    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None):
+        return existing
+
+    async def fake_cancel_effective_registration(db, invite_id, member_id, registration_type):
+        calls.append(('cancel', invite_id, member_id, registration_type))
+        return 1
+
+    async def fake_create_registration(db, payload):
+        calls.append(('create', payload))
+        return SimpleNamespace(registration_id=1)
+
+    monkeypatch.setattr(BattleRegistrationService, '_get_active_invite_or_raise', fake_get_invite_or_raise)
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_member_for_invite',
+        fake_get_member_for_invite,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_effective_registration',
+        fake_get_effective_registration,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.cancel_effective_registration',
+        fake_cancel_effective_registration,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.create_registration',
+        fake_create_registration,
+    )
+
+    result = await BattleRegistrationService.submit_public_registration_service(
+        FakeDb(),
+        'code001',
+        SimpleNamespace(member_id=9, player_class='', secondary_class='', applicant_name='', applicant_contact='', remark=''),
+    )
+
+    assert calls[0] == ('cancel', 88, 9, 'leave')
+    assert calls[1][0] == 'create'
+    assert calls[1][1]['registration_type'] == 'signup'
+    assert calls[2] == ('commit', None)
+    assert result.message == '约战报名已提交，原请假申请已自动取消'
+
+
+@pytest.mark.asyncio
+async def test_public_leave_submission_auto_cancels_existing_signup(monkeypatch):
+    calls = []
+    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101)
+    member = SimpleNamespace(
+        member_id=9,
+        player_name='测试玩家',
+        player_class='素问',
+        secondary_class='',
+        role_in_guild='成员',
+    )
+    existing = SimpleNamespace(registration_type='signup')
+
+    class FakeDb:
+        async def commit(self):
+            calls.append(('commit', None))
+
+    async def fake_get_invite_or_raise(db, invite_code):
+        return invite
+
+    async def fake_get_member_for_invite(db, owner_user_id, member_id):
+        return member
+
+    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None):
+        return existing
+
+    async def fake_cancel_effective_registration(db, invite_id, member_id, registration_type):
+        calls.append(('cancel', invite_id, member_id, registration_type))
+        return 1
+
+    async def fake_create_registration(db, payload):
+        calls.append(('create', payload))
+        return SimpleNamespace(registration_id=1)
+
+    monkeypatch.setattr(BattleRegistrationService, '_get_active_invite_or_raise', fake_get_invite_or_raise)
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_member_for_invite',
+        fake_get_member_for_invite,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_effective_registration',
+        fake_get_effective_registration,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.cancel_effective_registration',
+        fake_cancel_effective_registration,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.create_registration',
+        fake_create_registration,
+    )
+
+    result = await BattleRegistrationService.submit_public_leave_service(
+        FakeDb(),
+        'code001',
+        SimpleNamespace(member_id=9, remark='周四加班'),
+    )
+
+    assert calls[0] == ('cancel', 88, 9, 'signup')
+    assert calls[1][0] == 'create'
+    assert calls[1][1]['registration_type'] == 'leave'
+    assert calls[2] == ('commit', None)
+    assert result.message == '请假申请已提交，原约战报名已自动取消'
+
+
+@pytest.mark.asyncio
+async def test_leave_schedule_list_uses_active_invite_and_effective_statuses(monkeypatch):
+    calls = []
+    registration = SimpleNamespace(
+        registration_id=2,
+        invite_id=555,
+        invite_code='active',
+        registration_type='leave',
+        guild_id=101,
+        owner_user_id=101,
+        member_id=12,
+        player_name='请假玩家',
+        player_class='铁衣',
+        secondary_class='',
+        role_in_guild='成员',
+        applicant_name='',
+        applicant_contact='',
+        apply_time=datetime.now(),
+        approval_status='0',
+        approval_time=None,
+        approval_by='',
+        approval_comment='',
+        remark='外出',
+    )
+
+    class FakeDb:
+        def __init__(self):
+            self.commit_count = 0
+
+        async def commit(self):
+            self.commit_count += 1
+            calls.append(('commit', None))
+
+    class ExpiringInvite:
+        def __init__(self, db):
+            self._db = db
+            self._loaded_commit_count = db.commit_count
+
+        @property
+        def invite_id(self):
+            if self._db.commit_count > self._loaded_commit_count:
+                raise AssertionError('invite_id was read after commit expired the ORM object')
+            return 555
+
+    async def fake_mark_expired_invites(db):
+        calls.append(('mark_expired', None))
+
+    async def fake_get_latest_active_invite(db, owner_user_id):
+        calls.append(('latest_active', owner_user_id))
+        return ExpiringInvite(db)
+
+    async def fake_list_registrations(db, owner_user_id, status=None, invite_id=None, registration_type='signup', status_list=None):
+        calls.append(('list', owner_user_id, status, invite_id, registration_type, tuple(status_list or [])))
+        return [registration]
+
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.mark_expired_invites',
+        fake_mark_expired_invites,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_latest_active_invite',
+        fake_get_latest_active_invite,
+    )
+    monkeypatch.setattr(
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.list_registrations',
+        fake_list_registrations,
+    )
+
+    current_user = make_current_user(user_id=101, roles=['common'])
+    result = await BattleRegistrationService.list_leave_registrations_for_schedule_service(FakeDb(), current_user)
+
+    assert ('list', 101, None, 555, 'leave', ('0', '1')) in calls
+    assert result[0]['registration_type'] == 'leave'
+    assert result[0]['member_id'] == 12

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from module_admin.entity.do.role_do import SysRole
 from module_admin.entity.do.user_do import SysUser, SysUserRole
+from module_guild.dao.battle_registration_dao import BattleRegistrationDao
 from module_guild.entity.do.battle_do import GuildBattle, GuildBattleRecord
 from module_guild.entity.do.battle_registration_do import GuildBattleInvite, GuildBattleRegistration
 from module_guild.entity.do.join_application_do import GuildJoinApplication
@@ -164,20 +165,28 @@ class DashboardDao:
         return result.scalar_one_or_none()
 
     @classmethod
-    async def count_registrations_for_invite(cls, db: AsyncSession, invite_id: int) -> int:
+    async def count_registrations_for_invite(
+        cls, db: AsyncSession, invite_id: int, registration_type: str = 'signup'
+    ) -> int:
+        await BattleRegistrationDao.ensure_registration_schema(db)
         stmt = select(func.count()).select_from(GuildBattleRegistration).where(
             GuildBattleRegistration.invite_id == invite_id,
+            GuildBattleRegistration.registration_type == registration_type,
             GuildBattleRegistration.del_flag == '0',
         )
         result = await db.execute(stmt)
         return result.scalar() or 0
 
     @classmethod
-    async def list_registration_class_distribution(cls, db: AsyncSession, invite_id: int) -> list:
+    async def list_registration_class_distribution(
+        cls, db: AsyncSession, invite_id: int, registration_type: str = 'signup'
+    ) -> list:
+        await BattleRegistrationDao.ensure_registration_schema(db)
         stmt = (
             select(GuildBattleRegistration.player_class.label('class_name'), func.count().label('item_count'))
             .where(
                 GuildBattleRegistration.invite_id == invite_id,
+                GuildBattleRegistration.registration_type == registration_type,
                 GuildBattleRegistration.del_flag == '0',
             )
             .group_by(GuildBattleRegistration.player_class)
@@ -188,12 +197,14 @@ class DashboardDao:
 
     @classmethod
     async def list_registrations_for_invite(
-        cls, db: AsyncSession, invite_id: int, limit: int = 12
+        cls, db: AsyncSession, invite_id: int, limit: int = 12, registration_type: str = 'signup'
     ) -> list[GuildBattleRegistration]:
+        await BattleRegistrationDao.ensure_registration_schema(db)
         stmt = (
             select(GuildBattleRegistration)
             .where(
                 GuildBattleRegistration.invite_id == invite_id,
+                GuildBattleRegistration.registration_type == registration_type,
                 GuildBattleRegistration.del_flag == '0',
             )
             .order_by(GuildBattleRegistration.apply_time.desc(), GuildBattleRegistration.registration_id.desc())
@@ -331,6 +342,7 @@ class DashboardDao:
         applicant_user_id: int | None = None,
         status: str | None = None,
     ) -> int:
+        await BattleRegistrationDao.ensure_registration_schema(db)
         stmt = select(func.count()).select_from(GuildBattleRegistration).where(GuildBattleRegistration.del_flag == '0')
         if owner_user_id is not None:
             stmt = stmt.where(GuildBattleRegistration.owner_user_id == owner_user_id)
@@ -338,6 +350,7 @@ class DashboardDao:
             stmt = stmt.where(GuildBattleRegistration.applicant_user_id == applicant_user_id)
         if status is not None:
             stmt = stmt.where(GuildBattleRegistration.approval_status == status)
+        stmt = stmt.where(GuildBattleRegistration.registration_type == 'signup')
         result = await db.execute(stmt)
         return result.scalar() or 0
 

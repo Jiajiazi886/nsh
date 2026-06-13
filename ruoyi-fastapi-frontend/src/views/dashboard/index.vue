@@ -10,7 +10,7 @@
           <h1>约战报名人数</h1>
           <div class="invite-meta">
             <span>{{ activeInvite.guild_name || guildName || '当前帮会' }}</span>
-            <span>{{ formatDateTime(activeInvite.battle_time) }}</span>
+            <span>{{ formatDateTimeWithWeek(activeInvite.battle_time) }}</span>
             <el-tag type="success" effect="light">当前生效链接</el-tag>
           </div>
           <div class="invite-actions">
@@ -26,9 +26,15 @@
       </div>
 
       <div class="command-number">
-        <span>已报名</span>
-        <strong>{{ formatNumber(activeInvite?.registration_count) }}</strong>
-        <small>包含待审核、已通过、已拒绝</small>
+        <div class="command-stat">
+          <span>已报名</span>
+          <strong>{{ formatNumber(activeInvite?.registration_count) }}</strong>
+        </div>
+        <div class="command-stat">
+          <span>已请假</span>
+          <strong>{{ formatNumber(activeInvite?.leave_count) }}</strong>
+        </div>
+        <small>包含待审核、已通过、已拒绝，已取消不计入</small>
       </div>
     </section>
 
@@ -41,35 +47,78 @@
           </div>
           <span class="panel-note">{{ formatNumber(activeInvite?.registration_count) }} 人</span>
         </div>
-        <div v-if="signupClasses.length" class="class-card-grid compact">
-          <el-popover
-            v-for="item in signupClasses"
-            :key="item.class_name"
-            placement="top"
-            trigger="hover"
-            :width="240"
-            popper-class="guild-player-popover"
-          >
-            <template #reference>
-              <div class="class-card signup-class-card">
-                <span class="class-chip" :style="getGuildClassStyle(item.class_name)">{{ item.class_name }}</span>
-                <strong>{{ formatNumber(item.count) }}</strong>
-                <small>{{ item.percent || 0 }}%</small>
-                <div class="class-meter">
-                  <i :style="{ width: classWidth(item.percent), ...getGuildClassBarStyle(item.class_name) }"></i>
+        <div class="battle-class-stack">
+          <div class="battle-class-block">
+            <div v-if="signupClasses.length" class="class-card-grid compact">
+              <el-popover
+                v-for="item in signupClasses"
+                :key="item.class_name"
+                placement="top"
+                trigger="hover"
+                :width="240"
+                popper-class="guild-player-popover"
+              >
+                <template #reference>
+                  <div class="class-card signup-class-card" :style="getGuildClassTokenStyle(item.class_name)">
+                    <span class="class-chip">{{ item.class_name }}</span>
+                    <strong>{{ formatNumber(item.count) }}</strong>
+                    <small>{{ item.percent || 0 }}%</small>
+                    <div class="class-meter">
+                      <i :style="{ width: classWidth(item.percent) }"></i>
+                    </div>
+                  </div>
+                </template>
+                <div class="player-popover">
+                  <div class="popover-title">{{ item.class_name }} · {{ formatNumber(item.count) }} 人</div>
+                  <div v-if="item.players?.length" class="player-list">
+                    <span v-for="player in item.players" :key="player.registration_id">{{ player.player_name }}</span>
+                  </div>
+                  <span v-else class="muted-text">暂无报名玩家明细</span>
                 </div>
-              </div>
-            </template>
-            <div class="player-popover">
-              <div class="popover-title">{{ item.class_name }} · {{ formatNumber(item.count) }} 人</div>
-              <div v-if="item.players?.length" class="player-list">
-                <span v-for="player in item.players" :key="player.registration_id">{{ player.player_name }}</span>
-              </div>
-              <span v-else class="muted-text">暂无报名玩家明细</span>
+              </el-popover>
             </div>
-          </el-popover>
+            <el-empty v-else description="当前链接还没有报名记录" :image-size="64" />
+          </div>
+
+          <div class="battle-class-block leave-block">
+            <div class="panel-subhead">
+              <div>
+                <span class="eyebrow">Leave Classes</span>
+                <h2>请假职业人数</h2>
+              </div>
+              <span class="panel-note">{{ formatNumber(activeInvite?.leave_count) }} 人</span>
+            </div>
+            <div v-if="leaveClasses.length" class="class-card-grid compact">
+              <el-popover
+                v-for="item in leaveClasses"
+                :key="item.class_name"
+                placement="top"
+                trigger="hover"
+                :width="240"
+                popper-class="guild-player-popover"
+              >
+                <template #reference>
+                  <div class="class-card leave-class-card" :style="getGuildClassTokenStyle(item.class_name)">
+                    <span class="class-chip">{{ item.class_name }}</span>
+                    <strong>{{ formatNumber(item.count) }}</strong>
+                    <small>{{ item.percent || 0 }}%</small>
+                    <div class="class-meter">
+                      <i :style="{ width: classWidth(item.percent) }"></i>
+                    </div>
+                  </div>
+                </template>
+                <div class="player-popover">
+                  <div class="popover-title">{{ item.class_name }} · {{ formatNumber(item.count) }} 人请假</div>
+                  <div v-if="item.players?.length" class="player-list">
+                    <span v-for="player in item.players" :key="player.registration_id">{{ player.player_name }}</span>
+                  </div>
+                  <span v-else class="muted-text">暂无请假玩家明细</span>
+                </div>
+              </el-popover>
+            </div>
+            <el-empty v-else description="当前链接还没有请假记录" :image-size="64" />
+          </div>
         </div>
-        <el-empty v-else description="当前链接还没有报名记录" :image-size="90" />
       </article>
 
       <article class="panel guild-classes" data-guild-reveal>
@@ -90,12 +139,12 @@
             popper-class="guild-player-popover"
           >
             <template #reference>
-              <div class="class-card roster-card">
-                <span class="class-chip" :style="getGuildClassStyle(item.class_name)">{{ item.class_name }}</span>
+              <div class="class-card roster-card" :style="getGuildClassTokenStyle(item.class_name)">
+                <span class="class-chip">{{ item.class_name }}</span>
                 <strong>{{ formatNumber(item.count) }}</strong>
                 <small>{{ item.percent || 0 }}%</small>
                 <div class="class-meter">
-                  <i :style="{ width: classWidth(item.percent), ...getGuildClassBarStyle(item.class_name) }"></i>
+                  <i :style="{ width: classWidth(item.percent) }"></i>
                 </div>
               </div>
             </template>
@@ -136,7 +185,7 @@
               <strong>{{ item.player_name }}</strong>
               <span>{{ item.applicant_name || '未填写称呼' }} · {{ formatDateTime(item.apply_time) }}</span>
             </div>
-            <span class="class-chip" :style="getGuildClassStyle(item.player_class)">{{ item.player_class || '未设置' }}</span>
+            <span class="class-chip" :style="getGuildClassTokenStyle(item.player_class)">{{ item.player_class || '未设置' }}</span>
             <el-tag :type="reviewTagType(item.approval_status)" effect="light">
               {{ reviewStatusLabel(item.approval_status) }}
             </el-tag>
@@ -192,7 +241,7 @@
               <strong>{{ item.player_name }}</strong>
               <span>{{ item.guild_name || activeInvite?.guild_name || '当前帮会' }} · {{ formatDateTime(item.apply_time) }}</span>
             </div>
-            <span class="class-chip" :style="getGuildClassStyle(item.player_class)">{{ item.player_class || '未设置' }}</span>
+            <span class="class-chip" :style="getGuildClassTokenStyle(item.player_class)">{{ item.player_class || '未设置' }}</span>
             <el-tag :type="reviewTagType(item.review_status)" effect="light">
               {{ reviewStatusLabel(item.review_status) }}
             </el-tag>
@@ -336,7 +385,7 @@ const loading = ref(false)
 const battleActionId = ref('')
 const joinActionId = ref('')
 const dashboard = ref({})
-const { getGuildClassBarStyle, getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
+const { getGuildClassTokenStyle, loadGuildClassColors } = useGuildClassColors()
 
 useGuildPageMotion(pageRef)
 
@@ -346,6 +395,7 @@ const guild = computed(() => dashboard.value.guild || {})
 const guildName = computed(() => guild.value.guild_name || '')
 const activeInvite = computed(() => dashboard.value.active_invite_summary || null)
 const signupClasses = computed(() => activeInvite.value?.registration_class_distribution || [])
+const leaveClasses = computed(() => activeInvite.value?.leave_class_distribution || [])
 const cachedGuildClasses = computed(() => buildClassDistributionFromMembers(guildMemberStore.members))
 const guildClasses = computed(() => {
   if (scope.value.type === 'common' && guildMemberStore.hasReadyCache && cachedGuildClasses.value.length) {
@@ -524,6 +574,23 @@ function formatDateTime(value) {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
+function formatDateTimeWithWeek(value) {
+  const date = normalizeDate(value)
+  if (!date) return '未记录时间'
+  const dateText = date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'long'
+  })
+  const timeText = date.toLocaleTimeString('zh-CN', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+  return `${dateText} ${timeText}`
+}
+
 function battleDay(battle) {
   const date = normalizeDate(battle.battle_time || battle.battle_date || battle.create_time)
   return date ? String(date.getDate()).padStart(2, '0') : '--'
@@ -570,7 +637,7 @@ onMounted(() => {
 .guild-dashboard {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   color: #172033;
   background:
     linear-gradient(180deg, rgba(250, 252, 255, 0.97), rgba(244, 248, 250, 0.97)),
@@ -581,18 +648,18 @@ onMounted(() => {
 .panel,
 .metric-card {
   border: 1px solid rgba(23, 32, 51, 0.09);
-  border-radius: 14px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 252, 253, 0.9));
-  box-shadow: 0 18px 42px rgba(23, 32, 51, 0.08);
+  box-shadow: 0 10px 26px rgba(23, 32, 51, 0.06);
 }
 
 .signup-command {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 22px;
-  min-height: 220px;
-  padding: 30px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.36fr);
+  gap: 16px;
+  min-height: 148px;
+  padding: 20px 22px;
   overflow: hidden;
   background:
     linear-gradient(140deg, rgba(255, 255, 255, 0.96), rgba(247, 251, 249, 0.92)),
@@ -622,9 +689,9 @@ onMounted(() => {
 }
 
 .command-main h1 {
-  margin: 14px 0 12px;
+  margin: 10px 0 8px;
   color: #121826;
-  font-size: 36px;
+  font-size: 28px;
   line-height: 1.14;
   letter-spacing: 0;
   overflow-wrap: anywhere;
@@ -632,7 +699,7 @@ onMounted(() => {
 
 .empty-copy {
   max-width: 620px;
-  margin: 0 0 18px;
+  margin: 0 0 12px;
   color: #64748b;
   font-size: 15px;
   line-height: 1.8;
@@ -652,16 +719,17 @@ onMounted(() => {
 }
 
 .invite-actions {
-  margin-top: 20px;
+  margin-top: 14px;
 }
 
 .command-number {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   justify-content: center;
+  gap: 12px;
   min-width: 0;
-  padding: 22px;
-  border-radius: 13px;
+  padding: 16px;
+  border-radius: 8px;
   background:
     linear-gradient(135deg, #11261f, #1e473d),
     #11261f;
@@ -675,15 +743,16 @@ onMounted(() => {
   display: block;
 }
 
-.command-number strong {
+.command-stat strong {
   display: block;
-  margin-top: 8px;
-  font-size: 56px;
+  margin-top: 6px;
+  font-size: 34px;
   line-height: 1;
 }
 
 .command-number small {
-  margin-top: 12px;
+  grid-column: 1 / -1;
+  margin-top: 0;
   color: rgba(232, 255, 245, 0.72);
 }
 
@@ -691,9 +760,9 @@ onMounted(() => {
 .detail-grid,
 .history-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
   align-items: start;
-  gap: 18px;
+  gap: 12px;
 }
 
 .detail-grid {
@@ -702,7 +771,7 @@ onMounted(() => {
 
 .panel {
   min-width: 0;
-  padding: 22px;
+  padding: 16px;
 }
 
 .panel-head {
@@ -710,7 +779,32 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
+}
+
+.panel-subhead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 12px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.battle-class-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.battle-class-block {
+  min-width: 0;
+}
+
+.leave-block {
+  padding-left: 14px;
+  border-left: 1px solid rgba(23, 32, 51, 0.08);
 }
 
 .panel-head-actions {
@@ -721,10 +815,11 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.panel-head h2 {
-  margin: 5px 0 0;
+.panel-head h2,
+.panel-subhead h2 {
+  margin: 3px 0 0;
   color: #121826;
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1.25;
 }
 
@@ -740,76 +835,105 @@ onMounted(() => {
 
 .class-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
 }
 
 .class-card-grid.compact {
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
 }
 
 .class-card {
-  min-height: 112px;
-  padding: 14px;
+  position: relative;
+  min-height: 86px;
+  padding: 11px;
   border: 1px solid rgba(23, 32, 51, 0.08);
-  border-radius: 12px;
-  background: #fbfcfd;
-  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  will-change: transform;
+}
+
+.class-card::before {
+  display: none;
 }
 
 .class-card:hover {
-  border-color: rgba(47, 111, 99, 0.28);
-  box-shadow: 0 14px 28px rgba(23, 32, 51, 0.09);
+  border-color: rgba(23, 32, 51, 0.16);
+  box-shadow:
+    0 10px 20px rgba(23, 32, 51, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.72) inset;
   transform: translate3d(0, -2px, 0);
 }
 
 .class-chip {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   max-width: 100%;
-  min-height: 24px;
-  padding: 3px 9px;
-  border: 1px solid rgba(23, 32, 51, 0.12);
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid rgba(23, 32, 51, 0.08);
   border-radius: 999px;
-  background: #eef5f1;
-  color: #25443b;
-  font-size: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(246, 248, 250, 0.68));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  color: #263242;
+  font-size: 14px;
   font-weight: 800;
+  line-height: 1;
+  backdrop-filter: blur(12px);
+}
+
+.class-chip::before {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--guild-class-accent, #2f6f63);
+  box-shadow: 0 0 0 4px var(--guild-class-accent-soft, rgba(47, 111, 99, 0.12));
+  content: "";
 }
 
 .class-card strong {
   display: block;
-  margin-top: 12px;
+  margin-top: 8px;
   color: #121826;
-  font-size: 28px;
+  font-size: 21px;
   line-height: 1;
 }
 
 .class-card small {
   display: block;
-  margin-top: 6px;
+  margin-top: 3px;
   color: #64748b;
+  font-size: 12px;
 }
 
 .class-meter {
-  height: 8px;
-  margin-top: 14px;
+  height: 6px;
+  margin-top: 8px;
   overflow: hidden;
   border-radius: 999px;
-  background: #e9eef2;
+  background: #edf1f5;
 }
 
 .class-meter i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2f6f63, #7bb99f);
+  background: linear-gradient(90deg, #8a97a8, #445066);
 }
 
 .detail-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .detail-row {
@@ -817,10 +941,10 @@ onMounted(() => {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 12px;
-  min-height: 64px;
-  padding: 12px;
+  min-height: 52px;
+  padding: 9px 10px;
   border: 1px solid rgba(23, 32, 51, 0.07);
-  border-radius: 12px;
+  border-radius: 8px;
   background: #fbfcfd;
 }
 
@@ -847,39 +971,39 @@ onMounted(() => {
 
 .stacked-count strong {
   color: #121826;
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .ops-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .metric-card {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
-  min-height: 112px;
-  padding: 18px;
+  min-height: 82px;
+  padding: 13px 14px;
 }
 
 .metric-card strong {
   display: block;
-  margin: 5px 0;
+  margin: 3px 0;
   color: #121826;
-  font-size: 28px;
+  font-size: 23px;
   line-height: 1.1;
 }
 
 .metric-icon {
   display: grid;
   flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   place-items: center;
-  border-radius: 12px;
-  font-size: 20px;
+  border-radius: 8px;
+  font-size: 18px;
 }
 
 .metric-icon.green {
@@ -907,19 +1031,19 @@ onMounted(() => {
   grid-template-columns: 54px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  min-height: 76px;
-  padding: 12px;
+  min-height: 58px;
+  padding: 9px 10px;
   border: 1px solid rgba(23, 32, 51, 0.07);
-  border-radius: 12px;
+  border-radius: 8px;
   background: #fbfcfd;
 }
 
 .battle-date {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #11261f;
   color: #f5fff9;
 }
@@ -937,13 +1061,13 @@ onMounted(() => {
 .record-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .record-metric {
-  min-height: 82px;
-  padding: 14px;
-  border-radius: 12px;
+  min-height: 64px;
+  padding: 10px;
+  border-radius: 8px;
   background: #f4f8f7;
 }
 
@@ -954,9 +1078,9 @@ onMounted(() => {
 
 .record-metric strong {
   display: block;
-  margin-top: 10px;
+  margin-top: 7px;
   color: #121826;
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1.1;
 }
 
@@ -1008,8 +1132,19 @@ onMounted(() => {
     font-size: 28px;
   }
 
-  .command-number strong {
-    font-size: 42px;
+  .command-stat strong {
+    font-size: 30px;
+  }
+
+  .battle-class-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .leave-block {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid rgba(23, 32, 51, 0.08);
+    border-left: 0;
   }
 
   .detail-row,

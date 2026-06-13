@@ -41,6 +41,9 @@
                       <strong>{{ member.player_name }}</strong>
                       <span>{{ member.role_in_guild || '成员' }}</span>
                     </span>
+                    <el-tag v-if="member.current_registration_type" class="member-state-tag" size="small" :type="member.current_registration_type === 'leave' ? 'warning' : 'success'">
+                      {{ registrationTypeLabel(member.current_registration_type) }} · {{ registrationStatusLabel(member.current_registration_status) }}
+                    </el-tag>
                     <span class="member-option-meta">
                       <span>主职业：{{ member.player_class || '未设置' }}</span>
                       <span>副职：{{ member.secondary_class || '未设置' }}</span>
@@ -52,9 +55,22 @@
             </div>
 
             <el-form :model="signupForm" label-width="96px" class="signup-form">
+              <el-alert
+                class="mode-rule-alert"
+                type="info"
+                :closable="false"
+                title="提交约战报名时，如果你当前已经请假，系统会自动取消请假申请。已报名时不能重复报名。"
+              />
               <el-form-item label="已选择">
                 <el-input :model-value="selectedMember?.player_name || ''" placeholder="请先选择成员" disabled />
               </el-form-item>
+              <el-alert
+                v-if="selectedHasRegistration"
+                class="selected-state-alert"
+                type="warning"
+                :closable="false"
+                :title="selectedRegistrationTip"
+              />
               <el-form-item label="报名职业">
                 <el-select
                   v-model="signupForm.player_class"
@@ -78,8 +94,73 @@
                 <el-input v-model="signupForm.remark" type="textarea" :rows="3" maxlength="500" show-word-limit />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" :disabled="!selectedMember" :loading="signupLoading" @click="submitSignup">
+                <el-button type="primary" :disabled="isSignupSubmitDisabled" :loading="signupLoading" @click="submitSignup">
                   确认报名
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
+
+          <el-tab-pane label="请假申请" name="leave">
+            <div class="member-picker">
+              <el-input
+                v-model="memberKeyword"
+                placeholder="输入帮会内成员名字后自动搜索"
+                clearable
+                class="member-search"
+              />
+
+              <div v-if="showMemberDropdown" class="member-dropdown">
+                <div v-if="memberSearching" class="member-dropdown-status">搜索中...</div>
+                <div v-else-if="!memberList.length" class="member-dropdown-status">没有匹配的帮会成员</div>
+                <template v-else>
+                  <button
+                    v-for="member in memberList"
+                    :key="member.member_id"
+                    type="button"
+                    class="member-option"
+                    @click="handleMemberSelect(member)"
+                  >
+                    <span class="member-option-main">
+                      <strong>{{ member.player_name }}</strong>
+                      <span>{{ member.role_in_guild || '成员' }}</span>
+                    </span>
+                    <el-tag v-if="member.current_registration_type" class="member-state-tag" size="small" :type="member.current_registration_type === 'leave' ? 'warning' : 'success'">
+                      {{ registrationTypeLabel(member.current_registration_type) }} · {{ registrationStatusLabel(member.current_registration_status) }}
+                    </el-tag>
+                    <span class="member-option-meta">
+                      <span>主职业：{{ member.player_class || '未设置' }}</span>
+                      <span>副职：{{ member.secondary_class || '未设置' }}</span>
+                    </span>
+                    <span v-if="member.remark" class="member-option-remark">{{ member.remark }}</span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <el-form :model="leaveForm" label-width="96px" class="signup-form">
+              <el-alert
+                class="mode-rule-alert"
+                type="info"
+                :closable="false"
+                title="提交请假申请时，如果你当前已经报名，系统会自动取消约战报名。已请假时不能重复请假。"
+              />
+              <el-form-item label="已选择">
+                <el-input :model-value="selectedMember?.player_name || ''" placeholder="请先选择成员" disabled />
+              </el-form-item>
+              <el-alert
+                v-if="selectedHasRegistration"
+                class="selected-state-alert"
+                type="warning"
+                :closable="false"
+                :title="selectedRegistrationTip"
+              />
+              <el-form-item label="请假说明">
+                <el-input v-model="leaveForm.remark" type="textarea" :rows="3" maxlength="500" show-word-limit />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="warning" :disabled="isLeaveSubmitDisabled" :loading="leaveLoading" @click="submitLeave">
+                  提交请假
                 </el-button>
               </el-form-item>
             </el-form>
@@ -132,6 +213,7 @@ import {
   getPublicBattleProfessions,
   searchPublicBattleMembers,
   submitPublicBattleJoin,
+  submitPublicBattleLeave,
   submitPublicBattleSignup
 } from '@/api/guild/battle'
 
@@ -142,6 +224,7 @@ const pageError = ref('')
 const activeTab = ref('signup')
 const joinFormRef = ref(null)
 const joinLoading = ref(false)
+const leaveLoading = ref(false)
 const signupLoading = ref(false)
 const memberLoading = ref(false)
 const memberPending = ref(false)
@@ -153,6 +236,21 @@ let searchTimer = null
 
 const showMemberDropdown = computed(() => memberKeyword.value.trim().length > 0 && !selectedMember.value)
 const memberSearching = computed(() => memberPending.value || memberLoading.value)
+const selectedRegistrationType = computed(() => selectedMember.value?.current_registration_type || '')
+const selectedRegistrationLabel = computed(() => registrationTypeLabel(selectedRegistrationType.value))
+const selectedHasRegistration = computed(() => Boolean(selectedRegistrationType.value))
+const selectedRegistrationTip = computed(() => {
+  if (!selectedHasRegistration.value) return ''
+  const targetType = activeTab.value === 'leave' ? 'leave' : 'signup'
+  const targetLabel = registrationTypeLabel(targetType)
+  const currentStatus = registrationStatusLabel(selectedMember.value?.current_registration_status)
+  if (selectedRegistrationType.value === targetType) {
+    return `该成员已提交${selectedRegistrationLabel.value}，状态为${currentStatus}，不能重复提交。`
+  }
+  return `该成员当前是${selectedRegistrationLabel.value}，状态为${currentStatus}。提交${targetLabel}后，系统会自动取消${selectedRegistrationLabel.value}。`
+})
+const isSignupSubmitDisabled = computed(() => !selectedMember.value || selectedRegistrationType.value === 'signup')
+const isLeaveSubmitDisabled = computed(() => !selectedMember.value || selectedRegistrationType.value === 'leave')
 
 const joinForm = reactive({
   player_name: '',
@@ -166,6 +264,10 @@ const joinForm = reactive({
 const signupForm = reactive({
   player_class: '',
   secondary_class: '',
+  remark: ''
+})
+
+const leaveForm = reactive({
   remark: ''
 })
 
@@ -220,6 +322,14 @@ async function searchMembers() {
   }
 }
 
+function registrationTypeLabel(type) {
+  return type === 'leave' ? '请假申请' : '约战报名'
+}
+
+function registrationStatusLabel(status) {
+  return { 0: '待审核', 1: '已通过', 2: '已拒绝' }[String(status)] || '未记录'
+}
+
 function handleMemberSelect(member) {
   selectedMember.value = member
   signupForm.player_class = member?.player_class || ''
@@ -247,28 +357,52 @@ async function submitSignup() {
   if (!selectedMember.value) return
   signupLoading.value = true
   try {
-    await submitPublicBattleSignup(inviteCode, {
+    const res = await submitPublicBattleSignup(inviteCode, {
       member_id: selectedMember.value.member_id,
       player_class: signupForm.player_class,
       secondary_class: signupForm.secondary_class,
       remark: signupForm.remark
     })
-    ElMessage.success('约战报名已提交，请等待审核')
+    ElMessage.success(res.msg || '约战报名已提交，请等待审核')
     signupForm.player_class = ''
     signupForm.secondary_class = ''
     signupForm.remark = ''
-    memberKeyword.value = ''
-    memberList.value = []
-    selectedMember.value = null
+    clearMemberPicker()
   } finally {
     signupLoading.value = false
   }
+}
+
+async function submitLeave() {
+  if (!selectedMember.value) return
+  leaveLoading.value = true
+  try {
+    const res = await submitPublicBattleLeave(inviteCode, {
+      member_id: selectedMember.value.member_id,
+      remark: leaveForm.remark
+    })
+    ElMessage.success(res.msg || '请假申请已提交，请等待审核')
+    leaveForm.remark = ''
+    clearMemberPicker()
+  } finally {
+    leaveLoading.value = false
+  }
+}
+
+function clearMemberPicker() {
+  memberKeyword.value = ''
+  memberList.value = []
+  selectedMember.value = null
 }
 
 watch(memberKeyword, () => {
   if (searchTimer) clearTimeout(searchTimer)
   memberPending.value = memberKeyword.value.trim().length > 0
   searchTimer = setTimeout(searchMembers, 300)
+})
+
+watch(activeTab, () => {
+  clearMemberPicker()
 })
 
 onMounted(() => {
@@ -398,6 +532,10 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
+.member-state-tag {
+  align-self: flex-start;
+}
+
 .member-option-meta {
   display: flex;
   flex-wrap: wrap;
@@ -416,6 +554,10 @@ onBeforeUnmount(() => {
 
 .signup-form {
   margin-top: 14px;
+}
+
+.selected-state-alert {
+  margin: 0 0 14px;
 }
 
 @media (max-width: 760px) {

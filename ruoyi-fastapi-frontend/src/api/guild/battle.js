@@ -82,6 +82,13 @@ export function getApprovedBattleRegistrationsForSchedule() {
   })
 }
 
+export function getBattleLeaveRegistrationsForSchedule() {
+  return request({
+    url: '/guild/battle-registration/leave-schedule-list',
+    method: 'get'
+  })
+}
+
 export function approveBattleRegistration(registrationId, approvalComment = '') {
   return request({
     url: '/guild/battle-registration/approve',
@@ -135,6 +142,15 @@ export function submitPublicBattleSignup(inviteCode, data) {
 export function submitPublicBattleJoin(inviteCode, data) {
   return request({
     url: `/public/battle/${inviteCode}/join`,
+    method: 'post',
+    data,
+    headers: { isToken: false }
+  })
+}
+
+export function submitPublicBattleLeave(inviteCode, data) {
+  return request({
+    url: `/public/battle/${inviteCode}/leave`,
     method: 'post',
     data,
     headers: { isToken: false }

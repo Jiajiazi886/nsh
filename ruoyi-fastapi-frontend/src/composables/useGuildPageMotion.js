@@ -4,9 +4,12 @@ let gsapLoader = null
 
 async function loadGsap() {
   if (!gsapLoader) {
-    gsapLoader = import('gsap').then(gsapModule => {
+    gsapLoader = import('gsap').then(async gsapModule => {
       const gsap = gsapModule.gsap || gsapModule.default || gsapModule
-      return { gsap }
+      const scrollModule = await import('gsap/ScrollTrigger')
+      const ScrollTrigger = scrollModule.ScrollTrigger || scrollModule.default
+      gsap.registerPlugin(ScrollTrigger)
+      return { gsap, ScrollTrigger }
     })
   }
   return gsapLoader
@@ -25,7 +28,7 @@ export function useGuildPageMotion(rootRef, options = {}) {
     const root = rootRef.value
     if (!root || prefersReducedMotion()) return
 
-    const { gsap } = await loadGsap()
+    const { gsap, ScrollTrigger } = await loadGsap()
     if (disposed) return
 
     const heroSelector = options.heroSelector || '[data-guild-motion="hero"]'
@@ -48,14 +51,28 @@ export function useGuildPageMotion(rootRef, options = {}) {
 
       if (!revealItems.length) return
 
-      gsap.from(revealItems, {
-        autoAlpha: 0,
-        y: 12,
-        duration: 0.28,
-        ease: 'power2.out',
-        stagger: 0.025,
-        clearProps: 'transform,opacity,visibility'
+      gsap.set(revealItems, { autoAlpha: 0, y: 10 })
+
+      ScrollTrigger.batch(revealItems, {
+        start: 'top 94%',
+        once: true,
+        interval: 0.08,
+        batchMax: 6,
+        onEnter: batch => {
+          if (disposed) return
+          gsap.to(batch, {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.24,
+            ease: 'power2.out',
+            stagger: 0.025,
+            overwrite: true,
+            clearProps: 'transform,opacity,visibility'
+          })
+        }
       })
+
+      requestAnimationFrame(() => ScrollTrigger.refresh())
     }, root)
   })
 

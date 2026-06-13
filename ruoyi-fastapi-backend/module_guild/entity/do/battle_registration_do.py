@@ -36,6 +36,7 @@ class GuildBattleRegistration(Base):
     applicant_user_id = Column(BigInteger, nullable=False, server_default='0', comment='报名账号用户ID，公开报名为0')
     member_id = Column(BigInteger, nullable=True, comment='成员ID')
     team_id = Column(BigInteger, nullable=True, comment='团队ID')
+    registration_type = Column(String(20), nullable=True, server_default='signup', comment='申请类型(signup/leave)')
     player_name = Column(String(30), nullable=False, server_default="''", comment='玩家名快照')
     player_class = Column(String(20), nullable=True, server_default="''", comment='主职业')
     secondary_class = Column(String(20), nullable=True, server_default="''", comment='副职')

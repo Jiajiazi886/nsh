@@ -20,6 +20,10 @@
             仅显示约战审核通过
           </el-checkbox>
 
+          <el-checkbox v-model="excludeLeaveMembers">
+            排除请假申请
+          </el-checkbox>
+
           <div class="tree-toolbar">
             <span>职业文件夹</span>
             <div>
@@ -166,6 +170,7 @@
 
           <el-empty
             v-else
+            class="empty-board-canvas"
             description="还没有团队"
           >
             <el-button type="primary" @click="createTeam">创建团队</el-button>
@@ -237,7 +242,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
-import { getApprovedBattleRegistrationsForSchedule } from '@/api/guild/battle'
+import { getApprovedBattleRegistrationsForSchedule, getBattleLeaveRegistrationsForSchedule } from '@/api/guild/battle'
 import {
   addScheduleSquad,
   addScheduleTeam,
@@ -273,7 +278,9 @@ const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 useGuildPageMotion(pageRef)
 const keyword = ref('')
 const onlyApprovedBattleMembers = ref(true)
+const excludeLeaveMembers = ref(true)
 const approvedBattleMemberIds = ref([])
+const leaveMemberIds = ref([])
 const draggingMember = ref(null)
 const dragOverKey = ref('')
 const historyVisible = ref(false)
@@ -304,12 +311,14 @@ const assignedByMemberId = computed(() => {
 const filteredMembers = computed(() => {
   const value = keyword.value.trim().toLowerCase()
   const approvedSet = new Set(approvedBattleMemberIds.value)
+  const leaveSet = new Set(leaveMemberIds.value)
   return members.value.filter(member => {
     const matchesKeyword = !value || [member.player_name, member.player_class, member.secondary_class]
       .filter(Boolean)
       .some(text => String(text).toLowerCase().includes(value))
     const matchesBattle = !onlyApprovedBattleMembers.value || approvedSet.has(member.member_id)
-    return matchesKeyword && matchesBattle
+    const matchesLeave = !excludeLeaveMembers.value || !leaveSet.has(member.member_id)
+    return matchesKeyword && matchesBattle && matchesLeave
   })
 })
 
@@ -610,6 +619,11 @@ async function fetchApprovedBattleMembers() {
   approvedBattleMemberIds.value = (res.data || []).map(item => item.member_id).filter(Boolean)
 }
 
+async function fetchLeaveMembers() {
+  const res = await getBattleLeaveRegistrationsForSchedule()
+  leaveMemberIds.value = [...new Set((res.data || []).map(item => item.member_id).filter(Boolean))]
+}
+
 async function fetchSchedule() {
   const res = await getCurrentSchedule()
   normalizeSchedule(res.data || { teams: [] })
@@ -627,7 +641,7 @@ async function fetchClassColors() {
 async function fetchData() {
   loading.value = true
   try {
-    await Promise.all([fetchMembers(), fetchApprovedBattleMembers(), fetchSchedule(), fetchClassColors()])
+    await Promise.all([fetchMembers(), fetchApprovedBattleMembers(), fetchLeaveMembers(), fetchSchedule(), fetchClassColors()])
   } catch {
     ElMessage.error('加载排表数据失败')
   } finally {
@@ -927,10 +941,27 @@ onMounted(fetchData)
 }
 
 .team-board {
+  position: relative;
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: 14px;
+  background:
+    linear-gradient(90deg, rgba(99, 102, 241, 0.08) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(180deg, rgba(99, 102, 241, 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+    radial-gradient(circle at 24px 24px, rgba(124, 92, 255, 0.12) 1px, transparent 1px) 0 0 / 56px 56px,
+    linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(241, 245, 249, 0.82));
+}
+
+.team-board::before {
+  content: "";
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: block;
+  height: 0;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.2), 0 14px 30px rgba(15, 23, 42, 0.08);
+  pointer-events: none;
 }
 
 .team-list {
@@ -941,19 +972,23 @@ onMounted(fetchData)
 }
 
 .team-section {
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  background: var(--el-fill-color-blank);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(8px);
 }
 
 .team-header {
   min-height: 48px;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.82));
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  border-radius: 8px 8px 0 0;
 }
 
 .squad-grid {
@@ -965,18 +1000,21 @@ onMounted(fetchData)
 
 .squad-box {
   min-height: 150px;
-  border: 1px dashed var(--el-border-color);
-  border-radius: 6px;
-  background: var(--el-bg-color);
+  border: 1px dashed rgba(100, 116, 139, 0.34);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.86)),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px) 0 0 / 18px 18px;
   display: flex;
   flex-direction: column;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: transform 0.15s ease, background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .squad-box.is-over {
   border-color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
-  box-shadow: inset 0 0 0 1px var(--el-color-primary);
+  box-shadow: inset 0 0 0 1px var(--el-color-primary), 0 12px 28px rgba(64, 158, 255, 0.18);
+  transform: translateY(-1px);
 }
 
 .squad-header {
@@ -1049,12 +1087,27 @@ onMounted(fetchData)
 .drop-hint {
   position: absolute;
   inset: 8px;
-  border-radius: 4px;
+  border: 1px dashed rgba(148, 163, 184, 0.36);
+  border-radius: 6px;
+  background: rgba(248, 250, 252, 0.58);
   display: grid;
   place-items: center;
   color: var(--el-text-color-placeholder);
   font-size: 12px;
   pointer-events: none;
+}
+
+.empty-board-canvas {
+  min-height: 360px;
+  border: 1px dashed rgba(100, 116, 139, 0.32);
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px) 0 0 / 36px 36px,
+    linear-gradient(180deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px) 0 0 / 36px 36px,
+    rgba(255, 255, 255, 0.64);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .history-layout {

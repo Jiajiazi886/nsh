@@ -13,6 +13,7 @@ from module_guild.entity.vo.battle_registration_vo import (
     BattleInviteCreateModel,
     BattleRegistrationReviewModel,
     PublicBattleJoinApplicationModel,
+    PublicBattleLeaveApplicationModel,
     PublicBattleRegistrationModel,
 )
 from module_guild.service.battle_registration_service import BattleRegistrationService
@@ -119,11 +120,14 @@ async def delete_invite(
 )
 async def list_registrations(
     status: str | None = None,
+    registration_type: str | None = 'signup',
     query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
     current_user: Annotated[CurrentUserModel | None, CurrentUserDependency()] = None,
 ) -> Response:
     try:
-        result = await BattleRegistrationService.list_registrations_service(query_db, current_user, status)
+        result = await BattleRegistrationService.list_registrations_service(
+            query_db, current_user, status, registration_type
+        )
         return ResponseUtil.success(data=result)
     except ServiceException as e:
         return ResponseUtil.error(msg=e.message)
@@ -148,6 +152,25 @@ async def list_approved_schedule_registrations(
         return ResponseUtil.error(msg=e.message)
     except Exception as e:
         logger.error(f'排表读取已通过约战报名失败: {e!s}')
+        return ResponseUtil.error(msg=f'{e!s}')
+
+
+@battle_registration_controller.get(
+    '/leave-schedule-list',
+    summary='排表读取当前请假申请',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:list')],
+)
+async def list_leave_schedule_registrations(
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[CurrentUserModel | None, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await BattleRegistrationService.list_leave_registrations_for_schedule_service(query_db, current_user)
+        return ResponseUtil.success(data=result)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'排表读取请假申请失败: {e!s}')
         return ResponseUtil.error(msg=f'{e!s}')
 
 
@@ -242,6 +265,22 @@ async def submit_public_registration(
         return ResponseUtil.error(msg=e.message)
     except Exception as e:
         logger.error(f'公开提交约战报名失败: {e!s}')
+        return ResponseUtil.error(msg=f'{e!s}')
+
+
+@public_battle_registration_controller.post('/{invite_code}/leave', summary='公开提交请假申请')
+async def submit_public_leave(
+    invite_code: str,
+    data: PublicBattleLeaveApplicationModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+) -> Response:
+    try:
+        result = await BattleRegistrationService.submit_public_leave_service(query_db, invite_code, data)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'公开提交请假申请失败: {e!s}')
         return ResponseUtil.error(msg=f'{e!s}')
 
 

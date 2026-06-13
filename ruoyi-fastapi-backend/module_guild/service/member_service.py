@@ -85,6 +85,18 @@ class MemberService:
     async def query_member_list_service(cls, db: AsyncSession, current_user: CurrentUserModel) -> list:
         user_id = current_user.user.user_id
         members = await MemberDao.query_member_list_payload(db, user_id)
+        member_ids = [m['member_id'] for m in members]
+        leave_records = await MemberDao.list_leave_records_for_members(db, user_id, member_ids)
+        leave_map: dict[int, list[dict]] = {}
+        for row in leave_records:
+            leave_map.setdefault(row.member_id, []).append(
+                {
+                    'registration_id': row.registration_id,
+                    'battle_name': row.battle_name or '',
+                    'battle_time': row.battle_time,
+                    'approval_status': row.approval_status,
+                }
+            )
         return [
             {
                 'member_id': m['member_id'],
@@ -98,6 +110,8 @@ class MemberService:
                 'is_active': m['is_active'],
                 'source_type': m['source_type'] or 'manual',
                 'join_time': m['join_time'],
+                'leave_count': len(leave_map.get(m['member_id'], [])),
+                'leave_battle_times': leave_map.get(m['member_id'], []),
                 'remark': m['remark'] or '',
                 'team_id': m['team_id'],
                 'squad_number': m['squad_number'],

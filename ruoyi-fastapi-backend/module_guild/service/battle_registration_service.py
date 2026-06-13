@@ -14,6 +14,7 @@ from module_guild.entity.vo.battle_registration_vo import (
     BattleInviteCreateModel,
     BattleRegistrationReviewModel,
     PublicBattleJoinApplicationModel,
+    PublicBattleLeaveApplicationModel,
     PublicBattleRegistrationModel,
 )
 
@@ -122,7 +123,11 @@ class BattleRegistrationService:
 
     @classmethod
     async def list_registrations_service(
-        cls, db: AsyncSession, current_user: CurrentUserModel, status: str | None = None
+        cls,
+        db: AsyncSession,
+        current_user: CurrentUserModel,
+        status: str | None = None,
+        registration_type: str | None = 'signup',
     ) -> list[dict]:
         role_scope = cls._get_role_scope(current_user)
         if role_scope == 'user':
@@ -133,7 +138,35 @@ class BattleRegistrationService:
         active_invite = await BattleRegistrationDao.get_latest_active_invite(db, owner_user_id)
         if not active_invite:
             return []
-        rows = await BattleRegistrationDao.list_registrations(db, owner_user_id, status, active_invite.invite_id)
+        rows = await BattleRegistrationDao.list_registrations(
+            db,
+            owner_user_id,
+            status,
+            active_invite.invite_id,
+            registration_type=cls._normalize_registration_type(registration_type),
+        )
+        return [cls._format_registration(item) for item in rows]
+
+    @classmethod
+    async def list_leave_registrations_for_schedule_service(
+        cls, db: AsyncSession, current_user: CurrentUserModel
+    ) -> list[dict]:
+        role_scope = cls._get_role_scope(current_user)
+        if role_scope == 'user':
+            raise ServiceException(message='当前角色无权查看请假排除列表')
+        owner_user_id = None if role_scope == 'admin' else current_user.user.user_id
+        await BattleRegistrationDao.mark_expired_invites(db)
+        await db.commit()
+        active_invite = await BattleRegistrationDao.get_latest_active_invite(db, owner_user_id)
+        if not active_invite:
+            return []
+        rows = await BattleRegistrationDao.list_registrations(
+            db,
+            owner_user_id,
+            invite_id=active_invite.invite_id,
+            registration_type='leave',
+            status_list=['0', '1'],
+        )
         return [cls._format_registration(item) for item in rows]
 
     @classmethod
@@ -184,6 +217,13 @@ class BattleRegistrationService:
         if not keyword:
             return []
         members = await BattleRegistrationDao.search_members(db, invite.owner_user_id, keyword)
+        registrations = await BattleRegistrationDao.list_effective_registrations_for_members(
+            db, invite.invite_id, [item.member_id for item in members]
+        )
+        registration_map: dict[int, GuildBattleRegistration] = {}
+        for registration in registrations:
+            if registration.member_id not in registration_map:
+                registration_map[registration.member_id] = registration
         return [
             {
                 'member_id': item.member_id,
@@ -193,6 +233,14 @@ class BattleRegistrationService:
                 'role_in_guild': item.role_in_guild or '',
                 'remark': item.remark or '',
                 'join_time': item.join_time,
+                'current_registration_type': cls._normalize_registration_type(
+                    registration_map[item.member_id].registration_type
+                )
+                if item.member_id in registration_map
+                else '',
+                'current_registration_status': registration_map[item.member_id].approval_status
+                if item.member_id in registration_map
+                else '',
             }
             for item in members
         ]
@@ -210,9 +258,17 @@ class BattleRegistrationService:
         member = await BattleRegistrationDao.get_member_for_invite(db, invite.owner_user_id, data.member_id)
         if not member:
             raise ServiceException(message='未找到该帮会成员')
-        exists = await BattleRegistrationDao.has_effective_registration(db, invite.invite_id, member.member_id)
+        exists = await BattleRegistrationDao.get_effective_registration(db, invite.invite_id, member.member_id)
         if exists:
-            raise ServiceException(message='该成员已提交过约战报名，请等待审核')
+            existing_type = cls._normalize_registration_type(exists.registration_type) or 'signup'
+            if existing_type == 'signup':
+                raise ServiceException(message='该成员已提交过约战报名，请勿重复提交')
+            await BattleRegistrationDao.cancel_effective_registration(
+                db, invite.invite_id, member.member_id, existing_type
+            )
+            message = '约战报名已提交，原请假申请已自动取消'
+        else:
+            message = '约战报名已提交，请等待审核'
         await BattleRegistrationDao.create_registration(
             db,
             {
@@ -222,6 +278,7 @@ class BattleRegistrationService:
                 'owner_user_id': invite.owner_user_id,
                 'applicant_user_id': 0,
                 'member_id': member.member_id,
+                'registration_type': 'signup',
                 'player_name': member.player_name,
                 'player_class': (data.player_class or member.player_class or '').strip(),
                 'secondary_class': (data.secondary_class or member.secondary_class or '').strip(),
@@ -232,7 +289,46 @@ class BattleRegistrationService:
             },
         )
         await db.commit()
-        return CrudResponseModel(is_success=True, message='约战报名已提交，请等待审核')
+        return CrudResponseModel(is_success=True, message=message)
+
+    @classmethod
+    async def submit_public_leave_service(
+        cls, db: AsyncSession, invite_code: str, data: PublicBattleLeaveApplicationModel
+    ) -> CrudResponseModel:
+        invite = await cls._get_active_invite_or_raise(db, invite_code)
+        member = await BattleRegistrationDao.get_member_for_invite(db, invite.owner_user_id, data.member_id)
+        if not member:
+            raise ServiceException(message='未找到该帮会成员')
+        exists = await BattleRegistrationDao.get_effective_registration(db, invite.invite_id, member.member_id)
+        if exists:
+            existing_type = cls._normalize_registration_type(exists.registration_type) or 'signup'
+            if existing_type == 'leave':
+                raise ServiceException(message='该成员已提交过请假申请，请勿重复提交')
+            await BattleRegistrationDao.cancel_effective_registration(
+                db, invite.invite_id, member.member_id, existing_type
+            )
+            message = '请假申请已提交，原约战报名已自动取消'
+        else:
+            message = '请假申请已提交，请等待审核'
+        await BattleRegistrationDao.create_registration(
+            db,
+            {
+                'invite_id': invite.invite_id,
+                'invite_code': invite.invite_code,
+                'guild_id': invite.owner_user_id,
+                'owner_user_id': invite.owner_user_id,
+                'applicant_user_id': 0,
+                'member_id': member.member_id,
+                'registration_type': 'leave',
+                'player_name': member.player_name,
+                'player_class': member.player_class or '',
+                'secondary_class': member.secondary_class or '',
+                'role_in_guild': member.role_in_guild or '',
+                'remark': (data.remark or '').strip(),
+            },
+        )
+        await db.commit()
+        return CrudResponseModel(is_success=True, message=message)
 
     @classmethod
     async def submit_public_join_service(
@@ -339,6 +435,7 @@ class BattleRegistrationService:
             'guild_id': item.guild_id,
             'owner_user_id': item.owner_user_id,
             'member_id': item.member_id,
+            'registration_type': cls._normalize_registration_type(item.registration_type) or 'signup',
             'player_name': item.player_name,
             'player_class': item.player_class or '',
             'secondary_class': item.secondary_class or '',
@@ -370,3 +467,17 @@ class BattleRegistrationService:
         if 'common' in role_keys:
             return 'common'
         return 'user'
+
+    @classmethod
+    def _normalize_registration_type(cls, registration_type: str | None) -> str | None:
+        value = (registration_type or '').strip().lower()
+        if not value:
+            return None
+        if value not in {'signup', 'leave'}:
+            raise ServiceException(message='申请类型不正确')
+        return value
+
+    @classmethod
+    def _registration_type_label(cls, registration_type: str | None) -> str:
+        value = cls._normalize_registration_type(registration_type) or 'signup'
+        return '请假申请' if value == 'leave' else '约战报名'
