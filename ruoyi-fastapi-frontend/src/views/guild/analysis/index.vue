@@ -30,23 +30,67 @@
       </article>
     </section>
 
-    <section v-if="isFullscreen" class="analysis-cockpit" data-guild-reveal>
-      <header class="cockpit-header">
-        <div>
-          <span>dense analyst terminal</span>
-          <h2>约战数据矩阵</h2>
-          <p>对象池、A/B 选择和指标矩阵放在同一视线区域，按人看表格的习惯连续读取。</p>
+    <section v-if="isFullscreen" class="analysis-cockpit war-room" data-guild-reveal>
+      <header class="war-room-command">
+        <div class="command-identity">
+          <span>Guild Intelligence Desktop</span>
+          <h2>全屏战术分析台</h2>
+          <p>把玩家、队伍、指标、图表拆成可移动窗口；像 Windows 桌面一样拖动、缩放、重叠和置顶。</p>
         </div>
-        <div class="cockpit-source-line">
-          <strong>{{ selectedBattle?.battle_name || '未选择历史数据' }}</strong>
-          <em>{{ selectedSchedule?.schedule_name || '未关联排表' }}</em>
+
+        <div class="command-source-stack">
+          <div>
+            <small>历史数据</small>
+            <strong>{{ selectedBattle?.battle_name || '未选择历史数据' }}</strong>
+          </div>
+          <div>
+            <small>历史排表</small>
+            <strong>{{ selectedSchedule?.schedule_name || '未关联排表' }}</strong>
+          </div>
         </div>
-        <button type="button" class="cockpit-exit" @click="toggleFullscreen">退出全屏</button>
+
+        <div class="command-actions">
+          <button type="button" class="layout-reset-button" @click="resetAnalysisPanelLayout">重置窗口</button>
+          <button type="button" class="cockpit-exit" @click="toggleFullscreen">退出全屏</button>
+        </div>
       </header>
 
-      <div class="dense-workbench">
-        <div class="dense-toolbar">
-          <div class="mode-tabs">
+      <section class="war-room-ribbon">
+        <article v-for="item in heroMetrics" :key="item.label" class="ribbon-stat" :class="item.tone">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <em>{{ item.hint }}</em>
+        </article>
+        <article class="ribbon-stat mode-card">
+          <span>当前模式</span>
+          <strong>{{ compareModeLabel }}</strong>
+          <em>{{ comparisonOptionCountLabel }} · {{ selectedMetricKeys.length }} 个指标显示</em>
+        </article>
+      </section>
+
+      <div
+        class="war-room-desktop"
+        @dragover.prevent
+        @drop="handleComparisonDrop"
+      >
+        <ResizablePanel
+          :key="`comparison-pool-${panelLayoutKey}`"
+          storage-key="comparison-pool"
+          panel-class="war-window object-dock-window"
+          :default-width="440"
+          :default-height="780"
+          :min-width="340"
+          :min-height="460"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>01 / Object Dock</span>
+              <h3>对象抽屉</h3>
+            </div>
+            <b>{{ visibleComparisonOptions.length }}/{{ comparisonOptions.length }}</b>
+          </div>
+          <div class="mode-tabs command-tabs">
             <button
               v-for="mode in compareModes"
               :key="mode.value"
@@ -58,371 +102,403 @@
               {{ mode.label }}
             </button>
           </div>
-          <div class="dense-flags">
-            <label v-for="option in analysisOptionSwitches" :key="option.key">
+          <input
+            v-model="comparisonSearch"
+            class="pool-search"
+            type="search"
+            :placeholder="compareMode === 'team' ? '搜索队伍' : '搜索玩家 / 职业 / 帮会'"
+          >
+          <div class="folder-toolbar">
+            <p class="window-hint">{{ comparisonSourceHint }}。已加入多人对比的对象会从抽屉隐藏；双击或拖拽加入。</p>
+            <div>
+              <button type="button" @click="expandAllComparisonFolders">全部展开</button>
+              <button type="button" @click="collapseAllComparisonFolders">全部收起</button>
+            </div>
+          </div>
+          <div class="pool-list tactical-pool folder-pool">
+            <details
+              v-for="folder in comparisonObjectFolders"
+              :key="folder.key"
+              class="class-folder"
+              :style="folder.style"
+              :open="isComparisonFolderOpen(folder.key)"
+              @toggle="handleComparisonFolderToggle($event, folder.key)"
+            >
+              <summary class="class-folder-head">
+                <span>
+                  <i></i>
+                  <strong>{{ folder.label }}</strong>
+                </span>
+                <em>{{ folder.items.length }} {{ compareMode === 'team' ? '队' : '人' }}</em>
+                <b>{{ formatCompact(folder.totalKills) }}</b>
+              </summary>
+              <div class="class-folder-body">
+                <button
+                  v-for="item in folder.items"
+                  :key="item.id"
+                  type="button"
+                  class="pool-row"
+                  :class="{ left: item.id === compareLeftId, right: item.id === compareRightId }"
+                  draggable="true"
+                  @dragstart="handleComparisonDragStart($event, item.id)"
+                  @dblclick="addComparisonItem(item.id)"
+                >
+                  <i :style="getComparisonAccentStyle(item)"></i>
+                  <strong>{{ item.label }}</strong>
+                  <em>{{ item.subtitle }}</em>
+                  <b>{{ formatCompact(item.metrics?.total_kills) }}</b>
+                  <span>
+                    <small @click.stop="addComparisonItem(item.id)">加入</small>
+                    <small @click.stop="setComparisonSide(item.id, 'left')">A</small>
+                    <small @click.stop="setComparisonSide(item.id, 'right')">B</small>
+                  </span>
+                </button>
+              </div>
+            </details>
+            <el-empty v-if="!visibleComparisonOptions.length" description="没有可加入对象" :image-size="58" />
+          </div>
+        </ResizablePanel>
+
+        <ResizablePanel
+          :key="`comparison-command-${panelLayoutKey}`"
+          storage-key="comparison-command"
+          panel-class="war-window command-window"
+          :default-width="840"
+          :default-height="300"
+          :min-width="620"
+          :min-height="250"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>02 / Duel Control</span>
+              <h3>A/B 快速锁定</h3>
+            </div>
+            <button type="button" class="swap-button" title="交换 A/B" @click="swapComparisonSides">交换</button>
+          </div>
+          <div class="duel-selector-grid">
+            <div class="duel-select-card side-a">
+              <span>A</span>
+              <el-select
+                v-model="compareLeftId"
+                filterable
+                class="cockpit-select"
+                :placeholder="compareLeftPlaceholder"
+                @change="handleComparisonSelect('left')"
+              >
+                <el-option
+                  v-for="item in comparisonOptions"
+                  :key="item.id"
+                  :label="item.label"
+                  :value="item.id"
+                >
+                  <div class="option-line">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.subtitle }}</span>
+                  </div>
+                </el-option>
+              </el-select>
+              <strong>{{ leftComparison?.label || '未选' }}</strong>
+              <em>{{ leftComparison?.subtitle || '等待选择' }}</em>
+            </div>
+            <div class="duel-select-card side-b">
+              <span>B</span>
+              <el-select
+                v-model="compareRightId"
+                filterable
+                class="cockpit-select"
+                :placeholder="compareRightPlaceholder"
+                @change="handleComparisonSelect('right')"
+              >
+                <el-option
+                  v-for="item in comparisonOptions"
+                  :key="item.id"
+                  :label="item.label"
+                  :value="item.id"
+                >
+                  <div class="option-line">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.subtitle }}</span>
+                  </div>
+                </el-option>
+              </el-select>
+              <strong>{{ rightComparison?.label || '未选' }}</strong>
+              <em>{{ rightComparison?.subtitle || '等待选择' }}</em>
+            </div>
+          </div>
+          <div class="duel-summary-line">
+            <strong>{{ comparisonHeadline }}</strong>
+            <span>{{ comparisonSubtitle }}</span>
+            <b>{{ comparisonDeltaLabel }}</b>
+          </div>
+        </ResizablePanel>
+
+        <ResizablePanel
+          :key="`comparison-tray-${panelLayoutKey}`"
+          storage-key="comparison-tray"
+          panel-class="war-window tray-window"
+          :default-width="840"
+          :default-height="300"
+          :min-width="560"
+          :min-height="220"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>03 / Compare Lineup</span>
+              <h3>多人对比</h3>
+            </div>
+            <button type="button" class="ghost-button" @click="clearSelectedComparisonItems">清空</button>
+          </div>
+          <p class="window-hint window-memory-hint">拖动标题栏移动窗口，拖动边缘或右下角缩放；刷新后会记住位置和大小。</p>
+          <div
+            class="comparison-tray tactical-tray"
+            @dragover.prevent
+            @drop.stop="handleComparisonDrop"
+          >
+            <button
+              v-for="item in selectedComparisonItems"
+              :key="item.id"
+              type="button"
+              class="tray-chip"
+              :style="getComparisonAccentStyle(item)"
+              @click="removeComparisonItem(item.id)"
+            >
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.subtitle }}</span>
+              <em>{{ formatCompact(item.metrics?.total_kills) }}</em>
+            </button>
+            <div v-if="!selectedComparisonItems.length" class="tray-empty">
+              把左侧对象拖进来；多人越多，图表和矩阵越像真正的数据墙。
+            </div>
+          </div>
+        </ResizablePanel>
+
+        <ResizablePanel
+          :key="`comparison-matrix-${panelLayoutKey}`"
+          storage-key="comparison-matrix"
+          panel-class="war-window matrix-window"
+          :default-width="1180"
+          :default-height="660"
+          :min-width="760"
+          :min-height="420"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>04 / Full Metric Wall</span>
+              <h3>全量指标数据墙</h3>
+            </div>
+            <b>{{ activeMetricOptions.length }} 项显示</b>
+          </div>
+          <div v-if="isMultiComparison" class="multi-matrix metric-wall">
+            <div class="multi-matrix-head" :style="multiMatrixGridStyle">
+              <span>指标</span>
+              <span v-for="item in selectedComparisonItems" :key="item.id">{{ item.label }}</span>
+              <span>最高 / 最低 / 均值</span>
+            </div>
+            <div class="matrix-body">
+              <div
+                v-for="row in multiComparisonRows"
+                :key="row.key"
+                class="multi-matrix-row"
+                :style="multiMatrixGridStyle"
+              >
+                <strong>{{ row.label }}</strong>
+                <span
+                  v-for="cell in row.cells"
+                  :key="cell.id"
+                  :class="{ peak: cell.isMax, low: cell.isMin }"
+                >
+                  {{ cell.text }}
+                </span>
+                <em>{{ row.judgement }}</em>
+              </div>
+            </div>
+          </div>
+          <template v-else>
+            <div class="matrix-head duel-matrix-head">
+              <span>指标</span>
+              <span>A：{{ leftComparison?.label || '未选' }}</span>
+              <span>B：{{ rightComparison?.label || '未选' }}</span>
+              <span>差值</span>
+              <span>占比</span>
+              <span>判断</span>
+            </div>
+            <div class="matrix-body">
+              <div v-for="row in comparisonRows" :key="row.key" class="matrix-row duel-matrix-row" :class="row.leader">
+                <strong>{{ row.label }}</strong>
+                <span>{{ row.leftText }}</span>
+                <span>{{ row.rightText }}</span>
+                <span class="delta-cell">{{ row.deltaText }}</span>
+                <div class="mini-ratio">
+                  <i :style="{ width: `${row.leftPct}%` }"></i>
+                  <b :style="{ width: `${row.rightPct}%` }"></b>
+                  <small>{{ row.ratioText }}</small>
+                </div>
+                <em>{{ row.leaderText }}</em>
+              </div>
+              <el-empty v-if="!comparisonRows.length" description="请选择两个不同对象，并保留至少一个指标" :image-size="72" />
+            </div>
+          </template>
+        </ResizablePanel>
+
+        <ResizablePanel
+          :key="`bar-chart-${panelLayoutKey}`"
+          storage-key="bar-chart"
+          panel-class="war-window chart-window bar-window"
+          :default-width="620"
+          :default-height="430"
+          :min-width="420"
+          :min-height="300"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>05 / Bar Scanner</span>
+              <h3>柱状图：横向压强</h3>
+            </div>
+          </div>
+          <AnalysisChartPanel :option="barChartOption" :autoresize-key="chartResizeKey" />
+        </ResizablePanel>
+
+        <ResizablePanel
+          :key="`line-chart-${panelLayoutKey}`"
+          storage-key="line-chart"
+          panel-class="war-window chart-window line-window"
+          :default-width="620"
+          :default-height="430"
+          :min-width="420"
+          :min-height="300"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>06 / Line Trace</span>
+              <h3>折线图：指标走势</h3>
+            </div>
+          </div>
+          <AnalysisChartPanel :option="lineChartOption" :autoresize-key="chartResizeKey" />
+        </ResizablePanel>
+
+        <ResizablePanel
+          :key="`pie-chart-${panelLayoutKey}`"
+          storage-key="pie-chart"
+          panel-class="war-window chart-window pie-window"
+          :default-width="560"
+          :default-height="420"
+          :min-width="400"
+          :min-height="300"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>07 / Share Cut</span>
+              <h3>饼图：总量占比</h3>
+            </div>
+          </div>
+          <AnalysisChartPanel :option="pieChartOption" :autoresize-key="chartResizeKey" />
+        </ResizablePanel>
+
+        <ResizablePanel
+          :key="`class-analysis-${panelLayoutKey}`"
+          storage-key="class-analysis"
+          panel-class="war-window class-window"
+          :default-width="620"
+          :default-height="440"
+          :min-width="420"
+          :min-height="320"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>08 / Same Class Lab</span>
+              <h3>同职业分析</h3>
+            </div>
+          </div>
+          <div class="class-analysis-list">
+            <div v-for="group in classAnalysisGroups" :key="group.className" class="class-analysis-group">
+              <div class="class-analysis-head">
+                <strong>{{ group.className }}</strong>
+                <span>已选 {{ group.selectedCount }} / 全部 {{ group.totalCount }}</span>
+              </div>
+              <div
+                v-for="metric in group.metrics"
+                :key="metric.key"
+                class="class-analysis-row"
+              >
+                <span>{{ metric.label }}</span>
+                <b>均值 {{ metric.avgText }}</b>
+                <em>最高 {{ metric.maxText }}</em>
+              </div>
+            </div>
+            <el-empty v-if="!classAnalysisGroups.length" description="选择玩家后显示同职业均值和最高值" :image-size="62" />
+          </div>
+        </ResizablePanel>
+
+        <ResizablePanel
+          :key="`dense-side-${panelLayoutKey}`"
+          storage-key="dense-side"
+          panel-class="war-window intel-window"
+          :default-width="440"
+          :default-height="780"
+          :min-width="340"
+          :min-height="460"
+          @resize="refreshAnalysisCharts"
+        >
+          <div class="window-titlebar">
+            <div>
+              <span>09 / Intel Filters</span>
+              <h3>指标与洞察</h3>
+            </div>
+          </div>
+
+          <section class="intel-section">
+            <h4>A/B 摘要</h4>
+            <div class="compact-entity side-a">
+              <span>A</span>
+              <strong>{{ leftComparison?.label || '未选' }}</strong>
+              <em>{{ leftComparison?.subtitle || '等待选择' }}</em>
+              <small>{{ leftComparison?.membersText || leftComparison?.countText || '--' }}</small>
+            </div>
+            <div class="compact-entity side-b">
+              <span>B</span>
+              <strong>{{ rightComparison?.label || '未选' }}</strong>
+              <em>{{ rightComparison?.subtitle || '等待选择' }}</em>
+              <small>{{ rightComparison?.membersText || rightComparison?.countText || '--' }}</small>
+            </div>
+          </section>
+
+          <section class="intel-section">
+            <h4>指标开关</h4>
+            <div class="dense-metric-picks">
+              <button
+                v-for="metric in metricOptions"
+                :key="metric.key"
+                type="button"
+                :class="{ active: selectedMetricKeys.includes(metric.key) }"
+                @click="toggleMetric(metric.key)"
+              >
+                {{ metric.label }}
+              </button>
+            </div>
+          </section>
+
+          <section class="intel-section">
+            <h4>判读快照</h4>
+            <p>{{ comparisonDeltaLabel }}</p>
+            <p v-for="row in multiComparisonRows.slice(0, 4)" :key="row.key">{{ row.label }}：{{ row.judgement }}</p>
+            <p v-if="!multiComparisonRows.length">加入多个对象后，这里显示最高、最低、均值差距。</p>
+          </section>
+
+          <section class="intel-section">
+            <h4>范围控制</h4>
+            <label v-for="option in analysisOptionSwitches" :key="option.key" class="intel-toggle">
               <input v-model="option.model.value" type="checkbox">
               <span>{{ option.label }}</span>
             </label>
-            <button type="button" class="layout-reset-button" @click="resetAnalysisPanelLayout">重置布局</button>
-          </div>
-          <strong class="option-count">{{ comparisonOptionCountLabel }}</strong>
-        </div>
-
-        <div class="dense-selector-row">
-          <div class="dense-select-cell side-a">
-            <span>A</span>
-            <el-select
-              v-model="compareLeftId"
-              filterable
-              class="cockpit-select"
-              :placeholder="compareLeftPlaceholder"
-              @change="handleComparisonSelect('left')"
-            >
-              <el-option
-                v-for="item in comparisonOptions"
-                :key="item.id"
-                :label="item.label"
-                :value="item.id"
-              >
-                <div class="option-line">
-                  <strong>{{ item.label }}</strong>
-                  <span>{{ item.subtitle }}</span>
-                </div>
-              </el-option>
-            </el-select>
-          </div>
-          <button type="button" class="swap-button" title="交换 A/B" @click="swapComparisonSides">↔</button>
-          <div class="dense-select-cell side-b">
-            <span>B</span>
-            <el-select
-              v-model="compareRightId"
-              filterable
-              class="cockpit-select"
-              :placeholder="compareRightPlaceholder"
-              @change="handleComparisonSelect('right')"
-            >
-              <el-option
-                v-for="item in comparisonOptions"
-                :key="item.id"
-                :label="item.label"
-                :value="item.id"
-              >
-                <div class="option-line">
-                  <strong>{{ item.label }}</strong>
-                  <span>{{ item.subtitle }}</span>
-                </div>
-              </el-option>
-            </el-select>
-          </div>
-        </div>
-
-        <div class="dense-summary-strip">
-          <span>{{ compareModeLabel }}</span>
-          <strong>{{ comparisonHeadline }}</strong>
-          <em>{{ comparisonSubtitle }}</em>
-          <b>{{ comparisonDeltaLabel }}</b>
-        </div>
-
-        <div
-          class="dense-grid"
-          @dragover.prevent
-          @drop="handleComparisonDrop"
-        >
-          <ResizablePanel
-            :key="`comparison-pool-${panelLayoutKey}`"
-            storage-key="comparison-pool"
-            panel-class="comparison-pool"
-            :default-width="420"
-            :default-height="720"
-            :min-width="320"
-            :min-height="420"
-            @resize="refreshAnalysisCharts"
-          >
-            <div class="pool-head">
-              <div>
-                <h3>对象池</h3>
-                <span>{{ comparisonSourceHint }}</span>
-              </div>
-              <b>{{ visibleComparisonOptions.length }}/{{ comparisonOptions.length }}</b>
-            </div>
-            <input
-              v-model="comparisonSearch"
-              class="pool-search"
-              type="search"
-              :placeholder="compareMode === 'team' ? '搜索队伍' : '搜索玩家 / 职业 / 帮会'"
-            >
-            <div class="pool-list">
-              <button
-                v-for="item in visibleComparisonOptions"
-                :key="item.id"
-                type="button"
-                class="pool-row"
-                :class="{ left: item.id === compareLeftId, right: item.id === compareRightId }"
-                draggable="true"
-                @dragstart="handleComparisonDragStart($event, item.id)"
-                @dblclick="addComparisonItem(item.id)"
-              >
-                <i :style="getComparisonAccentStyle(item)"></i>
-                <strong>{{ item.label }}</strong>
-                <em>{{ item.subtitle }}</em>
-                <b>{{ formatCompact(item.metrics?.total_kills) }}</b>
-                <span>
-                  <small @click.stop="addComparisonItem(item.id)">加入</small>
-                  <small @click.stop="setComparisonSide(item.id, 'left')">设 A</small>
-                  <small @click.stop="setComparisonSide(item.id, 'right')">设 B</small>
-                </span>
-              </button>
-              <el-empty v-if="!visibleComparisonOptions.length" description="没有匹配对象" :image-size="58" />
-            </div>
-          </ResizablePanel>
-
-          <main class="dense-center">
-            <ResizablePanel
-              :key="`comparison-tray-${panelLayoutKey}`"
-              storage-key="comparison-tray"
-              panel-class="comparison-tray-panel"
-              :default-width="1040"
-              :default-height="190"
-              :min-width="620"
-              :min-height="150"
-              @resize="refreshAnalysisCharts"
-            >
-              <div class="tray-head">
-                <div>
-                  <h3>多人对比托盘</h3>
-                  <span>双击对象或拖入这里；不限制人数，图表横向滚动。</span>
-                </div>
-                <button type="button" @click="clearSelectedComparisonItems">清空</button>
-              </div>
-              <div
-                class="comparison-tray"
-                @dragover.prevent
-                @drop.stop="handleComparisonDrop"
-              >
-                <button
-                  v-for="item in selectedComparisonItems"
-                  :key="item.id"
-                  type="button"
-                  class="tray-chip"
-                  :style="getComparisonAccentStyle(item)"
-                  @click="removeComparisonItem(item.id)"
-                >
-                  <strong>{{ item.label }}</strong>
-                  <span>{{ item.subtitle }}</span>
-                  <em>{{ formatCompact(item.metrics?.total_kills) }}</em>
-                </button>
-                <div v-if="!selectedComparisonItems.length" class="tray-empty">
-                  从左侧拖入玩家/队伍，或双击对象加入对比。
-                </div>
-              </div>
-            </ResizablePanel>
-
-            <ResizablePanel
-              :key="`comparison-matrix-${panelLayoutKey}`"
-              storage-key="comparison-matrix"
-              panel-class="dense-matrix"
-              :default-width="1040"
-              :default-height="520"
-              :min-width="680"
-              :min-height="360"
-              @resize="refreshAnalysisCharts"
-            >
-              <div v-if="isMultiComparison" class="multi-matrix">
-                <div class="multi-matrix-head" :style="multiMatrixGridStyle">
-                  <span>指标</span>
-                  <span v-for="item in selectedComparisonItems" :key="item.id">{{ item.label }}</span>
-                  <span>判断</span>
-                </div>
-                <div class="matrix-body">
-                  <div
-                    v-for="row in multiComparisonRows"
-                    :key="row.key"
-                    class="multi-matrix-row"
-                    :style="multiMatrixGridStyle"
-                  >
-                    <strong>{{ row.label }}</strong>
-                    <span
-                      v-for="cell in row.cells"
-                      :key="cell.id"
-                      :class="{ peak: cell.isMax, low: cell.isMin }"
-                    >
-                      {{ cell.text }}
-                    </span>
-                    <em>{{ row.judgement }}</em>
-                  </div>
-                </div>
-              </div>
-              <template v-else>
-                <div class="matrix-head">
-                  <span>指标</span>
-                  <span>A：{{ leftComparison?.label || '未选' }}</span>
-                  <span>B：{{ rightComparison?.label || '未选' }}</span>
-                  <span>差值</span>
-                  <span>占比</span>
-                  <span>判断</span>
-                </div>
-                <div class="matrix-body">
-                  <div v-for="row in comparisonRows" :key="row.key" class="matrix-row" :class="row.leader">
-                    <strong>{{ row.label }}</strong>
-                    <span>{{ row.leftText }}</span>
-                    <span>{{ row.rightText }}</span>
-                    <span class="delta-cell">{{ row.deltaText }}</span>
-                    <div class="mini-ratio">
-                      <i :style="{ width: `${row.leftPct}%` }"></i>
-                      <b :style="{ width: `${row.rightPct}%` }"></b>
-                      <small>{{ row.ratioText }}</small>
-                    </div>
-                    <em>{{ row.leaderText }}</em>
-                  </div>
-                  <el-empty v-if="!comparisonRows.length" description="请选择两个不同对象，并保留至少一个指标" :image-size="72" />
-                </div>
-              </template>
-            </ResizablePanel>
-
-            <div class="chart-wall">
-              <ResizablePanel
-                :key="`bar-chart-${panelLayoutKey}`"
-                storage-key="bar-chart"
-                panel-class="chart-card"
-                :default-width="520"
-                :default-height="360"
-                :min-width="360"
-                :min-height="260"
-                @resize="refreshAnalysisCharts"
-              >
-                <div class="panel-title compact">
-                  <div>
-                    <span>Bar scanner</span>
-                    <h3>指标柱状图</h3>
-                  </div>
-                </div>
-                <AnalysisChartPanel :option="barChartOption" :autoresize-key="chartResizeKey" />
-              </ResizablePanel>
-
-              <ResizablePanel
-                :key="`line-chart-${panelLayoutKey}`"
-                storage-key="line-chart"
-                panel-class="chart-card"
-                :default-width="520"
-                :default-height="360"
-                :min-width="360"
-                :min-height="260"
-                @resize="refreshAnalysisCharts"
-              >
-                <div class="panel-title compact">
-                  <div>
-                    <span>Line trace</span>
-                    <h3>指标折线图</h3>
-                  </div>
-                </div>
-                <AnalysisChartPanel :option="lineChartOption" :autoresize-key="chartResizeKey" />
-              </ResizablePanel>
-
-              <ResizablePanel
-                :key="`pie-chart-${panelLayoutKey}`"
-                storage-key="pie-chart"
-                panel-class="chart-card"
-                :default-width="520"
-                :default-height="340"
-                :min-width="360"
-                :min-height="260"
-                @resize="refreshAnalysisCharts"
-              >
-                <div class="panel-title compact">
-                  <div>
-                    <span>Share cut</span>
-                    <h3>总量占比饼图</h3>
-                  </div>
-                </div>
-                <AnalysisChartPanel :option="pieChartOption" :autoresize-key="chartResizeKey" />
-              </ResizablePanel>
-
-              <ResizablePanel
-                :key="`class-analysis-${panelLayoutKey}`"
-                storage-key="class-analysis"
-                panel-class="class-analysis-panel"
-                :default-width="520"
-                :default-height="340"
-                :min-width="360"
-                :min-height="260"
-                @resize="refreshAnalysisCharts"
-              >
-                <div class="panel-title compact">
-                  <div>
-                    <span>Same class</span>
-                    <h3>同职业分析</h3>
-                  </div>
-                </div>
-                <div class="class-analysis-list">
-                  <div v-for="group in classAnalysisGroups" :key="group.className" class="class-analysis-group">
-                    <div class="class-analysis-head">
-                      <strong>{{ group.className }}</strong>
-                      <span>{{ group.selectedCount }} / {{ group.totalCount }} 人</span>
-                    </div>
-                    <div
-                      v-for="metric in group.metrics"
-                      :key="metric.key"
-                      class="class-analysis-row"
-                    >
-                      <span>{{ metric.label }}</span>
-                      <b>均值 {{ metric.avgText }}</b>
-                      <em>最高 {{ metric.maxText }}</em>
-                    </div>
-                  </div>
-                  <el-empty v-if="!classAnalysisGroups.length" description="请选择玩家查看同职业分析" :image-size="62" />
-                </div>
-              </ResizablePanel>
-            </div>
-          </main>
-
-          <ResizablePanel
-            :key="`dense-side-${panelLayoutKey}`"
-            storage-key="dense-side"
-            panel-class="dense-side"
-            :default-width="380"
-            :default-height="720"
-            :min-width="300"
-            :min-height="420"
-            @resize="refreshAnalysisCharts"
-          >
-            <section>
-              <h3>A/B 贴身摘要</h3>
-              <div class="compact-entity side-a">
-                <span>A</span>
-                <strong>{{ leftComparison?.label || '未选' }}</strong>
-                <em>{{ leftComparison?.subtitle || '等待选择' }}</em>
-                <small>{{ leftComparison?.membersText || leftComparison?.countText || '--' }}</small>
-              </div>
-              <div class="compact-entity side-b">
-                <span>B</span>
-                <strong>{{ rightComparison?.label || '未选' }}</strong>
-                <em>{{ rightComparison?.subtitle || '等待选择' }}</em>
-                <small>{{ rightComparison?.membersText || rightComparison?.countText || '--' }}</small>
-              </div>
-            </section>
-
-            <section>
-              <h3>指标开关</h3>
-              <div class="dense-metric-picks">
-                <button
-                  v-for="metric in metricOptions"
-                  :key="metric.key"
-                  type="button"
-                  :class="{ active: selectedMetricKeys.includes(metric.key) }"
-                  @click="toggleMetric(metric.key)"
-                >
-                  {{ metric.label }}
-                </button>
-              </div>
-            </section>
-
-            <section>
-              <h3>数据源</h3>
-              <p>{{ selectedBattle?.battle_name || '历史数据未选中' }}</p>
-              <p>{{ selectedSchedule?.schedule_name || '未关联排表' }}</p>
-            </section>
-          </ResizablePanel>
-        </div>
+          </section>
+        </ResizablePanel>
       </div>
     </section>
 
@@ -766,6 +842,7 @@ const scheduleDetail = ref(null)
 const battleRecordsLoading = ref(false)
 const scheduleDetailLoading = ref(false)
 const isFullscreen = ref(false)
+const keepAnalysisFullscreen = ref(false)
 const compareMode = ref('player')
 const compareLeftId = ref('')
 const compareRightId = ref('')
@@ -787,6 +864,8 @@ const selectedMetricKeys = ref([
 ])
 const selectedComparisonIds = ref([])
 const comparisonSearch = ref('')
+const expandedComparisonFolderKeys = ref([])
+const autoExpandComparisonFolders = ref(true)
 const draggingComparisonId = ref('')
 const chartResizeKey = ref(0)
 const panelLayoutKey = ref(0)
@@ -948,13 +1027,38 @@ const comparisonSourceHint = computed(() => compareMode.value === 'team'
 
 const visibleComparisonOptions = computed(() => {
   const keyword = comparisonSearch.value.trim().toLowerCase()
-  const items = comparisonOptions.value
+  const selectedIds = new Set(selectedComparisonIds.value)
+  const items = comparisonOptions.value.filter(item => !selectedIds.has(item.id))
   if (!keyword) return items.slice(0, 80)
   return items.filter(item => [
     item.label,
     item.subtitle,
     item.tagText
   ].some(value => String(value || '').toLowerCase().includes(keyword))).slice(0, 80)
+})
+
+const comparisonObjectFolders = computed(() => {
+  const folderMap = new Map()
+  visibleComparisonOptions.value.forEach(item => {
+    const folderLabel = compareMode.value === 'team'
+      ? '队伍'
+      : (item.tagText || item.accent || '未设置职业')
+    const key = `${compareMode.value}:${normalizeComparisonKey(folderLabel)}`
+    if (!folderMap.has(key)) {
+      folderMap.set(key, {
+        key,
+        label: folderLabel,
+        items: [],
+        totalKills: 0,
+        style: buildFolderAccentStyle(item)
+      })
+    }
+    const folder = folderMap.get(key)
+    folder.items.push(item)
+    folder.totalKills += Number(item.metrics?.total_kills || 0)
+  })
+  return Array.from(folderMap.values())
+    .sort((a, b) => b.items.length - a.items.length || b.totalKills - a.totalKills || a.label.localeCompare(b.label, 'zh-Hans-CN'))
 })
 
 const compareLeftItem = computed(() => comparisonOptions.value.find(item => item.id === compareLeftId.value) || comparisonOptions.value[0] || null)
@@ -1213,6 +1317,15 @@ const classAnalysisGroups = computed(() => {
   })
 })
 
+watch(comparisonObjectFolders, folders => {
+  const folderKeys = folders.map(folder => folder.key)
+  const validKeys = new Set(folderKeys)
+  const currentKeys = expandedComparisonFolderKeys.value.filter(key => validKeys.has(key))
+  expandedComparisonFolderKeys.value = autoExpandComparisonFolders.value
+    ? Array.from(new Set([...currentKeys, ...folderKeys]))
+    : currentKeys
+}, { immediate: true })
+
 watch(comparisonOptions, items => {
   if (!items.length) {
     compareLeftId.value = ''
@@ -1337,11 +1450,21 @@ function refreshAnalysisCharts() {
 function resetAnalysisPanelLayout() {
   try {
     localStorage.removeItem('guild-analysis:panel-sizes:v1')
+    localStorage.removeItem('guild-analysis:panel-sizes:v2')
   } catch {
     // localStorage can be unavailable in restricted browser contexts.
   }
   panelLayoutKey.value += 1
   refreshAnalysisCharts()
+}
+
+function buildFolderAccentStyle(item) {
+  const style = compareMode.value === 'player' && item?.accent
+    ? getGuildClassStyle(item.accent)
+    : getComparisonAccentStyle(item)
+  return {
+    '--folder-accent': style?.background || 'var(--war-amber)'
+  }
 }
 
 function getComparisonAccentStyle(item) {
@@ -1489,6 +1612,32 @@ function setCompareMode(mode) {
   compareMode.value = mode
 }
 
+function isComparisonFolderOpen(folderKey) {
+  return expandedComparisonFolderKeys.value.includes(folderKey)
+}
+
+function handleComparisonFolderToggle(event, folderKey) {
+  const isOpen = Boolean(event?.target?.open)
+  const currentKeys = new Set(expandedComparisonFolderKeys.value)
+  autoExpandComparisonFolders.value = false
+  if (isOpen) {
+    currentKeys.add(folderKey)
+  } else {
+    currentKeys.delete(folderKey)
+  }
+  expandedComparisonFolderKeys.value = Array.from(currentKeys)
+}
+
+function expandAllComparisonFolders() {
+  autoExpandComparisonFolders.value = true
+  expandedComparisonFolderKeys.value = comparisonObjectFolders.value.map(folder => folder.key)
+}
+
+function collapseAllComparisonFolders() {
+  autoExpandComparisonFolders.value = false
+  expandedComparisonFolderKeys.value = []
+}
+
 function addComparisonItem(id) {
   if (!comparisonOptions.value.some(item => item.id === id)) return
   if (selectedComparisonIds.value.includes(id)) return
@@ -1605,14 +1754,15 @@ async function ensureAnalysisContext() {
 
 async function toggleFullscreen() {
   if (isFullscreen.value) {
+    keepAnalysisFullscreen.value = false
+    isFullscreen.value = false
     if (document.fullscreenElement) {
       await document.exitFullscreen()
-    } else {
-      isFullscreen.value = false
     }
     return
   }
 
+  keepAnalysisFullscreen.value = true
   try {
     await pageRef.value?.requestFullscreen?.()
   } catch {
@@ -1623,7 +1773,13 @@ async function toggleFullscreen() {
 }
 
 function syncFullscreenState() {
-  isFullscreen.value = Boolean(document.fullscreenElement)
+  if (document.fullscreenElement === pageRef.value) {
+    isFullscreen.value = true
+    return
+  }
+  if (!keepAnalysisFullscreen.value) {
+    isFullscreen.value = false
+  }
 }
 
 async function animateResults() {
@@ -2927,6 +3083,1179 @@ onBeforeUnmount(() => {
 .analysis-page.is-fullscreen .class-analysis-head,
 .analysis-page.is-fullscreen .class-analysis-row {
   grid-template-columns: minmax(150px, 1fr) 180px 180px;
+}
+
+.analysis-page.is-fullscreen {
+  --war-bg: #081018;
+  --war-panel: rgba(14, 24, 34, 0.88);
+  --war-panel-strong: rgba(18, 31, 43, 0.94);
+  --war-line: rgba(152, 177, 190, 0.2);
+  --war-line-hot: rgba(228, 179, 93, 0.48);
+  --war-ink: #eef4ed;
+  --war-muted: #92a4a7;
+  --war-amber: #e4b35d;
+  --war-cyan: #6ec7c2;
+  --war-red: #d46d54;
+  --war-green: #76b37b;
+  color: var(--war-ink);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(110, 199, 194, 0.22), transparent 28%),
+    radial-gradient(circle at 76% 10%, rgba(228, 179, 93, 0.2), transparent 24%),
+    linear-gradient(90deg, rgba(184, 207, 214, 0.045) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(180deg, rgba(184, 207, 214, 0.045) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(135deg, #071019 0%, #0c1720 52%, #111a1b 100%);
+}
+
+.analysis-page:fullscreen {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(110, 199, 194, 0.22), transparent 28%),
+    radial-gradient(circle at 76% 10%, rgba(228, 179, 93, 0.2), transparent 24%),
+    linear-gradient(90deg, rgba(184, 207, 214, 0.045) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(180deg, rgba(184, 207, 214, 0.045) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(135deg, #071019 0%, #0c1720 52%, #111a1b 100%);
+}
+
+.analysis-cockpit.war-room {
+  min-width: 1380px;
+  min-height: calc(100vh - 20px);
+  border: 1px solid rgba(228, 179, 93, 0.18);
+  border-radius: 22px;
+  padding: 14px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px) 0 0 / 18px 18px,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px) 0 0 / 18px 18px,
+    rgba(7, 14, 22, 0.72);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px);
+  overflow: visible;
+}
+
+.war-room-command {
+  position: sticky;
+  top: 0;
+  z-index: 500;
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(420px, 0.72fr) auto;
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 12px;
+  border: 1px solid rgba(228, 179, 93, 0.22);
+  border-radius: 18px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, rgba(228, 179, 93, 0.12), transparent 34%),
+    rgba(10, 19, 28, 0.92);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+}
+
+.command-identity span,
+.window-titlebar span,
+.ribbon-stat span {
+  color: var(--war-amber);
+  font-family: "Bahnschrift", "DIN Condensed", sans-serif;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.command-identity h2 {
+  margin: 4px 0 2px;
+  color: var(--war-ink);
+  font-family: "Bahnschrift", "DIN Condensed", sans-serif;
+  font-size: 40px;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.command-identity p {
+  margin: 0;
+  max-width: 780px;
+  color: var(--war-muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.command-source-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.command-source-stack > div {
+  min-width: 0;
+  border: 1px solid var(--war-line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.command-source-stack small,
+.command-source-stack strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-source-stack small {
+  color: var(--war-muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.command-source-stack strong {
+  margin-top: 7px;
+  color: var(--war-ink);
+  font-size: 17px;
+}
+
+.command-actions {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+
+.cockpit-exit,
+.layout-reset-button,
+.ghost-button,
+.swap-button {
+  border: 1px solid rgba(228, 179, 93, 0.28);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: rgba(228, 179, 93, 0.12);
+  color: var(--war-ink);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.cockpit-exit {
+  background: linear-gradient(135deg, rgba(212, 109, 84, 0.92), rgba(138, 64, 50, 0.92));
+  color: #fff5ea;
+}
+
+.war-room-ribbon {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ribbon-stat {
+  min-height: 92px;
+  border: 1px solid var(--war-line);
+  border-radius: 16px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, rgba(110, 199, 194, 0.1), transparent 46%),
+    rgba(13, 24, 34, 0.82);
+}
+
+.ribbon-stat strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--war-ink);
+  font-family: "Bahnschrift", "DIN Condensed", sans-serif;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.ribbon-stat em {
+  display: block;
+  margin-top: 8px;
+  color: var(--war-muted);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.ribbon-stat.impact {
+  border-color: rgba(228, 179, 93, 0.3);
+}
+
+.ribbon-stat.damage {
+  border-color: rgba(212, 109, 84, 0.3);
+}
+
+.ribbon-stat.heal,
+.ribbon-stat.signal {
+  border-color: rgba(110, 199, 194, 0.3);
+}
+
+.war-room-desktop {
+  position: relative;
+  display: grid;
+  grid-template-columns: max-content max-content max-content;
+  gap: 10px;
+  align-items: start;
+  min-height: 1500px;
+  padding: 4px 4px 80px;
+  overflow: visible;
+}
+
+.war-window {
+  border: 1px solid rgba(152, 177, 190, 0.24);
+  border-radius: 16px;
+  padding: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 28%),
+    var(--war-panel);
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--war-ink);
+}
+
+.war-window::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(228, 179, 93, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(110, 199, 194, 0.1), transparent 32%);
+  opacity: 0.65;
+}
+
+.war-window > * {
+  position: relative;
+  z-index: 1;
+}
+
+.window-titlebar {
+  min-height: 58px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -2px -2px 10px;
+  border-bottom: 1px solid rgba(152, 177, 190, 0.16);
+  padding: 2px 2px 10px;
+  cursor: move;
+  user-select: none;
+}
+
+.window-titlebar h3 {
+  margin: 3px 0 0;
+  color: var(--war-ink);
+  font-family: "Bahnschrift", "DIN Condensed", sans-serif;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+.window-titlebar b {
+  color: var(--war-cyan);
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.window-hint {
+  margin: 8px 0 0;
+  color: var(--war-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.window-memory-hint {
+  margin: -2px 0 8px;
+  border: 1px solid rgba(110, 199, 194, 0.18);
+  border-radius: 11px;
+  padding: 7px 9px;
+  background: rgba(110, 199, 194, 0.08);
+  color: var(--war-cyan);
+  font-weight: 900;
+}
+
+.command-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.mode-tab {
+  min-height: 38px;
+  border: 1px solid var(--war-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--war-muted);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.mode-tab.active {
+  border-color: var(--war-line-hot);
+  background: rgba(228, 179, 93, 0.16);
+  color: var(--war-ink);
+}
+
+.pool-search {
+  height: 42px;
+  border: 1px solid var(--war-line);
+  border-radius: 12px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--war-ink);
+  font-size: 16px;
+  outline: none;
+}
+
+.pool-search::placeholder {
+  color: rgba(146, 164, 167, 0.8);
+}
+
+.folder-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.folder-toolbar .window-hint {
+  margin-top: 8px;
+}
+
+.folder-toolbar > div {
+  display: flex;
+  gap: 5px;
+  padding-bottom: 1px;
+}
+
+.folder-toolbar button {
+  border: 1px solid rgba(228, 179, 93, 0.26);
+  border-radius: 9px;
+  padding: 6px 8px;
+  background: rgba(228, 179, 93, 0.1);
+  color: var(--war-ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.folder-toolbar button:hover {
+  border-color: rgba(228, 179, 93, 0.5);
+  background: rgba(228, 179, 93, 0.18);
+}
+
+.tactical-pool {
+  max-height: calc(100% - 172px);
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+  overflow: auto;
+}
+
+.folder-pool {
+  align-content: start;
+  gap: 8px;
+}
+
+.class-folder {
+  border: 1px solid rgba(152, 177, 190, 0.16);
+  border-radius: 14px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--folder-accent, var(--war-amber)) 16%, transparent), transparent 48%),
+    rgba(255, 255, 255, 0.045);
+  overflow: hidden;
+}
+
+.class-folder[open] {
+  border-color: color-mix(in srgb, var(--folder-accent, var(--war-amber)) 46%, rgba(152, 177, 190, 0.16));
+}
+
+.class-folder-head {
+  position: relative;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.class-folder-head::-webkit-details-marker {
+  display: none;
+}
+
+.class-folder-head::before {
+  content: "▸";
+  position: absolute;
+  transform: translateX(-2px);
+  color: var(--folder-accent, var(--war-amber));
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.class-folder[open] > .class-folder-head::before {
+  content: "▾";
+}
+
+.class-folder-head span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding-left: 16px;
+}
+
+.class-folder-head i {
+  position: relative;
+  display: block;
+  width: 30px;
+  height: 22px;
+  border-radius: 5px 5px 7px 7px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 54%),
+    var(--folder-accent, var(--war-amber));
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.12);
+}
+
+.class-folder-head i::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 6px;
+  margin-top: -4px;
+  border-radius: 5px 5px 0 0;
+  background: var(--folder-accent, var(--war-amber));
+}
+
+.class-folder-head strong,
+.class-folder-head em,
+.class-folder-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.class-folder-head strong {
+  color: var(--war-ink);
+  font-size: 17px;
+}
+
+.class-folder-head em {
+  color: var(--war-muted);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.class-folder-head b {
+  color: var(--folder-accent, var(--war-amber));
+  font-size: 14px;
+}
+
+.class-folder-body {
+  display: grid;
+  gap: 5px;
+  padding: 0 8px 8px;
+}
+
+.pool-row {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid rgba(152, 177, 190, 0.16);
+  border-radius: 12px;
+  padding: 7px 8px;
+  display: grid;
+  grid-template-columns: 6px minmax(86px, 0.8fr) minmax(112px, 1fr) 76px 92px;
+  gap: 8px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--war-ink);
+  cursor: grab;
+  text-align: left;
+}
+
+.pool-row:hover,
+.pool-row.selected {
+  border-color: rgba(228, 179, 93, 0.38);
+  background: rgba(228, 179, 93, 0.1);
+}
+
+.pool-row.left {
+  border-color: rgba(110, 199, 194, 0.48);
+}
+
+.pool-row.right {
+  border-color: rgba(212, 109, 84, 0.48);
+}
+
+.pool-row i {
+  width: 6px;
+  height: 36px;
+  border-radius: 999px;
+}
+
+.pool-row strong,
+.pool-row em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pool-row strong {
+  color: var(--war-ink);
+  font-size: 16px;
+}
+
+.pool-row em {
+  color: var(--war-muted);
+  font-size: 14px;
+  font-style: normal;
+}
+
+.pool-row b {
+  color: var(--war-amber);
+  font-size: 15px;
+  text-align: right;
+}
+
+.pool-row span {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.pool-row small {
+  border-radius: 8px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--war-ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.duel-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.duel-select-card {
+  min-width: 0;
+  border: 1px solid rgba(152, 177, 190, 0.18);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.duel-select-card > span {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  color: #061018;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.duel-select-card.side-a > span {
+  background: var(--war-cyan);
+}
+
+.duel-select-card.side-b > span {
+  background: var(--war-red);
+  color: #fff5ea;
+}
+
+.duel-select-card strong,
+.duel-select-card em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duel-select-card strong {
+  margin-top: 10px;
+  color: var(--war-ink);
+  font-size: 20px;
+}
+
+.duel-select-card em {
+  margin-top: 3px;
+  color: var(--war-muted);
+  font-size: 14px;
+  font-style: normal;
+}
+
+.duel-summary-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.7fr) minmax(150px, 0.5fr);
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+  border: 1px solid rgba(228, 179, 93, 0.18);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(228, 179, 93, 0.08);
+}
+
+.duel-summary-line strong,
+.duel-summary-line span,
+.duel-summary-line b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duel-summary-line strong {
+  color: var(--war-ink);
+  font-size: 18px;
+}
+
+.duel-summary-line span {
+  color: var(--war-muted);
+  font-size: 14px;
+}
+
+.duel-summary-line b {
+  color: var(--war-amber);
+  font-size: 16px;
+}
+
+.tactical-tray {
+  min-height: 196px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+  overflow: auto;
+}
+
+.tray-chip {
+  min-width: 172px;
+  border: 1px solid rgba(152, 177, 190, 0.18);
+  border-left: 7px solid currentColor;
+  border-radius: 13px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--war-ink);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  text-align: left;
+}
+
+.tray-chip strong,
+.tray-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tray-chip strong {
+  font-size: 17px;
+}
+
+.tray-chip span {
+  grid-column: 1 / -1;
+  color: var(--war-muted);
+  font-size: 13px;
+}
+
+.tray-chip em {
+  color: var(--war-amber);
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.tray-empty {
+  width: 100%;
+  min-height: 150px;
+  border: 1px dashed rgba(228, 179, 93, 0.34);
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--war-muted);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.matrix-window {
+  overflow: auto;
+}
+
+.metric-wall,
+.multi-matrix {
+  min-width: max-content;
+}
+
+.matrix-head,
+.matrix-row,
+.multi-matrix-head,
+.multi-matrix-row {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+
+.matrix-head,
+.multi-matrix-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border: 1px solid rgba(228, 179, 93, 0.18);
+  border-radius: 12px 12px 0 0;
+  padding: 11px 12px;
+  background: rgba(7, 14, 22, 0.96);
+  color: var(--war-amber);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.duel-matrix-head,
+.duel-matrix-row {
+  grid-template-columns: 150px 190px 190px 120px 180px 90px;
+}
+
+.matrix-body {
+  display: grid;
+  gap: 4px;
+}
+
+.matrix-row,
+.multi-matrix-row {
+  min-height: 48px;
+  border: 1px solid rgba(152, 177, 190, 0.14);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--war-ink);
+  font-size: 16px;
+}
+
+.matrix-row strong,
+.multi-matrix-row strong {
+  color: var(--war-ink);
+  font-size: 16px;
+}
+
+.multi-matrix-row span,
+.matrix-row span {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.multi-matrix-row span {
+  border-radius: 8px;
+  padding: 4px 7px;
+}
+
+.multi-matrix-row span.peak {
+  background: rgba(110, 199, 194, 0.14);
+  color: var(--war-cyan);
+  font-weight: 900;
+}
+
+.multi-matrix-row span.low {
+  background: rgba(212, 109, 84, 0.12);
+  color: var(--war-red);
+}
+
+.multi-matrix-row em,
+.matrix-row em {
+  overflow: hidden;
+  color: var(--war-muted);
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delta-cell {
+  border-radius: 8px;
+  padding: 4px 7px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--war-amber);
+  font-weight: 900;
+}
+
+.mini-ratio {
+  position: relative;
+  display: flex;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mini-ratio small {
+  position: absolute;
+  inset: 0 8px 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.mini-ratio i,
+.mini-ratio b {
+  display: block;
+  height: 100%;
+}
+
+.mini-ratio i {
+  background: var(--war-cyan);
+}
+
+.mini-ratio b {
+  background: var(--war-red);
+}
+
+.chart-window,
+.class-window {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.chart-window .analysis-chart-panel {
+  min-height: 250px;
+}
+
+.class-analysis-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+}
+
+.class-analysis-group,
+.intel-section,
+.compact-entity {
+  border: 1px solid rgba(152, 177, 190, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.class-analysis-group,
+.intel-section {
+  padding: 10px;
+}
+
+.class-analysis-head,
+.class-analysis-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 150px 150px;
+  gap: 8px;
+  align-items: center;
+}
+
+.class-analysis-head {
+  margin-bottom: 6px;
+  color: var(--war-ink);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.class-analysis-head span {
+  color: var(--war-cyan);
+  text-align: right;
+}
+
+.class-analysis-row {
+  min-height: 34px;
+  border-top: 1px solid rgba(152, 177, 190, 0.12);
+  color: var(--war-muted);
+  font-size: 15px;
+}
+
+.class-analysis-row b,
+.class-analysis-row em {
+  color: var(--war-ink);
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.intel-window {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.intel-section h4 {
+  margin: 0 0 8px;
+  color: var(--war-amber);
+  font-size: 17px;
+}
+
+.intel-section p {
+  margin: 7px 0;
+  color: var(--war-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.compact-entity {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 1px 8px;
+  padding: 9px;
+  margin-top: 7px;
+}
+
+.compact-entity > span {
+  grid-row: span 3;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #061018;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.compact-entity.side-a > span {
+  background: var(--war-cyan);
+}
+
+.compact-entity.side-b > span {
+  background: var(--war-red);
+  color: #fff5ea;
+}
+
+.compact-entity strong,
+.compact-entity em,
+.compact-entity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-entity strong {
+  color: var(--war-ink);
+  font-size: 17px;
+}
+
+.compact-entity em,
+.compact-entity small {
+  color: var(--war-muted);
+  font-size: 13px;
+  font-style: normal;
+}
+
+.dense-metric-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dense-metric-picks button {
+  border: 1px solid rgba(152, 177, 190, 0.18);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--war-muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.dense-metric-picks button.active {
+  border-color: rgba(228, 179, 93, 0.42);
+  background: rgba(228, 179, 93, 0.16);
+  color: var(--war-ink);
+}
+
+.intel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--war-muted);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.intel-toggle input {
+  accent-color: var(--war-amber);
+}
+
+.analysis-page.is-fullscreen :deep(.cockpit-select .el-select__wrapper),
+.analysis-page.is-fullscreen :deep(.cockpit-select .el-input__wrapper) {
+  min-height: 44px;
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(152, 177, 190, 0.18);
+}
+
+.analysis-page.is-fullscreen :deep(.cockpit-select .el-select__placeholder),
+.analysis-page.is-fullscreen :deep(.cockpit-select .el-input__inner),
+.analysis-page.is-fullscreen :deep(.cockpit-select .el-select__selected-item) {
+  color: var(--war-ink);
+  font-size: 16px;
+}
+
+.analysis-page.is-fullscreen .el-empty {
+  --el-empty-description-color: var(--war-muted);
+}
+
+@media (max-width: 1500px) {
+  .war-room-command {
+    grid-template-columns: 1fr;
+  }
+
+  .war-room-ribbon {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.analysis-page.is-fullscreen .war-room .layout-reset-button,
+.analysis-page.is-fullscreen .war-room .ghost-button,
+.analysis-page.is-fullscreen .war-room .swap-button,
+.analysis-page.is-fullscreen .war-room .cockpit-exit {
+  padding: 10px 14px;
+  font-size: 15px;
+}
+
+.analysis-page.is-fullscreen .war-room .mode-tab {
+  min-height: 38px;
+  padding: 0 10px;
+  font-size: 15px;
+}
+
+.analysis-page.is-fullscreen .war-room .pool-search {
+  height: 42px;
+  font-size: 16px;
+}
+
+.analysis-page.is-fullscreen .war-room .pool-row {
+  min-height: 54px;
+  grid-template-columns: 6px minmax(86px, 0.8fr) minmax(112px, 1fr) 76px 92px;
+  gap: 8px;
+}
+
+.analysis-page.is-fullscreen .war-room .pool-row i {
+  width: 6px;
+  height: 36px;
+}
+
+.analysis-page.is-fullscreen .war-room .pool-row strong,
+.analysis-page.is-fullscreen .war-room .pool-row em,
+.analysis-page.is-fullscreen .war-room .pool-row b {
+  font-size: 16px;
+}
+
+.analysis-page.is-fullscreen .war-room .pool-row em,
+.analysis-page.is-fullscreen .war-room .pool-row small {
+  font-size: 14px;
+}
+
+.analysis-page.is-fullscreen .war-room .pool-row small {
+  padding: 4px 6px;
+}
+
+.analysis-page.is-fullscreen .war-room .tray-chip {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 9px 11px;
+}
+
+.analysis-page.is-fullscreen .war-room .tray-chip strong,
+.analysis-page.is-fullscreen .war-room .tray-chip em {
+  font-size: 17px;
+}
+
+.analysis-page.is-fullscreen .war-room .tray-chip span {
+  font-size: 13px;
+}
+
+.analysis-page.is-fullscreen .war-room .matrix-head,
+.analysis-page.is-fullscreen .war-room .matrix-row {
+  gap: 8px;
+}
+
+.analysis-page.is-fullscreen .war-room .duel-matrix-head,
+.analysis-page.is-fullscreen .war-room .duel-matrix-row {
+  grid-template-columns: 150px 190px 190px 120px 180px 90px;
+}
+
+.analysis-page.is-fullscreen .war-room .matrix-head,
+.analysis-page.is-fullscreen .war-room .multi-matrix-head {
+  padding: 11px 12px;
+  font-size: 15px;
+}
+
+.analysis-page.is-fullscreen .war-room .matrix-row,
+.analysis-page.is-fullscreen .war-room .multi-matrix-row,
+.analysis-page.is-fullscreen .war-room .matrix-row strong,
+.analysis-page.is-fullscreen .war-room .multi-matrix-row strong {
+  min-height: 48px;
+  padding: 9px 12px;
+  font-size: 16px;
+}
+
+.analysis-page.is-fullscreen .war-room .mini-ratio {
+  height: 24px;
+}
+
+.analysis-page.is-fullscreen .war-room .mini-ratio small {
+  font-size: 12px;
+}
+
+.analysis-page.is-fullscreen .war-room .class-analysis-head,
+.analysis-page.is-fullscreen .war-room .class-analysis-row {
+  grid-template-columns: minmax(120px, 1fr) 150px 150px;
+  font-size: 15px;
+}
+
+.analysis-page.is-fullscreen .war-room .class-analysis-head {
+  font-size: 16px;
+}
+
+.analysis-page.is-fullscreen .war-room .compact-entity {
+  grid-template-columns: 34px minmax(0, 1fr);
+  padding: 9px;
+}
+
+.analysis-page.is-fullscreen .war-room .compact-entity > span {
+  width: 34px;
+  height: 34px;
+  font-size: 17px;
+}
+
+.analysis-page.is-fullscreen .war-room .compact-entity strong {
+  font-size: 17px;
+}
+
+.analysis-page.is-fullscreen .war-room .compact-entity em,
+.analysis-page.is-fullscreen .war-room .compact-entity small {
+  font-size: 13px;
+}
+
+.analysis-page.is-fullscreen .war-room .dense-metric-picks button {
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+.analysis-page.is-fullscreen .war-room :deep(.cockpit-select .el-select__wrapper),
+.analysis-page.is-fullscreen .war-room :deep(.cockpit-select .el-input__wrapper) {
+  min-height: 44px;
+}
+
+.analysis-page.is-fullscreen .war-room :deep(.cockpit-select .el-select__placeholder),
+.analysis-page.is-fullscreen .war-room :deep(.cockpit-select .el-input__inner),
+.analysis-page.is-fullscreen .war-room :deep(.cockpit-select .el-select__selected-item) {
+  font-size: 16px;
 }
 .source-status-board {
   display: grid;

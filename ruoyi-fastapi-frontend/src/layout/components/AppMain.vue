@@ -38,17 +38,18 @@ function addIframe() {
 <style lang="scss" scoped>
 .app-main {
   min-height: calc(100vh - 66px);
+  height: calc(100vh - 66px);
   width: 100%;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: auto;
 }
 
 .fixed-header + .app-main {
   margin-top: 66px;
   height: calc(100vh - 66px);
   min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: auto;
 }
 
 .app-main:has(.copyright) {
@@ -58,6 +59,7 @@ function addIframe() {
 .hasTagsView {
   .app-main {
     min-height: calc(100vh - 108px);
+    height: calc(100vh - 108px);
   }
 
   .fixed-header + .app-main {
@@ -69,11 +71,17 @@ function addIframe() {
 
 :global(.themeDark) .app-main {
   min-height: calc(100vh - 62px);
+  height: calc(100vh - 62px);
 }
 
 :global(.themeDark) .fixed-header + .app-main {
   margin-top: 62px;
   height: calc(100vh - 62px);
+}
+
+:global(.themeDark) :global(.hasTagsView) .app-main {
+  min-height: calc(100vh - 98px);
+  height: calc(100vh - 98px);
 }
 
 :global(.themeDark) :global(.hasTagsView) .fixed-header + .app-main {
