@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CHAR, Column, DateTime, Integer, String
+from sqlalchemy import BigInteger, CHAR, Column, DateTime, Integer, String, Text
+from sqlalchemy.dialects.mysql import LONGTEXT
 
 from config.database import Base
 
@@ -57,5 +58,16 @@ class GuildScheduleAssignment(Base):
     player_class = Column(String(20), nullable=True, server_default="''", comment='主职业快照')
     secondary_class = Column(String(20), nullable=True, server_default="''", comment='副职快照')
     order_num = Column(Integer, nullable=False, server_default='0', comment='显示顺序')
+    create_time = Column(DateTime, nullable=True, default=datetime.now, comment='创建时间')
+    update_time = Column(DateTime, nullable=True, default=datetime.now, onupdate=datetime.now, comment='更新时间')
+
+
+class GuildScheduleWorkbook(Base):
+    __tablename__ = 'guild_schedule_workbook'
+    __table_args__ = {'comment': '约战排表自由表格数据表'}
+
+    workbook_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True, comment='自由表格ID')
+    schedule_id = Column(BigInteger, nullable=False, server_default='0', unique=True, comment='排表ID')
+    workbook_json = Column(Text().with_variant(LONGTEXT, 'mysql'), nullable=False, comment='Univer工作簿JSON')
     create_time = Column(DateTime, nullable=True, default=datetime.now, comment='创建时间')
     update_time = Column(DateTime, nullable=True, default=datetime.now, onupdate=datetime.now, comment='更新时间')

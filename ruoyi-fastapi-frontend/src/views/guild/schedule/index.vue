@@ -103,79 +103,20 @@
             <span>团队和小队会保存到数据库，每个小队最多 6 人</span>
           </div>
           <div class="schedule-actions">
-            <el-button type="primary" @click="createTeam">创建团队</el-button>
             <el-button @click="saveHistorySnapshot">保存历史</el-button>
             <el-button @click="openHistory">历史查询</el-button>
           </div>
         </div>
 
-        <div v-loading="loading" class="team-board">
-          <div v-if="schedule.teams.length" class="team-list">
-            <section v-for="team in schedule.teams" :key="team.team_id" class="team-section">
-              <div class="team-header">
-                <div>
-                  <h4>{{ team.team_name }}</h4>
-                  <span>{{ getTeamMemberCount(team) }} 人 / {{ team.squads.length }} 小队</span>
-                </div>
-                <div class="team-actions">
-                  <el-button size="small" type="primary" @click="createSquad(team)">创建小队</el-button>
-                  <el-button size="small" text type="danger" @click="removeTeam(team)">删除</el-button>
-                </div>
-              </div>
-
-              <div v-if="team.squads.length" class="squad-grid">
-                <div
-                  v-for="squad in team.squads"
-                  :key="squad.squad_id"
-                  class="squad-box"
-                  :class="{ 'is-over': dragOverKey === getSquadKey(team.team_id, squad.squad_id) }"
-                  @dragover.prevent="dragOverKey = getSquadKey(team.team_id, squad.squad_id)"
-                  @dragleave="dragOverKey = ''"
-                  @drop="onDrop(team, squad)"
-                >
-                  <div class="squad-header">
-                    <strong>{{ squad.squad_name }}</strong>
-                    <div class="squad-actions">
-                      <span>{{ squad.members.length }} / {{ squad.max_members }}</span>
-                      <button type="button" title="删除小队" @click.stop="removeSquad(team, squad)">x</button>
-                    </div>
-                  </div>
-
-                  <div class="squad-members">
-                    <div
-                      v-for="member in squad.members"
-                      :key="member.member_id"
-                      class="schedule-chip"
-                      :style="getClassStyle(member.player_class)"
-                      draggable="true"
-                      @dragstart="onDragStart(member, $event)"
-                      @dragend="onDragEnd"
-                    >
-                      <span>{{ member.player_name }}</span>
-                      <button type="button" title="移出排表" @click.stop="clearMember(member)">x</button>
-                    </div>
-                    <span v-if="!squad.members.length" class="drop-hint">拖入成员</span>
-                  </div>
-                </div>
-              </div>
-
-              <el-empty
-                v-else
-                description="这个团队还没有小队"
-              >
-                <el-button type="primary" @click="createSquad(team)">创建小队</el-button>
-              </el-empty>
-            </section>
-          </div>
-
-          <el-empty
-            v-else
-            class="empty-board-canvas"
-            description="还没有团队"
-          >
-            <el-button type="primary" @click="createTeam">创建团队</el-button>
-          </el-empty>
-        </div>
+        <ScheduleUniverSheet
+          ref="scheduleSheetRef"
+          v-loading="loading"
+          :schedule="schedule"
+          :dragging-member="draggingMember"
+          :get-class-style="getClassStyle"
+          @assign-member="handleSheetAssignMember"
+          @workbook-assignments-change="syncWorkbookAssignments"
+        />
       </section>
     </div>
 
@@ -194,8 +135,14 @@
             :class="{ active: historyPreview?.schedule_id === item.schedule_id }"
             @click="viewHistory(item)"
           >
-            <strong>{{ item.schedule_name }}</strong>
-            <span>{{ item.create_time }}</span>
+            <div class="history-item-main">
+              <strong>{{ item.schedule_name }}</strong>
+              <span>{{ item.create_time }}</span>
+            </div>
+            <div class="history-item-actions">
+              <el-button text type="primary" size="small" @click.stop="renameHistory(item)">重命名</el-button>
+              <el-button text type="danger" size="small" @click.stop="deleteHistory(item)">删除</el-button>
+            </div>
           </div>
           <el-empty v-if="!historyRows.length" description="暂无历史" />
         </div>
@@ -204,7 +151,11 @@
           <template v-if="historyPreview">
             <div class="preview-header">
               <h4>{{ historyPreview.schedule_name }}</h4>
-              <el-button type="primary" @click="useHistoryConfiguration">应用配置</el-button>
+              <div class="preview-actions">
+                <el-button @click="renameHistory(historyPreview)">重命名</el-button>
+                <el-button type="danger" @click="deleteHistory(historyPreview)">删除</el-button>
+                <el-button type="primary" @click="useHistoryConfiguration">应用配置</el-button>
+              </div>
             </div>
             <section
               v-for="team in historyPreview.teams"
@@ -243,16 +194,14 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import { getApprovedBattleRegistrationsForSchedule, getBattleLeaveRegistrationsForSchedule } from '@/api/guild/battle'
+import ScheduleUniverSheet from './components/ScheduleUniverSheet.vue'
 import {
-  addScheduleSquad,
-  addScheduleTeam,
   applyScheduleHistory,
-  clearScheduleAssignment,
-  deleteScheduleSquad,
-  deleteScheduleTeam,
+  deleteScheduleHistory,
   getCurrentSchedule,
   getScheduleDetail,
   getScheduleHistory,
+  renameScheduleHistory,
   saveScheduleAssignment,
   saveScheduleSnapshot
 } from '@/api/guild/schedule'
@@ -270,6 +219,7 @@ function loadScheduleGsap() {
 
 const guildMemberStore = useGuildMemberStore()
 const pageRef = ref(null)
+const scheduleSheetRef = ref(null)
 const loading = ref(false)
 const members = computed(() => guildMemberStore.members)
 const schedule = ref({ teams: [] })
@@ -282,10 +232,10 @@ const excludeLeaveMembers = ref(true)
 const approvedBattleMemberIds = ref([])
 const leaveMemberIds = ref([])
 const draggingMember = ref(null)
-const dragOverKey = ref('')
 const historyVisible = ref(false)
 const historyRows = ref([])
 const historyPreview = ref(null)
+const workbookAssignedByMemberId = ref({})
 const collapsedClassFolders = ref(new Set())
 const folderBodyRefs = new Map()
 
@@ -300,10 +250,20 @@ const assignedByMemberId = computed(() => {
           teamName: team.team_name,
           squadName: squad.squad_name,
           teamId: team.team_id,
-          squadId: squad.squad_id
+          squadId: squad.squad_id,
+          source: 'schedule'
         }
       })
     })
+  })
+  Object.values(workbookAssignedByMemberId.value).forEach((assignment) => {
+    if (!assignment?.member_id || map[assignment.member_id]) return
+    map[assignment.member_id] = {
+      teamName: '自由表格',
+      squadName: assignment.cellLabel,
+      cellLabel: assignment.cellLabel,
+      source: 'workbook'
+    }
   })
   return map
 })
@@ -349,10 +309,6 @@ const groupedMemberFolders = computed(() => {
       }
     })
 })
-
-function getSquadKey(teamId, squadId) {
-  return `${teamId}-${squadId}`
-}
 
 function getMemberAssignment(memberId) {
   return assignedByMemberId.value[memberId]
@@ -427,10 +383,6 @@ function collapseAllFolders() {
   collapsedClassFolders.value = new Set(groupedMemberFolders.value.map(folder => folder.className))
 }
 
-function getTeamMemberCount(team) {
-  return (team.squads || []).reduce((total, squad) => total + (squad.members || []).length, 0)
-}
-
 function normalizeSchedule(data) {
   schedule.value = {
     ...data,
@@ -451,117 +403,12 @@ function onDragStart(member, event) {
 
 function onDragEnd() {
   draggingMember.value = null
-  dragOverKey.value = ''
-}
-
-async function onDrop(team, squad) {
-  dragOverKey.value = ''
-  if (!draggingMember.value) return
-  if (squad.members.some(member => member.member_id === draggingMember.value.member_id)) {
-    draggingMember.value = null
-    return
-  }
-  if (squad.members.length >= squad.max_members) {
-    ElMessage.warning('每个小队最多 6 人')
-    draggingMember.value = null
-    return
-  }
-  try {
-    await saveScheduleAssignment({
-      member_id: draggingMember.value.member_id,
-      team_id: team.team_id,
-      squad_id: squad.squad_id
-    })
-    ElMessage.success('排表已保存')
-    await fetchSchedule()
-  } catch {
-    ElMessage.error('排表保存失败')
-  } finally {
-    draggingMember.value = null
-  }
-}
-
-async function createTeam() {
-  try {
-    const { value } = await ElMessageBox.prompt('请输入团队名称', '创建团队', {
-      confirmButtonText: '创建',
-      cancelButtonText: '取消',
-      inputPlaceholder: '例如：一团'
-    })
-    await addScheduleTeam({ team_name: value })
-    ElMessage.success('团队创建成功')
-    await fetchSchedule()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('创建团队失败')
-    }
-  }
-}
-
-async function createSquad(team) {
-  try {
-    const { value } = await ElMessageBox.prompt('请输入小队名称', '创建小队', {
-      confirmButtonText: '创建',
-      cancelButtonText: '取消',
-      inputPlaceholder: `第 ${team.squads.length + 1} 小队`
-    })
-    await addScheduleSquad(team.team_id, { squad_name: value })
-    ElMessage.success('小队创建成功')
-    await fetchSchedule()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('创建小队失败')
-    }
-  }
-}
-
-async function removeTeam(team) {
-  try {
-    await ElMessageBox.confirm(`删除团队 "${team.team_name}" 会同时移出其中所有成员，确定继续吗？`, '删除团队', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    })
-    await deleteScheduleTeam(team.team_id)
-    ElMessage.success('团队已删除')
-    await fetchSchedule()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除团队失败')
-    }
-  }
-}
-
-async function removeSquad(team, squad) {
-  try {
-    await ElMessageBox.confirm(`删除 "${squad.squad_name}" 会同时移出其中所有成员，确定继续吗？`, '删除小队', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    })
-    await deleteScheduleSquad(team.team_id, squad.squad_id)
-    ElMessage.success('小队已删除')
-    await fetchSchedule()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除小队失败')
-    }
-  }
-}
-
-async function clearMember(member) {
-  try {
-    await clearScheduleAssignment(member.member_id)
-    ElMessage.success('已移出排表')
-    await fetchSchedule()
-  } catch {
-    ElMessage.error('移出失败')
-  }
 }
 
 async function saveHistorySnapshot() {
   const defaultName = `约战排表 ${new Date().toLocaleString()}`
   try {
+    await scheduleSheetRef.value?.flushWorkbookSave?.()
     const { value } = await ElMessageBox.prompt('请输入历史名称', '保存历史', {
       confirmButtonText: '保存',
       cancelButtonText: '取消',
@@ -617,6 +464,83 @@ async function fetchMembers() {
 async function fetchApprovedBattleMembers() {
   const res = await getApprovedBattleRegistrationsForSchedule()
   approvedBattleMemberIds.value = (res.data || []).map(item => item.member_id).filter(Boolean)
+}
+
+async function handleSheetAssignMember({ member, team, squad, orderNum }) {
+  if (!member || !team || !squad) return
+  try {
+    await saveScheduleAssignment({
+      member_id: member.member_id,
+      team_id: team.team_id,
+      squad_id: squad.squad_id,
+      order_num: orderNum
+    })
+    ElMessage.success('排表已保存')
+    await fetchSchedule()
+  } catch (error) {
+    ElMessage.error(error?.message || '排表保存失败')
+  } finally {
+    draggingMember.value = null
+  }
+}
+
+function syncWorkbookAssignments(assignments = []) {
+  const nextMap = {}
+  assignments.forEach((assignment) => {
+    if (!assignment?.member_id) return
+    nextMap[assignment.member_id] = {
+      ...assignment,
+      member_id: Number(assignment.member_id)
+    }
+  })
+  workbookAssignedByMemberId.value = nextMap
+}
+
+async function renameHistory(item) {
+  if (!item?.schedule_id) return
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新的历史名称', '重命名历史排表', {
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+      inputValue: item.schedule_name || '',
+      inputPattern: /\S+/,
+      inputErrorMessage: '历史名称不能为空'
+    })
+    await renameScheduleHistory(item.schedule_id, { schedule_name: value })
+    ElMessage.success('历史名称已更新')
+    await fetchHistory()
+    if (historyPreview.value?.schedule_id === item.schedule_id) {
+      historyPreview.value = {
+        ...historyPreview.value,
+        schedule_name: value
+      }
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('重命名历史失败')
+    }
+  }
+}
+
+async function deleteHistory(item) {
+  if (!item?.schedule_id) return
+  try {
+    await ElMessageBox.confirm(`确定删除历史排表「${item.schedule_name || item.schedule_id}」吗？删除后不可在历史查询中恢复。`, '删除历史排表', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+    await deleteScheduleHistory(item.schedule_id)
+    ElMessage.success('历史排表已删除')
+    if (historyPreview.value?.schedule_id === item.schedule_id) {
+      historyPreview.value = null
+    }
+    await fetchHistory()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除历史失败')
+    }
+  }
 }
 
 async function fetchLeaveMembers() {
@@ -685,15 +609,13 @@ onMounted(fetchData)
   gap: 12px;
 }
 
-.panel-header h3,
-.team-header h4 {
+.panel-header h3 {
   margin: 0 0 4px;
   font-size: 16px;
   font-weight: 600;
 }
 
-.panel-header span,
-.team-header span {
+.panel-header span {
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
@@ -906,208 +828,10 @@ onMounted(fetchData)
   color: #168a45;
 }
 
-.class-tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  padding: 2px 8px;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  font-size: 12px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
-  white-space: nowrap;
-}
-
-.mini-class-tag {
-  min-width: 0;
-  padding: 1px 7px;
-  font-size: 12px;
-}
-
-.secondary-class-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.schedule-actions,
-.team-actions,
-.squad-actions {
+.schedule-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.team-board {
-  position: relative;
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
-  padding: 14px;
-  background:
-    linear-gradient(90deg, rgba(99, 102, 241, 0.08) 1px, transparent 1px) 0 0 / 28px 28px,
-    linear-gradient(180deg, rgba(99, 102, 241, 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
-    radial-gradient(circle at 24px 24px, rgba(124, 92, 255, 0.12) 1px, transparent 1px) 0 0 / 56px 56px,
-    linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(241, 245, 249, 0.82));
-}
-
-.team-board::before {
-  content: "";
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: block;
-  height: 0;
-  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.2), 0 14px 30px rgba(15, 23, 42, 0.08);
-  pointer-events: none;
-}
-
-.team-list {
-  min-width: 760px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.team-section {
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(8px);
-}
-
-.team-header {
-  min-height: 48px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.82));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-radius: 8px 8px 0 0;
-}
-
-.squad-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-  padding: 12px;
-}
-
-.squad-box {
-  min-height: 150px;
-  border: 1px dashed rgba(100, 116, 139, 0.34);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.86)),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px) 0 0 / 18px 18px;
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.15s ease, background 0.15s, border-color 0.15s, box-shadow 0.15s;
-}
-
-.squad-box.is-over {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  box-shadow: inset 0 0 0 1px var(--el-color-primary), 0 12px 28px rgba(64, 158, 255, 0.18);
-  transform: translateY(-1px);
-}
-
-.squad-header {
-  min-height: 36px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.squad-header strong {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.squad-header span {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
-.squad-actions button {
-  width: 16px;
-  height: 16px;
-  border: 0;
-  padding: 0;
-  border-radius: 50%;
-  line-height: 16px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
-  cursor: pointer;
-}
-
-.squad-members {
-  min-height: 110px;
-  flex: 1;
-  padding: 8px;
-  position: relative;
-}
-
-.schedule-chip {
-  min-height: 26px;
-  margin-bottom: 6px;
-  padding: 3px 6px 3px 8px;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  font-size: 12px;
-  cursor: grab;
-}
-
-.schedule-chip button {
-  width: 16px;
-  height: 16px;
-  border: 0;
-  padding: 0;
-  border-radius: 50%;
-  line-height: 16px;
-  color: inherit;
-  background: rgba(0, 0, 0, 0.12);
-  cursor: pointer;
-}
-
-.drop-hint {
-  position: absolute;
-  inset: 8px;
-  border: 1px dashed rgba(148, 163, 184, 0.36);
-  border-radius: 6px;
-  background: rgba(248, 250, 252, 0.58);
-  display: grid;
-  place-items: center;
-  color: var(--el-text-color-placeholder);
-  font-size: 12px;
-  pointer-events: none;
-}
-
-.empty-board-canvas {
-  min-height: 360px;
-  border: 1px dashed rgba(100, 116, 139, 0.32);
-  border-radius: 10px;
-  background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px) 0 0 / 36px 36px,
-    linear-gradient(180deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px) 0 0 / 36px 36px,
-    rgba(255, 255, 255, 0.64);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .history-layout {
@@ -1130,14 +854,41 @@ onMounted(fetchData)
   padding: 9px;
   border-radius: 4px;
   cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .history-item:hover,
 .history-item.active {
   background: var(--el-fill-color-light);
+}
+
+.history-item-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-item-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.history-item:hover .history-item-actions,
+.history-item.active .history-item-actions {
+  opacity: 1;
 }
 
 .history-item span,
@@ -1152,6 +903,14 @@ onMounted(fetchData)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .preview-header h4 {
@@ -1198,12 +957,7 @@ onMounted(fetchData)
     max-height: 460px;
   }
 
-  .team-list {
-    min-width: 0;
-  }
-
-  .panel-header,
-  .team-header {
+  .panel-header {
     align-items: flex-start;
     flex-direction: column;
   }

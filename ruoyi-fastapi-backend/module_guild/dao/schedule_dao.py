@@ -7,6 +7,7 @@ from module_guild.entity.do.schedule_do import (
     GuildScheduleAssignment,
     GuildScheduleSquad,
     GuildScheduleTeam,
+    GuildScheduleWorkbook,
 )
 
 
@@ -51,6 +52,31 @@ class ScheduleDao:
         )
         result = await db.execute(stmt)
         return result.scalars().all()
+
+    @classmethod
+    async def update_schedule_name(cls, db: AsyncSession, schedule_id: int, schedule_name: str) -> None:
+        await db.execute(
+            update(GuildSchedule)
+            .where(GuildSchedule.schedule_id == schedule_id)
+            .values(schedule_name=schedule_name)
+        )
+        await db.flush()
+
+    @classmethod
+    async def delete_history_schedule(cls, db: AsyncSession, schedule_id: int) -> None:
+        teams = await cls.list_schedule_teams(db, schedule_id)
+        team_ids = [team.team_id for team in teams]
+        await db.execute(delete(GuildScheduleAssignment).where(GuildScheduleAssignment.schedule_id == schedule_id))
+        if team_ids:
+            await db.execute(delete(GuildScheduleSquad).where(GuildScheduleSquad.team_id.in_(team_ids)))
+        await db.execute(delete(GuildScheduleTeam).where(GuildScheduleTeam.schedule_id == schedule_id))
+        await db.execute(delete(GuildScheduleWorkbook).where(GuildScheduleWorkbook.schedule_id == schedule_id))
+        await db.execute(
+            update(GuildSchedule)
+            .where(GuildSchedule.schedule_id == schedule_id)
+            .values(del_flag='1')
+        )
+        await db.flush()
 
     @classmethod
     async def list_schedule_teams(cls, db: AsyncSession, schedule_id: int) -> list[GuildScheduleTeam]:
@@ -117,6 +143,31 @@ class ScheduleDao:
         return result.scalar_one()
 
     @classmethod
+    async def get_assignment_by_member(
+        cls, db: AsyncSession, schedule_id: int, member_id: int
+    ) -> GuildScheduleAssignment | None:
+        result = await db.execute(
+            select(GuildScheduleAssignment).where(
+                GuildScheduleAssignment.schedule_id == schedule_id,
+                GuildScheduleAssignment.member_id == member_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def get_assignment_by_slot(
+        cls, db: AsyncSession, schedule_id: int, squad_id: int, order_num: int
+    ) -> GuildScheduleAssignment | None:
+        result = await db.execute(
+            select(GuildScheduleAssignment).where(
+                GuildScheduleAssignment.schedule_id == schedule_id,
+                GuildScheduleAssignment.squad_id == squad_id,
+                GuildScheduleAssignment.order_num == order_num,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @classmethod
     async def create_team(cls, db: AsyncSession, data: dict) -> GuildScheduleTeam:
         team = GuildScheduleTeam(**data)
         db.add(team)
@@ -173,6 +224,17 @@ class ScheduleDao:
         await db.flush()
 
     @classmethod
+    async def update_assignment_slot(
+        cls, db: AsyncSession, assignment_id: int, team_id: int, squad_id: int, order_num: int
+    ) -> None:
+        await db.execute(
+            update(GuildScheduleAssignment)
+            .where(GuildScheduleAssignment.assignment_id == assignment_id)
+            .values(team_id=team_id, squad_id=squad_id, order_num=order_num)
+        )
+        await db.flush()
+
+    @classmethod
     async def clear_assignment(cls, db: AsyncSession, schedule_id: int, member_id: int) -> None:
         await db.execute(
             delete(GuildScheduleAssignment).where(
@@ -188,3 +250,36 @@ class ScheduleDao:
             select(GuildMember).where(GuildMember.user_id == user_id, GuildMember.member_id == member_id)
         )
         return result.scalar_one_or_none()
+
+    @classmethod
+    async def get_workbook(cls, db: AsyncSession, schedule_id: int) -> GuildScheduleWorkbook | None:
+        result = await db.execute(
+            select(GuildScheduleWorkbook).where(GuildScheduleWorkbook.schedule_id == schedule_id)
+        )
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def upsert_workbook(cls, db: AsyncSession, schedule_id: int, workbook_json: str) -> None:
+        workbook = await cls.get_workbook(db, schedule_id)
+        if workbook:
+            await db.execute(
+                update(GuildScheduleWorkbook)
+                .where(GuildScheduleWorkbook.workbook_id == workbook.workbook_id)
+                .values(workbook_json=workbook_json)
+            )
+        else:
+            db.add(GuildScheduleWorkbook(schedule_id=schedule_id, workbook_json=workbook_json))
+        await db.flush()
+
+    @classmethod
+    async def delete_workbook(cls, db: AsyncSession, schedule_id: int) -> None:
+        await db.execute(delete(GuildScheduleWorkbook).where(GuildScheduleWorkbook.schedule_id == schedule_id))
+        await db.flush()
+
+    @classmethod
+    async def copy_workbook(cls, db: AsyncSession, source_schedule_id: int, target_schedule_id: int) -> None:
+        workbook = await cls.get_workbook(db, source_schedule_id)
+        if workbook:
+            await cls.upsert_workbook(db, target_schedule_id, workbook.workbook_json)
+        else:
+            await cls.delete_workbook(db, target_schedule_id)

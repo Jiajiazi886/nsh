@@ -10,9 +10,11 @@ from common.router import APIRouterPro
 from exceptions.exception import ServiceException
 from module_guild.entity.vo.schedule_vo import (
     ScheduleAssignmentModel,
+    ScheduleHistoryRenameModel,
     ScheduleSnapshotModel,
     ScheduleSquadCreateModel,
     ScheduleTeamCreateModel,
+    ScheduleWorkbookModel,
 )
 from module_guild.service.schedule_service import ScheduleService
 from utils.log_util import logger
@@ -54,6 +56,84 @@ async def list_schedule_history(
         return ResponseUtil.success(data=result)
     except Exception as e:
         logger.error(f'查询约战排表历史失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@schedule_controller.put(
+    '/history/{schedule_id}/name',
+    summary='修改历史约战排表名称',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:history')],
+)
+async def rename_schedule_history(
+    schedule_id: int,
+    data: ScheduleHistoryRenameModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.rename_history_service(query_db, current_user, schedule_id, data)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'修改历史约战排表名称失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@schedule_controller.delete(
+    '/history/{schedule_id}',
+    summary='删除历史约战排表',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:history')],
+)
+async def delete_schedule_history(
+    schedule_id: int,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.delete_history_service(query_db, current_user, schedule_id)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'删除历史约战排表失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@schedule_controller.get(
+    '/current/workbook',
+    summary='获取当前约战排表自由表格',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:list')],
+)
+async def get_current_schedule_workbook(
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.get_current_workbook_service(query_db, current_user)
+        return ResponseUtil.success(data=result)
+    except Exception as e:
+        logger.error(f'获取约战排表自由表格失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@schedule_controller.put(
+    '/current/workbook',
+    summary='保存当前约战排表自由表格',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:edit')],
+)
+async def save_current_schedule_workbook(
+    data: ScheduleWorkbookModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.save_current_workbook_service(query_db, current_user, data)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'保存约战排表自由表格失败: {str(e)}')
         return ResponseUtil.error(msg=str(e))
 
 

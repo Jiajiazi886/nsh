@@ -80,3 +80,33 @@ export function applyScheduleHistory(scheduleId) {
     method: 'post'
   })
 }
+
+export function renameScheduleHistory(scheduleId, data) {
+  return request({
+    url: `/guild/schedule/history/${scheduleId}/name`,
+    method: 'put',
+    data
+  })
+}
+
+export function deleteScheduleHistory(scheduleId) {
+  return request({
+    url: `/guild/schedule/history/${scheduleId}`,
+    method: 'delete'
+  })
+}
+
+export function getCurrentScheduleWorkbook() {
+  return request({
+    url: '/guild/schedule/current/workbook',
+    method: 'get'
+  })
+}
+
+export function saveCurrentScheduleWorkbook(workbook) {
+  return request({
+    url: '/guild/schedule/current/workbook',
+    method: 'put',
+    data: { workbook }
+  })
+}

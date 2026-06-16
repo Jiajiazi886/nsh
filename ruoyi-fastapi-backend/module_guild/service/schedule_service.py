@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel
@@ -6,9 +8,11 @@ from module_guild.dao.schedule_dao import ScheduleDao
 from module_guild.entity.do.schedule_do import GuildSchedule, GuildScheduleTeam
 from module_guild.entity.vo.schedule_vo import (
     ScheduleAssignmentModel,
+    ScheduleHistoryRenameModel,
     ScheduleSnapshotModel,
     ScheduleSquadCreateModel,
     ScheduleTeamCreateModel,
+    ScheduleWorkbookModel,
 )
 
 
@@ -28,6 +32,35 @@ class ScheduleService:
         return await cls._build_schedule_detail(db, current_user.user.user_id, schedule_id)
 
     @classmethod
+    async def get_current_workbook_service(cls, db: AsyncSession, current_user) -> dict:
+        schedule = await cls._ensure_active_schedule(db, current_user.user.user_id)
+        schedule_id = schedule.schedule_id
+        workbook = await ScheduleDao.get_workbook(db, schedule_id)
+        if not workbook:
+            await db.commit()
+            return {'schedule_id': schedule_id, 'workbook': None}
+        try:
+            workbook_data = json.loads(workbook.workbook_json or '{}')
+        except json.JSONDecodeError:
+            workbook_data = None
+        await db.commit()
+        return {'schedule_id': schedule_id, 'workbook': workbook_data}
+
+    @classmethod
+    async def save_current_workbook_service(
+        cls, db: AsyncSession, current_user, data: ScheduleWorkbookModel
+    ) -> CrudResponseModel:
+        schedule = await cls._ensure_active_schedule(db, current_user.user.user_id)
+        schedule_id = schedule.schedule_id
+        await ScheduleDao.upsert_workbook(
+            db,
+            schedule_id,
+            json.dumps(data.workbook or {}, ensure_ascii=False, separators=(',', ':')),
+        )
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='表格已保存')
+
+    @classmethod
     async def list_history_service(cls, db: AsyncSession, current_user) -> list[dict]:
         rows = await ScheduleDao.list_history(db, current_user.user.user_id)
         return [
@@ -39,6 +72,33 @@ class ScheduleService:
             }
             for item in rows
         ]
+
+    @classmethod
+    async def rename_history_service(
+        cls, db: AsyncSession, current_user, schedule_id: int, data: ScheduleHistoryRenameModel
+    ) -> CrudResponseModel:
+        schedule_name = data.schedule_name.strip()
+        if not schedule_name:
+            raise ServiceException(message='请输入历史名称')
+        schedule = await ScheduleDao.get_schedule_by_id(db, current_user.user.user_id, schedule_id)
+        if not schedule:
+            raise ServiceException(message='历史排表不存在')
+        if schedule.is_active == '1':
+            raise ServiceException(message='当前排表不能作为历史重命名')
+        await ScheduleDao.update_schedule_name(db, schedule_id, schedule_name)
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='历史名称已更新')
+
+    @classmethod
+    async def delete_history_service(cls, db: AsyncSession, current_user, schedule_id: int) -> CrudResponseModel:
+        schedule = await ScheduleDao.get_schedule_by_id(db, current_user.user.user_id, schedule_id)
+        if not schedule:
+            raise ServiceException(message='历史排表不存在')
+        if schedule.is_active == '1':
+            raise ServiceException(message='当前排表不能删除')
+        await ScheduleDao.delete_history_schedule(db, schedule_id)
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='历史排表已删除')
 
     @classmethod
     async def create_team_service(
@@ -116,9 +176,31 @@ class ScheduleService:
         if not member:
             raise ServiceException(message='成员不存在')
 
-        current_size = await ScheduleDao.count_squad_assignments(db, squad.squad_id, exclude_member_id=member.member_id)
-        if current_size >= squad.max_members:
+        current_assignment = await ScheduleDao.get_assignment_by_member(db, schedule.schedule_id, member.member_id)
+        current_size = await ScheduleDao.count_squad_assignments(
+            db, squad.squad_id, exclude_member_id=member.member_id
+        )
+        requested_order_num = data.order_num or current_size + 1
+        if requested_order_num < 1 or requested_order_num > squad.max_members:
+            raise ServiceException(message=f'位置必须在 1-{squad.max_members} 之间')
+
+        target_assignment = await ScheduleDao.get_assignment_by_slot(
+            db, schedule.schedule_id, squad.squad_id, requested_order_num
+        )
+        if target_assignment and target_assignment.member_id != member.member_id and not current_assignment:
+            raise ServiceException(message='目标位置已有成员')
+        if current_size >= squad.max_members and not current_assignment and not target_assignment:
             raise ServiceException(message='每个小队最多 6 人')
+
+        if target_assignment and target_assignment.member_id != member.member_id and current_assignment:
+            await ScheduleDao.update_assignment_slot(
+                db,
+                target_assignment.assignment_id,
+                current_assignment.team_id,
+                current_assignment.squad_id,
+                current_assignment.order_num,
+            )
+
         await ScheduleDao.upsert_assignment(db, {
             'schedule_id': schedule.schedule_id,
             'team_id': team.team_id,
@@ -127,7 +209,7 @@ class ScheduleService:
             'player_name': member.player_name,
             'player_class': member.player_class or '',
             'secondary_class': member.secondary_class or '',
-            'order_num': current_size + 1,
+            'order_num': requested_order_num,
         })
         await db.commit()
         return CrudResponseModel(is_success=True, message='排表已保存')
@@ -189,6 +271,7 @@ class ScheduleService:
                     'secondary_class': item.secondary_class or '',
                     'order_num': item.order_num,
                 })
+        await ScheduleDao.copy_workbook(db, source.schedule_id, snapshot.schedule_id)
         await db.commit()
         return CrudResponseModel(is_success=True, message='历史已保存')
 
@@ -238,6 +321,7 @@ class ScheduleService:
                     'secondary_class': item.secondary_class or '',
                     'order_num': item.order_num,
                 })
+        await ScheduleDao.copy_workbook(db, source.schedule_id, active.schedule_id)
         await db.commit()
         return CrudResponseModel(is_success=True, message='历史配置已应用')
 
@@ -278,6 +362,7 @@ class ScheduleService:
                 'player_name': item.player_name,
                 'player_class': item.player_class or '',
                 'secondary_class': item.secondary_class or '',
+                'order_num': item.order_num,
             })
 
         squad_map: dict[int, list[dict]] = {}

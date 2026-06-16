@@ -55,6 +55,49 @@
 
         <el-tabs v-model="activeTab" class="database-tabs" @tab-change="handleTabChange">
           <el-tab-pane label="表数据" name="rows">
+            <div class="row-toolbar">
+              <div class="column-summary">
+                <strong>字段显示</strong>
+                <span>已显示 {{ visibleTableColumns.length }}/{{ tableRows.columns.length }} 列</span>
+                <el-tag v-if="protectedVisibleColumns.length" type="success" effect="plain">
+                  业务列不隐藏：{{ protectedVisibleColumns.join('、') }}
+                </el-tag>
+              </div>
+              <el-dropdown trigger="click" :hide-on-click="false">
+                <el-button size="small">
+                  显示/隐藏字段
+                  <el-icon class="el-icon--right"><arrow-down /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <div class="column-dropdown">
+                    <div class="column-dropdown-head">
+                      <span>字段列表</span>
+                      <div>
+                        <el-button link type="primary" @click="showAllColumns">全部显示</el-button>
+                        <el-button link @click="resetColumnVisibility">重置</el-button>
+                      </div>
+                    </div>
+                    <el-scrollbar max-height="320px">
+                      <label
+                        v-for="item in tableColumnOptions"
+                        :key="item.name"
+                        class="column-option"
+                        :class="{ protected: item.protected }"
+                      >
+                        <el-checkbox
+                          :model-value="item.visible"
+                          :disabled="item.protected"
+                          @change="(visible) => setColumnVisibility(item.name, visible)"
+                        >
+                          {{ item.name }}
+                        </el-checkbox>
+                        <el-tag v-if="item.protected" size="small" type="success" effect="plain">业务列</el-tag>
+                      </label>
+                    </el-scrollbar>
+                  </div>
+                </template>
+              </el-dropdown>
+            </div>
             <el-table
               v-loading="rowsLoading"
               :data="tableRows.rows"
@@ -63,7 +106,7 @@
               empty-text="暂无数据"
             >
               <el-table-column
-                v-for="column in tableRows.columns"
+                v-for="column in visibleTableColumns"
                 :key="column"
                 :prop="column"
                 :label="column"
@@ -165,6 +208,9 @@ const tableRows = ref({
   total: 0
 })
 const columns = ref([])
+const COLUMN_VISIBILITY_STORAGE_KEY = 'system-database:column-visibility:v1'
+const protectedBusinessColumns = new Set(['member_id', 'team_id', 'slot_id'])
+const columnVisibility = ref(loadColumnVisibilityState())
 const users = ref({
   rows: [],
   total: 0
@@ -184,6 +230,22 @@ const filteredTables = computed(() => {
     return overview.value.tables
   }
   return overview.value.tables.filter(table => table.tableName.toLowerCase().includes(keyword))
+})
+
+const tableColumnOptions = computed(() => {
+  return tableRows.value.columns.map(name => ({
+    name,
+    visible: isColumnVisible(name),
+    protected: isProtectedBusinessColumn(name)
+  }))
+})
+
+const visibleTableColumns = computed(() => {
+  return tableRows.value.columns.filter(column => isColumnVisible(column))
+})
+
+const protectedVisibleColumns = computed(() => {
+  return tableRows.value.columns.filter(column => isProtectedBusinessColumn(column))
 })
 
 onMounted(() => {
@@ -236,6 +298,7 @@ async function loadRows() {
   try {
     const res = await getTableRows(activeTable.value, rowQuery)
     tableRows.value = res.data || tableRows.value
+    normalizeColumnVisibility(tableRows.value.columns)
   } finally {
     rowsLoading.value = false
   }
@@ -272,6 +335,103 @@ function normalizeCell(value) {
     return JSON.stringify(value)
   }
   return String(value)
+}
+
+function loadColumnVisibilityState() {
+  try {
+    const raw = localStorage.getItem(COLUMN_VISIBILITY_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveColumnVisibilityState() {
+  localStorage.setItem(COLUMN_VISIBILITY_STORAGE_KEY, JSON.stringify(columnVisibility.value))
+}
+
+function getActiveTableVisibility() {
+  return columnVisibility.value[activeTable.value] || {}
+}
+
+function isProtectedBusinessColumn(column) {
+  return protectedBusinessColumns.has(String(column).toLowerCase())
+}
+
+function isColumnVisible(column) {
+  if (isProtectedBusinessColumn(column)) {
+    return true
+  }
+  return getActiveTableVisibility()[column] !== false
+}
+
+function setColumnVisibility(column, visible) {
+  if (isProtectedBusinessColumn(column)) {
+    return
+  }
+
+  const nextVisible = Boolean(visible)
+  if (!nextVisible) {
+    const remainingVisibleCount = tableRows.value.columns
+      .filter(item => item !== column && isColumnVisible(item))
+      .length
+    if (remainingVisibleCount === 0) {
+      return
+    }
+  }
+
+  const tableName = activeTable.value
+  const current = { ...getActiveTableVisibility() }
+  if (nextVisible) {
+    delete current[column]
+  } else {
+    current[column] = false
+  }
+  columnVisibility.value = {
+    ...columnVisibility.value,
+    [tableName]: current
+  }
+  saveColumnVisibilityState()
+}
+
+function showAllColumns() {
+  if (!activeTable.value) {
+    return
+  }
+  columnVisibility.value = {
+    ...columnVisibility.value,
+    [activeTable.value]: {}
+  }
+  saveColumnVisibilityState()
+}
+
+function resetColumnVisibility() {
+  showAllColumns()
+}
+
+function normalizeColumnVisibility(tableColumns) {
+  if (!activeTable.value || !Array.isArray(tableColumns)) {
+    return
+  }
+  const validColumns = new Set(tableColumns)
+  const current = { ...getActiveTableVisibility() }
+  let changed = false
+
+  Object.keys(current).forEach(column => {
+    if (!validColumns.has(column) || isProtectedBusinessColumn(column)) {
+      delete current[column]
+      changed = true
+    }
+  })
+
+  if (changed) {
+    columnVisibility.value = {
+      ...columnVisibility.value,
+      [activeTable.value]: current
+    }
+    saveColumnVisibilityState()
+  }
 }
 
 function formatRows(value) {
@@ -453,6 +613,65 @@ function formatBytes(value) {
 
 .database-tabs {
   min-width: 0;
+}
+
+.row-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 12px;
+  background: rgba(245, 242, 234, 0.72);
+}
+
+.column-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  color: rgba(17, 24, 39, 0.68);
+  font-size: 13px;
+}
+
+.column-summary strong {
+  color: #111827;
+}
+
+.column-dropdown {
+  width: min(420px, 82vw);
+  padding: 10px;
+}
+
+.column-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.column-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+}
+
+.column-option:hover {
+  background: rgba(108, 63, 245, 0.08);
+}
+
+.column-option.protected {
+  background: rgba(34, 197, 94, 0.08);
 }
 
 .cell-value {
