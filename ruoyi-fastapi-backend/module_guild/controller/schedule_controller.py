@@ -157,6 +157,26 @@ async def get_schedule_detail(
         return ResponseUtil.error(msg=str(e))
 
 
+@schedule_controller.get(
+    '/{schedule_id}/workbook',
+    summary='获取指定约战排表自由表格',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:query')],
+)
+async def get_schedule_workbook(
+    schedule_id: int,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.get_schedule_workbook_service(query_db, current_user, schedule_id)
+        return ResponseUtil.success(data=result)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'获取指定约战排表自由表格失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
 @schedule_controller.post(
     '/team',
     summary='创建排表团队',

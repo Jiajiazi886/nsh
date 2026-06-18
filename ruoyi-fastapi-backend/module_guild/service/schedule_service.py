@@ -47,6 +47,20 @@ class ScheduleService:
         return {'schedule_id': schedule_id, 'workbook': workbook_data}
 
     @classmethod
+    async def get_schedule_workbook_service(cls, db: AsyncSession, current_user, schedule_id: int) -> dict:
+        schedule = await ScheduleDao.get_schedule_by_id(db, current_user.user.user_id, schedule_id)
+        if not schedule:
+            raise ServiceException(message='排表不存在')
+        workbook = await ScheduleDao.get_workbook(db, schedule_id)
+        if not workbook:
+            return {'schedule_id': schedule_id, 'workbook': None}
+        try:
+            workbook_data = json.loads(workbook.workbook_json or '{}')
+        except json.JSONDecodeError:
+            workbook_data = None
+        return {'schedule_id': schedule_id, 'workbook': workbook_data}
+
+    @classmethod
     async def save_current_workbook_service(
         cls, db: AsyncSession, current_user, data: ScheduleWorkbookModel
     ) -> CrudResponseModel:

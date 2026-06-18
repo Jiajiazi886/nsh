@@ -52,6 +52,11 @@ import {
   WrapStrategy
 } from '@univerjs/presets'
 import { getCurrentScheduleWorkbook, saveCurrentScheduleWorkbook } from '@/api/guild/schedule'
+import {
+  exportScheduleWorkbook,
+  getTempMembersFromWorkbook,
+  setTempMembersToWorkbook
+} from '../utils/scheduleWorkbook'
 import '@univerjs/preset-sheets-core/lib/index.css'
 
 const props = defineProps({
@@ -69,7 +74,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['assign-member', 'workbook-assignments-change'])
+const emit = defineEmits(['assign-member', 'workbook-assignments-change', 'temp-members-change'])
 
 const LARGE_ROW_COUNT = 2000
 const LARGE_COLUMN_COUNT = 200
@@ -96,6 +101,7 @@ const loadingToken = ref(0)
 const suppressCommandSave = ref(false)
 const lastDragPointer = ref(null)
 const lastUniverDropTarget = ref(null)
+const tempMembers = ref([])
 
 const teams = computed(() => props.schedule?.teams || [])
 const activeDragMember = computed(() => props.draggingMember)
@@ -121,7 +127,10 @@ onBeforeUnmount(() => {
 
 defineExpose({
   flushWorkbookSave,
-  saveWorkbookNow
+  saveWorkbookNow,
+  upsertTempMember,
+  getWorkbookSnapshot,
+  exportWorkbook
 })
 
 async function loadWorkbook() {
@@ -133,11 +142,13 @@ async function loadWorkbook() {
     if (token !== loadingToken.value) return
     const remoteWorkbook = res.data?.workbook
     workbookData.value = normalizeWorkbookData(remoteWorkbook || buildDefaultWorkbookData())
+    syncTempMembersFromWorkbook(workbookData.value)
     emitWorkbookAssignments()
     await nextTick()
     rebuildWorkbook()
   } catch (error) {
     workbookData.value = buildDefaultWorkbookData()
+    syncTempMembersFromWorkbook(workbookData.value)
     emitWorkbookAssignments()
     await nextTick()
     rebuildWorkbook()
@@ -394,6 +405,37 @@ function normalizeWorkbookData(rawWorkbook) {
   return workbook
 }
 
+async function upsertTempMember(member) {
+  if (!member?.member_id || !member?.player_name) return
+  const normalized = {
+    member_id: String(member.member_id),
+    player_name: String(member.player_name || ''),
+    player_class: String(member.player_class || ''),
+    secondary_class: String(member.secondary_class || ''),
+    is_temporary: true
+  }
+  const existingIndex = tempMembers.value.findIndex(item => String(item.member_id) === normalized.member_id)
+  const nextMembers = [...tempMembers.value]
+  if (existingIndex >= 0) {
+    nextMembers.splice(existingIndex, 1, normalized)
+  } else {
+    nextMembers.push(normalized)
+  }
+  tempMembers.value = nextMembers
+  workbookData.value = normalizeWorkbookData(setTempMembersToWorkbook(getWorkbookSnapshot(), tempMembers.value))
+  emitTempMembers()
+  await saveWorkbookNow()
+}
+
+function syncTempMembersFromWorkbook(workbook) {
+  tempMembers.value = getTempMembersFromWorkbook(workbook)
+  emitTempMembers()
+}
+
+function emitTempMembers() {
+  emit('temp-members-change', tempMembers.value.map(member => ({ ...member })))
+}
+
 function buildSlotMapFromSchedule() {
   const slotMap = {}
   let row = 3
@@ -516,7 +558,9 @@ async function placeMemberIntoCell(member, target) {
     },
     custom: {
       member_id: member.member_id,
-      player_class: member.player_class || ''
+      player_class: member.player_class || '',
+      player_name: getMemberDisplayName(member),
+      is_temporary: Boolean(member.is_temporary)
     }
   })
 
@@ -524,7 +568,7 @@ async function placeMemberIntoCell(member, target) {
   emitWorkbookAssignments()
 
   const slot = systemSlotMap.value[getCellKey(target.row, target.column)]
-  if (slot?.team && slot?.squad) {
+  if (!member.is_temporary && slot?.team && slot?.squad) {
     emit('assign-member', {
       member,
       team: slot.team,
@@ -653,13 +697,22 @@ async function saveWorkbookNow() {
   }
   const snapshot = univerAPIInstance.value.getActiveWorkbook?.()?.save?.()
   if (!snapshot) return
-  workbookData.value = normalizeWorkbookData(snapshot)
+  workbookData.value = normalizeWorkbookData(setTempMembersToWorkbook(snapshot, tempMembers.value))
   emitWorkbookAssignments()
   try {
     await saveCurrentScheduleWorkbook(workbookData.value)
   } catch (error) {
     ElMessage.error('自由表格保存失败')
   }
+}
+
+function getWorkbookSnapshot() {
+  const snapshot = univerAPIInstance.value?.getActiveWorkbook?.()?.save?.() || workbookData.value || buildDefaultWorkbookData()
+  return normalizeWorkbookData(setTempMembersToWorkbook(snapshot, tempMembers.value))
+}
+
+async function exportWorkbook(filename = '约战排表.xlsx', sourceWorkbook = null) {
+  await exportScheduleWorkbook(sourceWorkbook || getWorkbookSnapshot(), filename)
 }
 
 function emitWorkbookAssignments() {
@@ -674,8 +727,10 @@ function emitWorkbookAssignments() {
       const column = Number(columnKey)
       if (!Number.isFinite(row) || !Number.isFinite(column)) return
       assignments.push({
-        member_id: Number(memberId),
+        member_id: memberId,
         player_class: cell?.custom?.player_class || '',
+        player_name: cell?.custom?.player_name || cell?.v || '',
+        is_temporary: Boolean(cell?.custom?.is_temporary),
         cellLabel: formatCellPosition({ row, column })
       })
     })

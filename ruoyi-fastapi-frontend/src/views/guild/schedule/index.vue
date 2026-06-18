@@ -5,9 +5,12 @@
         <div class="panel-header">
           <div>
             <h3>帮会成员</h3>
-            <span>{{ filteredMembers.length }} / {{ members.length }} 人</span>
+            <span>{{ filteredMembers.length }} / {{ allMembers.length }} 人</span>
           </div>
-          <el-button text type="primary" @click="fetchData">刷新</el-button>
+          <div class="member-header-actions">
+            <el-button text type="primary" @click="openTempMemberDialog">临时补人</el-button>
+            <el-button text type="primary" @click="fetchData">刷新</el-button>
+          </div>
         </div>
 
         <div class="member-tools">
@@ -78,6 +81,7 @@
                 <span class="member-file-main">
                   <span class="member-name">{{ member.player_name }}</span>
                   <span class="member-meta-line">
+                    <span v-if="member.is_temporary" class="temp-member-badge">临时</span>
                     <span>{{ getAssignedText(member.member_id) || '未排表' }}</span>
                     <template v-if="member.secondary_class">
                       <span class="member-meta-divider">·</span>
@@ -103,6 +107,7 @@
             <span>团队和小队会保存到数据库，每个小队最多 6 人</span>
           </div>
           <div class="schedule-actions">
+            <el-button @click="exportCurrentSchedule">导出 Excel</el-button>
             <el-button @click="saveHistorySnapshot">保存历史</el-button>
             <el-button @click="openHistory">历史查询</el-button>
           </div>
@@ -116,14 +121,54 @@
           :get-class-style="getClassStyle"
           @assign-member="handleSheetAssignMember"
           @workbook-assignments-change="syncWorkbookAssignments"
+          @temp-members-change="syncTempMembers"
         />
       </section>
     </div>
 
     <el-dialog
+      v-model="tempMemberVisible"
+      title="临时补人"
+      width="420px"
+      append-to-body
+    >
+      <el-form label-width="78px" @submit.prevent>
+        <el-form-item label="玩家名字">
+          <el-input
+            v-model="tempMemberForm.player_name"
+            placeholder="输入临时补人的名字"
+            maxlength="30"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item label="职业">
+          <el-select
+            v-model="tempMemberForm.player_class"
+            placeholder="选择职业"
+            filterable
+            allow-create
+            default-first-option
+            style="width: 100%"
+          >
+            <el-option
+              v-for="className in classOptions"
+              :key="className"
+              :label="className"
+              :value="className"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="tempMemberVisible = false">取消</el-button>
+        <el-button type="primary" @click="addTempMember">加入临时列表</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="historyVisible"
       title="历史查询"
-      width="820px"
+      width="1120px"
       append-to-body
     >
       <div class="history-layout">
@@ -154,9 +199,15 @@
               <div class="preview-actions">
                 <el-button @click="renameHistory(historyPreview)">重命名</el-button>
                 <el-button type="danger" @click="deleteHistory(historyPreview)">删除</el-button>
+                <el-button @click="exportHistoryWorkbook">导出 Excel</el-button>
                 <el-button type="primary" @click="useHistoryConfiguration">应用配置</el-button>
               </div>
             </div>
+            <ScheduleWorkbookPreview
+              :workbook="historyWorkbook"
+              @preview-ready="previewImageUrl = $event"
+              @preview-click="openPreviewImage"
+            />
             <section
               v-for="team in historyPreview.teams"
               :key="team.team_id"
@@ -186,6 +237,16 @@
         </div>
       </div>
     </el-dialog>
+
+    <el-dialog
+      v-model="previewImageVisible"
+      title="历史排表图片"
+      width="92vw"
+      append-to-body
+      class="history-image-dialog"
+    >
+      <img v-if="previewImageUrl" class="history-large-image" :src="previewImageUrl" alt="历史排表图片" />
+    </el-dialog>
   </div>
 </template>
 
@@ -195,11 +256,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import { getApprovedBattleRegistrationsForSchedule, getBattleLeaveRegistrationsForSchedule } from '@/api/guild/battle'
 import ScheduleUniverSheet from './components/ScheduleUniverSheet.vue'
+import ScheduleWorkbookPreview from './components/ScheduleWorkbookPreview.vue'
 import {
   applyScheduleHistory,
   deleteScheduleHistory,
   getCurrentSchedule,
   getScheduleDetail,
+  getScheduleWorkbook,
   getScheduleHistory,
   renameScheduleHistory,
   saveScheduleAssignment,
@@ -208,6 +271,7 @@ import {
 import useGuildMemberStore from '@/store/modules/guildMember'
 import { useGuildClassColors } from '@/utils/guildClassColor'
 import { useGuildPageMotion } from '@/composables/useGuildPageMotion'
+import { exportScheduleWorkbook } from './utils/scheduleWorkbook'
 
 let scheduleGsapLoader = null
 function loadScheduleGsap() {
@@ -223,7 +287,7 @@ const scheduleSheetRef = ref(null)
 const loading = ref(false)
 const members = computed(() => guildMemberStore.members)
 const schedule = ref({ teams: [] })
-const { getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
+const { classOptions, getGuildClassStyle, loadGuildClassColors } = useGuildClassColors()
 
 useGuildPageMotion(pageRef)
 const keyword = ref('')
@@ -235,11 +299,25 @@ const draggingMember = ref(null)
 const historyVisible = ref(false)
 const historyRows = ref([])
 const historyPreview = ref(null)
+const historyWorkbook = ref(null)
+const previewImageUrl = ref('')
+const previewImageVisible = ref(false)
+const tempMemberVisible = ref(false)
+const tempMembers = ref([])
+const tempMemberForm = ref({
+  player_name: '',
+  player_class: ''
+})
 const workbookAssignedByMemberId = ref({})
 const collapsedClassFolders = ref(new Set())
 const folderBodyRefs = new Map()
 
 const UNSET_CLASS_NAME = '未设置'
+
+const allMembers = computed(() => [
+  ...members.value,
+  ...tempMembers.value
+])
 
 const assignedByMemberId = computed(() => {
   const map = {}
@@ -272,12 +350,12 @@ const filteredMembers = computed(() => {
   const value = keyword.value.trim().toLowerCase()
   const approvedSet = new Set(approvedBattleMemberIds.value)
   const leaveSet = new Set(leaveMemberIds.value)
-  return members.value.filter(member => {
+  return allMembers.value.filter(member => {
     const matchesKeyword = !value || [member.player_name, member.player_class, member.secondary_class]
       .filter(Boolean)
       .some(text => String(text).toLowerCase().includes(value))
-    const matchesBattle = !onlyApprovedBattleMembers.value || approvedSet.has(member.member_id)
-    const matchesLeave = !excludeLeaveMembers.value || !leaveSet.has(member.member_id)
+    const matchesBattle = member.is_temporary || !onlyApprovedBattleMembers.value || approvedSet.has(member.member_id)
+    const matchesLeave = member.is_temporary || !excludeLeaveMembers.value || !leaveSet.has(member.member_id)
     return matchesKeyword && matchesBattle && matchesLeave
   })
 })
@@ -405,6 +483,49 @@ function onDragEnd() {
   draggingMember.value = null
 }
 
+function openTempMemberDialog() {
+  tempMemberForm.value = {
+    player_name: '',
+    player_class: classOptions.value[0] || ''
+  }
+  tempMemberVisible.value = true
+}
+
+async function addTempMember() {
+  const playerName = tempMemberForm.value.player_name.trim()
+  const playerClass = tempMemberForm.value.player_class.trim()
+  if (!playerName) {
+    ElMessage.warning('请输入玩家名字')
+    return
+  }
+  if (!playerClass) {
+    ElMessage.warning('请选择职业')
+    return
+  }
+  const tempMember = {
+    member_id: `temp_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    player_name: playerName,
+    player_class: playerClass,
+    secondary_class: '',
+    is_temporary: true
+  }
+  await scheduleSheetRef.value?.upsertTempMember?.(tempMember)
+  const nextCollapsed = new Set(collapsedClassFolders.value)
+  nextCollapsed.delete(playerClass || UNSET_CLASS_NAME)
+  collapsedClassFolders.value = nextCollapsed
+  tempMemberVisible.value = false
+  ElMessage.success('临时玩家已加入')
+}
+
+async function exportCurrentSchedule() {
+  try {
+    await scheduleSheetRef.value?.flushWorkbookSave?.()
+    await scheduleSheetRef.value?.exportWorkbook?.(`约战排表-${formatExportTime()}.xlsx`)
+  } catch {
+    ElMessage.error('导出当前排表失败')
+  }
+}
+
 async function saveHistorySnapshot() {
   const defaultName = `约战排表 ${new Date().toLocaleString()}`
   try {
@@ -426,16 +547,52 @@ async function saveHistorySnapshot() {
 async function openHistory() {
   historyVisible.value = true
   historyPreview.value = null
+  historyWorkbook.value = null
+  previewImageUrl.value = ''
   await fetchHistory()
+  if (historyRows.value.length) {
+    await viewHistory(historyRows.value[0])
+  }
 }
 
 async function viewHistory(item) {
   try {
-    const res = await getScheduleDetail(item.schedule_id)
-    historyPreview.value = res.data || null
+    previewImageUrl.value = ''
+    const [detailRes, workbookRes] = await Promise.all([
+      getScheduleDetail(item.schedule_id),
+      getScheduleWorkbook(item.schedule_id)
+    ])
+    historyPreview.value = detailRes.data || null
+    historyWorkbook.value = workbookRes.data?.workbook || null
   } catch {
     ElMessage.error('加载历史详情失败')
   }
+}
+
+async function exportHistoryWorkbook() {
+  if (!historyPreview.value) return
+  try {
+    if (!historyWorkbook.value) {
+      const res = await getScheduleWorkbook(historyPreview.value.schedule_id)
+      historyWorkbook.value = res.data?.workbook || null
+    }
+    if (!historyWorkbook.value) {
+      ElMessage.warning('该历史暂无自由表格可导出')
+      return
+    }
+    await exportScheduleWorkbook(
+      historyWorkbook.value,
+      `${sanitizeFilename(historyPreview.value.schedule_name || '历史排表')}-${formatExportTime()}.xlsx`
+    )
+  } catch {
+    ElMessage.error('导出历史排表失败')
+  }
+}
+
+function openPreviewImage(url) {
+  if (!url) return
+  previewImageUrl.value = url
+  previewImageVisible.value = true
 }
 
 async function useHistoryConfiguration() {
@@ -488,12 +645,21 @@ function syncWorkbookAssignments(assignments = []) {
   const nextMap = {}
   assignments.forEach((assignment) => {
     if (!assignment?.member_id) return
-    nextMap[assignment.member_id] = {
+    const memberId = String(assignment.member_id)
+    nextMap[memberId] = {
       ...assignment,
-      member_id: Number(assignment.member_id)
+      member_id: memberId
     }
   })
   workbookAssignedByMemberId.value = nextMap
+}
+
+function syncTempMembers(list = []) {
+  tempMembers.value = list.map(member => ({
+    ...member,
+    member_id: String(member.member_id),
+    is_temporary: true
+  }))
 }
 
 async function renameHistory(item) {
@@ -534,8 +700,13 @@ async function deleteHistory(item) {
     ElMessage.success('历史排表已删除')
     if (historyPreview.value?.schedule_id === item.schedule_id) {
       historyPreview.value = null
+      historyWorkbook.value = null
+      previewImageUrl.value = ''
     }
     await fetchHistory()
+    if (!historyPreview.value && historyRows.value.length) {
+      await viewHistory(historyRows.value[0])
+    }
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('删除历史失败')
@@ -560,6 +731,14 @@ async function fetchHistory() {
 
 async function fetchClassColors() {
   await loadGuildClassColors()
+}
+
+function formatExportTime() {
+  return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+}
+
+function sanitizeFilename(value) {
+  return String(value || '约战排表').replace(/[\\/:*?"<>|]/g, '_')
 }
 
 async function fetchData() {
@@ -618,6 +797,13 @@ onMounted(fetchData)
 .panel-header span {
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+.member-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
 .member-tools {
@@ -814,6 +1000,19 @@ onMounted(fetchData)
   color: var(--el-text-color-placeholder);
 }
 
+.temp-member-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 5px;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 999px;
+  padding: 0 5px;
+  background: rgba(245, 158, 11, 0.13);
+  color: #a16207;
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .member-file-status {
   border-radius: 999px;
   padding: 2px 6px;
@@ -920,6 +1119,15 @@ onMounted(fetchData)
 .preview-team {
   border-top: 1px solid var(--el-border-color-lighter);
   padding: 10px 0;
+}
+
+.history-large-image {
+  width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
 }
 
 .preview-squad {

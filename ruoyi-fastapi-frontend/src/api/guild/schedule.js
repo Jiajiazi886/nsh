@@ -103,6 +103,13 @@ export function getCurrentScheduleWorkbook() {
   })
 }
 
+export function getScheduleWorkbook(scheduleId) {
+  return request({
+    url: `/guild/schedule/${scheduleId}/workbook`,
+    method: 'get'
+  })
+}
+
 export function saveCurrentScheduleWorkbook(workbook) {
   return request({
     url: '/guild/schedule/current/workbook',
