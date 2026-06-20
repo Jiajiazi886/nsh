@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from module_guild.constants.class_color_defaults import DEFAULT_GUILD_CLASS_COLORS
 from module_guild.service.class_color_service import ClassColorService
 
 
@@ -14,9 +15,26 @@ def test_class_color_default_uses_configured_palette():
 
     assert result == {
         'class_name': '九灵',
-        'bg_color': '#e100ff',
-        'text_color': '#000000',
+        'bg_color': '#ff0000',
+        'text_color': '#ffffff',
     }
+
+
+def test_class_color_default_palette_matches_designed_config():
+    assert DEFAULT_GUILD_CLASS_COLORS == [
+        {'class_name': '九灵', 'bg_color': '#ff0000', 'text_color': '#ffffff'},
+        {'class_name': '沧澜', 'bg_color': '#002fff', 'text_color': '#000000'},
+        {'class_name': '潮光', 'bg_color': '#0073ff', 'text_color': '#000000'},
+        {'class_name': '玄机', 'bg_color': '#ddff00', 'text_color': '#000000'},
+        {'class_name': '碎梦', 'bg_color': '#00ffe5', 'text_color': '#000000'},
+        {'class_name': '神相', 'bg_color': '#002fff', 'text_color': '#000000'},
+        {'class_name': '素问', 'bg_color': '#ea00ff', 'text_color': '#000000'},
+        {'class_name': '血河', 'bg_color': '#ff0000', 'text_color': '#000000'},
+        {'class_name': '铁衣', 'bg_color': '#ff8c00', 'text_color': '#000000'},
+        {'class_name': '鸿音', 'bg_color': '#ff7b00', 'text_color': '#000000'},
+        {'class_name': '龙吟', 'bg_color': '#00f846', 'text_color': '#000000'},
+        {'class_name': '刺客', 'bg_color': '#FFFFFF', 'text_color': '#000000'},
+    ]
 
 
 def test_class_color_saved_value_overrides_default():
@@ -42,8 +60,8 @@ def test_class_color_legacy_empty_saved_value_uses_new_default():
 
     assert result == {
         'class_name': '九灵',
-        'bg_color': '#e100ff',
-        'text_color': '#000000',
+        'bg_color': '#ff0000',
+        'text_color': '#ffffff',
     }
 
 
@@ -72,7 +90,7 @@ async def test_class_color_list_fills_enabled_professions_with_defaults(monkeypa
     result = await ClassColorService.get_colors_service(None, make_current_user())
 
     assert result == [
-        {'class_name': '九灵', 'bg_color': '#e100ff', 'text_color': '#000000'},
+        {'class_name': '九灵', 'bg_color': '#ff0000', 'text_color': '#ffffff'},
         {'class_name': '铁衣', 'bg_color': '#ff8c00', 'text_color': '#000000'},
         {'class_name': '自定义', 'bg_color': '#FFFFFF', 'text_color': '#000000'},
     ]

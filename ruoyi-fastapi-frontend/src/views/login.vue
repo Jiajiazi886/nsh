@@ -90,6 +90,7 @@
 import { getAuthConfig } from "@/api/login";
 import Cookies from "js-cookie";
 import { encrypt, decrypt } from "@/utils/jsencrypt";
+import { resolveLoginRedirectPath } from "@/utils/loginRedirect";
 import useUserStore from "@/store/modules/user";
 import defaultSettings from "@/settings";
 import AnimatedCharacters from "@/components/AuthCharacters/AnimatedCharacters.vue";
@@ -150,7 +151,7 @@ function handleLogin() {
         return acc;
       }, {});
       setTimeout(() => {
-        router.push({ path: redirect.value || "/", query: otherQueryParams });
+        router.push({ path: resolveLoginRedirectPath(redirect.value), query: otherQueryParams });
       }, 450);
     }).catch(() => {
       loading.value = false;

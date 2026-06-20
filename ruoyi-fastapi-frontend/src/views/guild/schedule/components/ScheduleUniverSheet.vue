@@ -4,6 +4,10 @@
       class="sheet-workbench"
       @dragover.capture="handleWorkbenchDragOver"
       @dragleave="handleWorkbenchDragLeave"
+      @pointerdown.capture="handleWorkbenchPointerDown"
+      @pointermove.capture="handleWorkbenchPointerMove"
+      @pointerup.capture="handleWorkbenchPointerUp"
+      @pointercancel.capture="cancelInternalCellMove"
     >
       <div ref="containerRef" class="univer-host"></div>
 
@@ -30,6 +34,15 @@
         <span v-else-if="activeDragMember" class="drop-position muted">
           拖到表格单元格内即可放入
         </span>
+      </div>
+
+      <div
+        v-if="internalCellMove?.dragging"
+        class="sheet-internal-move-tip"
+        :style="internalCellMove.tooltipStyle"
+      >
+        <span>移动 {{ internalCellMove.label }}</span>
+        <strong>{{ internalCellMove.targetLabel || '选择目标格' }}</strong>
       </div>
     </div>
   </div>
@@ -102,6 +115,7 @@ const suppressCommandSave = ref(false)
 const lastDragPointer = ref(null)
 const lastUniverDropTarget = ref(null)
 const tempMembers = ref([])
+const internalCellMove = ref(null)
 
 const teams = computed(() => props.schedule?.teams || [])
 const activeDragMember = computed(() => props.draggingMember)
@@ -174,6 +188,7 @@ function disposeUniver() {
   univerInstance.value = null
   dropPreviewCell.value = null
   lastUniverDropTarget.value = null
+  cancelInternalCellMove()
 }
 
 function rebuildWorkbook() {
@@ -401,8 +416,20 @@ function normalizeWorkbookData(rawWorkbook) {
   sheet.columnData = sheet.columnData || {}
   sheet.mergeData = sheet.mergeData || []
   sheet.showGridlines = 1
+  normalizeNumericMemberCells(sheet)
   systemSlotMap.value = buildSlotMapFromSchedule()
   return workbook
+}
+
+function normalizeNumericMemberCells(sheet) {
+  Object.values(sheet.cellData || {}).forEach(columns => {
+    Object.values(columns || {}).forEach(cell => {
+      if (!cell?.custom?.member_id || !isPlainNumericId(cell.v)) return
+      const normalized = buildCellValue(cell.v)
+      cell.v = normalized.v
+      cell.t = normalized.t
+    })
+  })
 }
 
 async function upsertTempMember(member) {
@@ -468,9 +495,9 @@ function setCell(cellData, row, column, value, styleId, custom = null) {
   if (!cellData[row]) {
     cellData[row] = {}
   }
+  const cellValue = custom?.member_id ? buildCellValue(value) : buildTextCellValue(value)
   cellData[row][column] = {
-    v: value,
-    t: CellValueType.STRING,
+    ...cellValue,
     s: styleId
   }
   if (custom) {
@@ -511,6 +538,164 @@ function handleWorkbenchDragLeave(event) {
   clearDropPreview()
 }
 
+function handleWorkbenchPointerDown(event) {
+  if (event.button !== 0 || !event.altKey || activeDragMember.value || workbookLoading.value) return
+  const selectedCell = getSelectedMemberCellForMove()
+  if (!selectedCell) return
+
+  internalCellMove.value = {
+    source: selectedCell,
+    cellData: cloneWorkbook(selectedCell.cellData),
+    startX: event.clientX,
+    startY: event.clientY,
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    dragging: false,
+    label: formatCellPosition(selectedCell),
+    target: null,
+    targetLabel: '',
+    tooltipStyle: buildInternalMoveTooltipStyle(event)
+  }
+}
+
+function handleWorkbenchPointerMove(event) {
+  const state = internalCellMove.value
+  if (!state) return
+  if (!event.altKey) {
+    cancelInternalCellMove()
+    return
+  }
+
+  const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
+  if (distance < 4 && !state.dragging) return
+
+  const target = getTargetCellFromActiveSelection(state.source, event)
+  const targetLabel = target ? formatCellPosition(target) : ''
+  internalCellMove.value = {
+    ...state,
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    dragging: true,
+    target,
+    targetLabel,
+    tooltipStyle: buildInternalMoveTooltipStyle(event)
+  }
+
+  if (target) {
+    updateDropHighlight({ ...target, worksheet: getActiveWorksheet() })
+  }
+}
+
+async function handleWorkbenchPointerUp(event) {
+  const state = internalCellMove.value
+  if (!state) return
+
+  const target = state.dragging
+    ? getTargetCellFromActiveSelection(state.source, event) || state.target
+    : null
+  cancelInternalCellMove()
+  if (!target || isSameCell(state.source, target)) return
+
+  await moveMemberCell(state.source, target, state.cellData)
+}
+
+function getSelectedMemberCellForMove() {
+  const workbook = univerAPIInstance.value?.getActiveWorkbook?.()
+  const activeCell = workbook?.getActiveCell?.() || workbook?.getActiveRange?.()
+  const row = Number(activeCell?.getRow?.())
+  const column = Number(activeCell?.getColumn?.())
+  if (!Number.isInteger(row) || !Number.isInteger(column)) return null
+
+  const cellData = getSnapshotCellData(row, column)
+  if (!cellData?.custom?.member_id) return null
+  return { row, column, cellData }
+}
+
+function getTargetCellFromActiveSelection(source, event) {
+  const workbook = univerAPIInstance.value?.getActiveWorkbook?.()
+  const activeRange = workbook?.getActiveRange?.()
+  const range = activeRange?.getRange?.()
+  if (!range) {
+    const activeCell = workbook?.getActiveCell?.()
+    const row = Number(activeCell?.getRow?.())
+    const column = Number(activeCell?.getColumn?.())
+    return Number.isInteger(row) && Number.isInteger(column) ? { row, column } : null
+  }
+
+  const startRow = Number(range.startRow)
+  const endRow = Number(range.endRow)
+  const startColumn = Number(range.startColumn)
+  const endColumn = Number(range.endColumn)
+  if ([startRow, endRow, startColumn, endColumn].some(value => !Number.isInteger(value))) return null
+
+  const deltaX = event.clientX - (internalCellMove.value?.startX || event.clientX)
+  const deltaY = event.clientY - (internalCellMove.value?.startY || event.clientY)
+  const row = deltaY < 0 ? startRow : endRow
+  const column = deltaX < 0 ? startColumn : endColumn
+  return { row, column }
+}
+
+async function moveMemberCell(source, target, cellData) {
+  const worksheet = getActiveWorksheet()
+  const sourceRange = worksheet?.getRange?.(source.row, source.column)
+  const targetRange = worksheet?.getRange?.(target.row, target.column)
+  if (!sourceRange || !targetRange) return
+
+  targetRange.setValueForCell(cloneWorkbook(cellData))
+  sourceRange.clear()
+
+  await saveWorkbookNow()
+  emitWorkbookAssignments()
+
+  const slot = systemSlotMap.value[getCellKey(target.row, target.column)]
+  if (!cellData?.custom?.is_temporary && slot?.team && slot?.squad) {
+    emit('assign-member', {
+      member: {
+        member_id: cellData.custom.member_id,
+        player_class: cellData.custom.player_class || '',
+        player_name: cellData.custom.player_name || cellData.v || ''
+      },
+      team: slot.team,
+      squad: slot.squad,
+      orderNum: slot.orderNum
+    })
+  }
+}
+
+function getSnapshotCellData(row, column) {
+  const workbook = getWorkbookSnapshot()
+  const sheetId = workbook?.sheetOrder?.[0] || Object.keys(workbook?.sheets || {})[0]
+  return sheetId ? workbook?.sheets?.[sheetId]?.cellData?.[row]?.[column] : null
+}
+
+function buildInternalMoveTooltipStyle(event) {
+  const workbenchRect = containerRef.value?.parentElement?.getBoundingClientRect()
+  if (!workbenchRect) return {}
+  const tooltipWidth = 150
+  const tooltipHeight = 48
+  const left = Math.min(
+    Math.max(8, event.clientX - workbenchRect.left + 14),
+    Math.max(8, workbenchRect.width - tooltipWidth - 8)
+  )
+  const top = Math.min(
+    Math.max(8, event.clientY - workbenchRect.top + 14),
+    Math.max(8, workbenchRect.height - tooltipHeight - 8)
+  )
+  return {
+    left: `${left}px`,
+    top: `${top}px`
+  }
+}
+
+function cancelInternalCellMove() {
+  internalCellMove.value = null
+  clearDropHighlight()
+}
+
+function isSameCell(left, right) {
+  return Number(left?.row) === Number(right?.row) && Number(left?.column) === Number(right?.column)
+}
+
 function handleUniverDragOver(params) {
   const member = activeDragMember.value
   if (!member) return
@@ -545,9 +730,9 @@ async function placeMemberIntoCell(member, target) {
   const range = target.worksheet?.getRange?.(target.row, target.column) || getActiveWorksheet()?.getRange(target.row, target.column)
   if (!range) return
   const style = normalizeClassStyle(props.getClassStyle(member.player_class))
+  const displayName = getMemberDisplayName(member)
   range.setValueForCell({
-    v: getMemberDisplayName(member),
-    t: CellValueType.STRING,
+    ...buildCellValue(displayName),
     s: {
       bg: { rgb: style.backgroundColor || '#dbeafe' },
       cl: { rgb: style.color || '#111827' },
@@ -559,7 +744,7 @@ async function placeMemberIntoCell(member, target) {
     custom: {
       member_id: member.member_id,
       player_class: member.player_class || '',
-      player_name: getMemberDisplayName(member),
+      player_name: displayName,
       is_temporary: Boolean(member.is_temporary)
     }
   })
@@ -746,6 +931,31 @@ function getMemberDisplayName(member) {
   return String(member.player_id || member.game_id || member.player_name || member.member_id || '')
 }
 
+function buildCellValue(value) {
+  const text = String(value ?? '')
+  if (isPlainNumericId(text)) {
+    return {
+      v: Number(text),
+      t: CellValueType.NUMBER
+    }
+  }
+  return {
+    v: text,
+    t: CellValueType.STRING
+  }
+}
+
+function buildTextCellValue(value) {
+  return {
+    v: String(value ?? ''),
+    t: CellValueType.STRING
+  }
+}
+
+function isPlainNumericId(value) {
+  return /^(0|[1-9]\d*)$/.test(String(value || '').trim())
+}
+
 function classStyleId(className) {
   const normalized = String(className || 'unset').replace(/[^\w\u4e00-\u9fa5-]/g, '_')
   return `class_${normalized}`
@@ -888,6 +1098,37 @@ function columnToName(index) {
     0 14px 30px rgba(8, 47, 73, 0.16),
     0 0 0 1px rgba(255, 255, 255, 0.7) inset;
   transform: translateZ(0);
+}
+
+.sheet-internal-move-tip {
+  position: absolute;
+  z-index: 9;
+  pointer-events: none;
+  display: grid;
+  gap: 2px;
+  min-width: 126px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.9));
+  color: #e2e8f0;
+  box-shadow:
+    0 16px 34px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+
+.sheet-internal-move-tip span {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.sheet-internal-move-tip strong {
+  color: #7dd3fc;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  font-size: 15px;
+  letter-spacing: 0.04em;
 }
 
 @media (max-width: 900px) {

@@ -1,20 +1,8 @@
 import { computed, ref } from 'vue'
 import { getClassColors } from '@/api/guild/classColor'
+import defaultGuildClassColorConfig from '@/assets/data/guild-class-colors-default.json'
 
-export const DEFAULT_GUILD_CLASS_COLORS = [
-  { class_name: '九灵', bg_color: '#e100ff', text_color: '#000000' },
-  { class_name: '沧澜', bg_color: '#009dff', text_color: '#000000' },
-  { class_name: '潮光', bg_color: '#0073ff', text_color: '#000000' },
-  { class_name: '玄机', bg_color: '#ddff00', text_color: '#000000' },
-  { class_name: '碎梦', bg_color: '#00ffe5', text_color: '#000000' },
-  { class_name: '神相', bg_color: '#002fff', text_color: '#000000' },
-  { class_name: '素问', bg_color: '#ea00ff', text_color: '#000000' },
-  { class_name: '血河', bg_color: '#ff0000', text_color: '#000000' },
-  { class_name: '铁衣', bg_color: '#ff8c00', text_color: '#000000' },
-  { class_name: '鸿音', bg_color: '#ff7b00', text_color: '#000000' },
-  { class_name: '龙吟', bg_color: '#00f846', text_color: '#000000' },
-  { class_name: '刺客', bg_color: '#FFFFFF', text_color: '#000000' }
-]
+export const DEFAULT_GUILD_CLASS_COLORS = defaultGuildClassColorConfig.colors || []
 
 const defaultClassColorMap = buildClassColorMap(DEFAULT_GUILD_CLASS_COLORS, false)
 const classColorMap = ref({ ...defaultClassColorMap })

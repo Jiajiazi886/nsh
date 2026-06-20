@@ -1,17 +1,25 @@
-DEFAULT_GUILD_CLASS_COLORS = [
-    {'class_name': '九灵', 'bg_color': '#e100ff', 'text_color': '#000000'},
-    {'class_name': '沧澜', 'bg_color': '#009dff', 'text_color': '#000000'},
-    {'class_name': '潮光', 'bg_color': '#0073ff', 'text_color': '#000000'},
-    {'class_name': '玄机', 'bg_color': '#ddff00', 'text_color': '#000000'},
-    {'class_name': '碎梦', 'bg_color': '#00ffe5', 'text_color': '#000000'},
-    {'class_name': '神相', 'bg_color': '#002fff', 'text_color': '#000000'},
-    {'class_name': '素问', 'bg_color': '#ea00ff', 'text_color': '#000000'},
-    {'class_name': '血河', 'bg_color': '#ff0000', 'text_color': '#000000'},
-    {'class_name': '铁衣', 'bg_color': '#ff8c00', 'text_color': '#000000'},
-    {'class_name': '鸿音', 'bg_color': '#ff7b00', 'text_color': '#000000'},
-    {'class_name': '龙吟', 'bg_color': '#00f846', 'text_color': '#000000'},
-    {'class_name': '刺客', 'bg_color': '#FFFFFF', 'text_color': '#000000'},
-]
+import json
+from pathlib import Path
+
+_DEFAULT_CONFIG_PATH = Path(__file__).with_suffix('.json')
+
+
+def _load_default_class_colors() -> list[dict]:
+    with _DEFAULT_CONFIG_PATH.open('r', encoding='utf-8') as file:
+        payload = json.load(file)
+    colors = payload.get('colors', [])
+    return [
+        {
+            'class_name': str(item.get('class_name', '')),
+            'bg_color': str(item.get('bg_color', '#FFFFFF')),
+            'text_color': str(item.get('text_color', '#000000')),
+        }
+        for item in colors
+        if item.get('class_name')
+    ]
+
+
+DEFAULT_GUILD_CLASS_COLORS = _load_default_class_colors()
 
 DEFAULT_GUILD_CLASS_COLOR_MAP = {
     item['class_name']: item

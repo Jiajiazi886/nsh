@@ -126,6 +126,14 @@ function resolveSpecialView(route) {
     return 'personal/profileEdit/index'
   }
 
+  if (
+    routeName === 'PersonalSkill' ||
+    routeTitle === '内功管理' ||
+    /(^|\/)skill$/.test(routePath)
+  ) {
+    return 'personal/skill/index'
+  }
+
   return view
 }
 

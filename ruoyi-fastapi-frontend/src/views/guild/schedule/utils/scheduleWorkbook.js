@@ -81,6 +81,7 @@ export function getUsedRange(workbook, options = {}) {
   })
 
   if (!Number.isFinite(minRow) || !Number.isFinite(minColumn)) {
+    if (options.emptyFallback === false) return null
     return {
       sheet,
       minRow: 0,
@@ -100,9 +101,18 @@ export function getUsedRange(workbook, options = {}) {
 }
 
 export function buildWorkbookPreviewModel(workbook, options = {}) {
-  const range = getUsedRange(workbook, {
+  return buildWorkbookTableModel(workbook, {
     maxRows: options.maxRows || DEFAULT_PREVIEW_ROW_LIMIT,
-    maxColumns: options.maxColumns || DEFAULT_PREVIEW_COLUMN_LIMIT
+    maxColumns: options.maxColumns || DEFAULT_PREVIEW_COLUMN_LIMIT,
+    emptyFallback: options.emptyFallback ?? true
+  })
+}
+
+export function buildWorkbookTableModel(workbook, options = {}) {
+  const range = getUsedRange(workbook, {
+    maxRows: options.maxRows || DEFAULT_EXPORT_ROW_LIMIT,
+    maxColumns: options.maxColumns || DEFAULT_EXPORT_COLUMN_LIMIT,
+    emptyFallback: options.emptyFallback === true
   })
   if (!range) return null
   const { sheet, minRow, maxRow, minColumn, maxColumn } = range
@@ -147,6 +157,7 @@ export function buildWorkbookPreviewModel(workbook, options = {}) {
     }
     rows.push({
       key: row,
+      label: String(row + 1),
       height: pxFromRowHeight(sheet.rowData?.[row]?.h || sheet.defaultRowHeight || 30),
       cells
     })
@@ -156,11 +167,19 @@ export function buildWorkbookPreviewModel(workbook, options = {}) {
   for (let column = minColumn; column <= maxColumn; column += 1) {
     columns.push({
       key: column,
+      label: columnToName(column),
       width: pxFromColumnWidth(sheet.columnData?.[column]?.w || sheet.defaultColumnWidth || 120)
     })
   }
 
-  return { rows, columns }
+  return {
+    rows,
+    columns,
+    sheetName: sheet.name || '约战排表',
+    range: { minRow, maxRow, minColumn, maxColumn },
+    rowCount: maxRow - minRow + 1,
+    columnCount: maxColumn - minColumn + 1
+  }
 }
 
 export async function exportScheduleWorkbook(workbook, filename = '约战排表.xlsx') {
@@ -286,4 +305,15 @@ function pxFromRowHeight(value) {
 
 function cellKey(row, column) {
   return `${row}:${column}`
+}
+
+function columnToName(index) {
+  let value = index + 1
+  let name = ''
+  while (value > 0) {
+    const remainder = (value - 1) % 26
+    name = String.fromCharCode(65 + remainder) + name
+    value = Math.floor((value - 1) / 26)
+  }
+  return name
 }

@@ -168,7 +168,7 @@
     <el-dialog
       v-model="historyVisible"
       title="历史查询"
-      width="1120px"
+      width="92vw"
       append-to-body
     >
       <div class="history-layout">
@@ -203,50 +203,40 @@
                 <el-button type="primary" @click="useHistoryConfiguration">应用配置</el-button>
               </div>
             </div>
-            <ScheduleWorkbookPreview
-              :workbook="historyWorkbook"
-              @preview-ready="previewImageUrl = $event"
-              @preview-click="openPreviewImage"
-            />
-            <section
-              v-for="team in historyPreview.teams"
-              :key="team.team_id"
-              class="preview-team"
-            >
-              <strong>{{ team.team_name }}</strong>
-              <div
-                v-for="squad in team.squads"
-                :key="squad.squad_id"
-                class="preview-squad"
+            <ScheduleWorkbookTable :workbook="historyWorkbook" />
+            <div v-if="historyPreview.teams?.length" class="preview-summary">
+              <div class="preview-summary-title">结构化排表摘要</div>
+              <section
+                v-for="team in historyPreview.teams"
+                :key="team.team_id"
+                class="preview-team"
               >
-                <span>{{ squad.squad_name }}: {{ squad.members.length }} / {{ squad.max_members }}</span>
-                <div class="preview-members">
-                  <span
-                    v-for="member in squad.members"
-                    :key="member.assignment_id || member.member_id"
-                    class="preview-chip"
-                    :style="getClassStyle(member.player_class)"
-                  >
-                    {{ member.player_name }}
-                  </span>
+                <strong>{{ team.team_name }}</strong>
+                <div
+                  v-for="squad in team.squads"
+                  :key="squad.squad_id"
+                  class="preview-squad"
+                >
+                  <span>{{ squad.squad_name }}: {{ squad.members.length }} / {{ squad.max_members }}</span>
+                  <div class="preview-members">
+                    <span
+                      v-for="member in squad.members"
+                      :key="member.assignment_id || member.member_id"
+                      class="preview-chip"
+                      :style="getClassStyle(member.player_class)"
+                    >
+                      {{ member.player_name }}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            </div>
           </template>
           <el-empty v-else description="选择一条历史查看详情" />
         </div>
       </div>
     </el-dialog>
 
-    <el-dialog
-      v-model="previewImageVisible"
-      title="历史排表图片"
-      width="92vw"
-      append-to-body
-      class="history-image-dialog"
-    >
-      <img v-if="previewImageUrl" class="history-large-image" :src="previewImageUrl" alt="历史排表图片" />
-    </el-dialog>
   </div>
 </template>
 
@@ -256,7 +246,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import { getApprovedBattleRegistrationsForSchedule, getBattleLeaveRegistrationsForSchedule } from '@/api/guild/battle'
 import ScheduleUniverSheet from './components/ScheduleUniverSheet.vue'
-import ScheduleWorkbookPreview from './components/ScheduleWorkbookPreview.vue'
+import ScheduleWorkbookTable from './components/ScheduleWorkbookTable.vue'
 import {
   applyScheduleHistory,
   deleteScheduleHistory,
@@ -300,8 +290,6 @@ const historyVisible = ref(false)
 const historyRows = ref([])
 const historyPreview = ref(null)
 const historyWorkbook = ref(null)
-const previewImageUrl = ref('')
-const previewImageVisible = ref(false)
 const tempMemberVisible = ref(false)
 const tempMembers = ref([])
 const tempMemberForm = ref({
@@ -548,7 +536,6 @@ async function openHistory() {
   historyVisible.value = true
   historyPreview.value = null
   historyWorkbook.value = null
-  previewImageUrl.value = ''
   await fetchHistory()
   if (historyRows.value.length) {
     await viewHistory(historyRows.value[0])
@@ -557,7 +544,6 @@ async function openHistory() {
 
 async function viewHistory(item) {
   try {
-    previewImageUrl.value = ''
     const [detailRes, workbookRes] = await Promise.all([
       getScheduleDetail(item.schedule_id),
       getScheduleWorkbook(item.schedule_id)
@@ -587,12 +573,6 @@ async function exportHistoryWorkbook() {
   } catch {
     ElMessage.error('导出历史排表失败')
   }
-}
-
-function openPreviewImage(url) {
-  if (!url) return
-  previewImageUrl.value = url
-  previewImageVisible.value = true
 }
 
 async function useHistoryConfiguration() {
@@ -701,7 +681,6 @@ async function deleteHistory(item) {
     if (historyPreview.value?.schedule_id === item.schedule_id) {
       historyPreview.value = null
       historyWorkbook.value = null
-      previewImageUrl.value = ''
     }
     await fetchHistory()
     if (!historyPreview.value && historyRows.value.length) {
@@ -1049,6 +1028,12 @@ onMounted(fetchData)
   padding: 10px;
 }
 
+.history-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .history-item {
   padding: 9px;
   border-radius: 4px;
@@ -1121,13 +1106,17 @@ onMounted(fetchData)
   padding: 10px 0;
 }
 
-.history-large-image {
-  width: 100%;
-  max-height: 78vh;
-  object-fit: contain;
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+.preview-summary {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 10px 12px 2px;
+  background: var(--el-fill-color-extra-light);
+}
+
+.preview-summary-title {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .preview-squad {
