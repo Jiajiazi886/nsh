@@ -11,6 +11,10 @@ from exceptions.exception import ServiceException
 from module_guild.entity.vo.schedule_vo import (
     ScheduleAssignmentModel,
     ScheduleHistoryRenameModel,
+    ScheduleRegionAssignmentsModel,
+    ScheduleRegionSquadCreateModel,
+    ScheduleRegionSquadUpdateModel,
+    ScheduleRegionTeamCreateModel,
     ScheduleSnapshotModel,
     ScheduleSquadCreateModel,
     ScheduleTeamCreateModel,
@@ -256,6 +260,88 @@ async def delete_schedule_squad(
         return ResponseUtil.error(msg=e.message)
     except Exception as e:
         logger.error(f'删除排表小队失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@schedule_controller.post(
+    '/region/squad',
+    summary='从表格选区创建小队',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:edit')],
+)
+async def create_region_squad(
+    data: ScheduleRegionSquadCreateModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.create_region_squad_service(query_db, current_user, data)
+        return ResponseUtil.success(data=result, msg='小队创建成功')
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'从表格选区创建小队失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@schedule_controller.put(
+    '/region/squad/{squad_id}',
+    summary='更新表格区域小队',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:edit')],
+)
+async def update_region_squad(
+    squad_id: int,
+    data: ScheduleRegionSquadUpdateModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.update_region_squad_service(query_db, current_user, squad_id, data)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'更新表格区域小队失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@schedule_controller.put(
+    '/region/squad/{squad_id}/assignments',
+    summary='同步表格区域小队成员',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:edit')],
+)
+async def sync_region_squad_assignments(
+    squad_id: int,
+    data: ScheduleRegionAssignmentsModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.sync_region_squad_assignments_service(query_db, current_user, squad_id, data)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'同步表格区域小队成员失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@schedule_controller.post(
+    '/region/team',
+    summary='从小队创建团队',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:edit')],
+)
+async def create_region_team(
+    data: ScheduleRegionTeamCreateModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.create_region_team_service(query_db, current_user, data)
+        return ResponseUtil.success(data=result, msg='团队创建成功')
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'从小队创建团队失败: {str(e)}')
         return ResponseUtil.error(msg=str(e))
 
 

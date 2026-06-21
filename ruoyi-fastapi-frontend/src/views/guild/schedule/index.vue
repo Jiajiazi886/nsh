@@ -104,9 +104,11 @@
         <div class="panel-header">
           <div>
             <h3>约战排表</h3>
-            <span>团队和小队会保存到数据库，每个小队最多 6 人</span>
+            <span>选中表格区域即可创建小队，团队/小队会同步给数据分析使用</span>
           </div>
           <div class="schedule-actions">
+            <el-button type="primary" plain @click="createSquadFromSelection">创建小队</el-button>
+            <el-button type="success" plain @click="createTeamFromSquads">创建团队</el-button>
             <el-button @click="exportCurrentSchedule">导出 Excel</el-button>
             <el-button @click="saveHistorySnapshot">保存历史</el-button>
             <el-button @click="openHistory">历史查询</el-button>
@@ -122,6 +124,7 @@
           @assign-member="handleSheetAssignMember"
           @workbook-assignments-change="syncWorkbookAssignments"
           @temp-members-change="syncTempMembers"
+          @structure-changed="handleScheduleStructureChanged"
         />
       </section>
     </div>
@@ -514,6 +517,14 @@ async function exportCurrentSchedule() {
   }
 }
 
+function createSquadFromSelection() {
+  scheduleSheetRef.value?.openCreateSquadFromSelection?.()
+}
+
+function createTeamFromSquads() {
+  scheduleSheetRef.value?.openCreateTeamDialog?.()
+}
+
 async function saveHistorySnapshot() {
   const defaultName = `约战排表 ${new Date().toLocaleString()}`
   try {
@@ -640,6 +651,14 @@ function syncTempMembers(list = []) {
     member_id: String(member.member_id),
     is_temporary: true
   }))
+}
+
+async function handleScheduleStructureChanged() {
+  try {
+    await fetchSchedule()
+  } catch {
+    ElMessage.warning('排表结构已保存，但刷新当前结构失败，请手动刷新')
+  }
 }
 
 async function renameHistory(item) {

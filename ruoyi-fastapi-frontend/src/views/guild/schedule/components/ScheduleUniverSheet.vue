@@ -8,6 +8,7 @@
       @pointermove.capture="handleWorkbenchPointerMove"
       @pointerup.capture="handleWorkbenchPointerUp"
       @pointercancel.capture="cancelInternalCellMove"
+      @contextmenu.capture="handleWorkbenchContextMenu"
     >
       <div ref="containerRef" class="univer-host"></div>
 
@@ -44,13 +45,96 @@
         <span>移动 {{ internalCellMove.label }}</span>
         <strong>{{ internalCellMove.targetLabel || '选择目标格' }}</strong>
       </div>
+
+      <div
+        v-if="contextMenu.visible"
+        class="sheet-context-menu"
+        :style="contextMenuStyle"
+        @click.stop
+      >
+        <div class="sheet-context-menu-head">
+          <strong>小队操作</strong>
+          <span>{{ contextMenu.region ? contextMenu.region.squad_name : formatRangeLabel(contextMenu.range) }}</span>
+        </div>
+        <button v-if="contextMenu.region" type="button" @click="editSquadFromContextMenu">
+          <strong>编辑小队</strong>
+          <span>{{ contextMenu.region.squad_name }} · {{ formatRangeLabel(contextMenu.region.range) }}</span>
+        </button>
+        <button v-if="!contextMenu.region" type="button" @click="createSquadFromContextMenu">
+          <strong>创建为小队</strong>
+          <span>{{ formatRangeLabel(contextMenu.range) }}</span>
+        </button>
+        <button v-if="contextMenu.region" type="button" class="danger" @click="deleteSquadFromContextMenu">
+          <strong>删除小队</strong>
+          <span>移除 {{ contextMenu.region.squad_name }} 的结构化区域</span>
+        </button>
+      </div>
     </div>
+
+    <el-dialog
+      v-model="squadDialogVisible"
+      :title="squadForm.mode === 'edit' ? '编辑小队' : '创建小队'"
+      width="420px"
+      append-to-body
+    >
+      <el-form label-width="86px" @submit.prevent>
+        <el-form-item label="选区">
+          <div class="region-range-row">
+            <el-input :model-value="formatRangeLabel(squadForm.range)" disabled />
+            <el-button v-if="squadForm.mode === 'edit'" @click="useActiveRangeForEditing">使用当前选区</el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="小队名称">
+          <el-input v-model.trim="squadForm.squad_name" maxlength="30" placeholder="例如：一队 / 防守一组" />
+        </el-form-item>
+        <el-form-item label="容量">
+          <el-input :model-value="`${squadForm.max_members || 0} 人（按选区格数）`" disabled />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="squadDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="squadSaving" @click="confirmSaveSquad">
+          {{ squadForm.mode === 'edit' ? '保存小队' : '创建小队' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="teamDialogVisible"
+      title="创建团队"
+      width="520px"
+      append-to-body
+    >
+      <el-form label-width="86px" @submit.prevent>
+        <el-form-item label="团队名称">
+          <el-input v-model.trim="teamForm.team_name" maxlength="30" placeholder="例如：一团 / 进攻一团" />
+        </el-form-item>
+        <el-form-item label="选择小队">
+          <el-checkbox-group v-model="teamForm.squad_ids" class="region-squad-checks">
+            <el-checkbox
+              v-for="region in scheduleRegions.squads"
+              :key="region.region_id"
+              :label="region.squad_id"
+            >
+              {{ region.squad_name }} · {{ formatRangeLabel(region.range) }}
+            </el-checkbox>
+          </el-checkbox-group>
+          <div v-if="!scheduleRegions.squads.length" class="region-empty-note">
+            先选中表格区域创建小队，再把小队组成团队。
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="teamDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="teamSaving" @click="confirmCreateTeam">创建团队</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core'
 import UniverPresetSheetsCoreZhCN from '@univerjs/preset-sheets-core/locales/zh-CN'
@@ -64,10 +148,20 @@ import {
   VerticalAlign,
   WrapStrategy
 } from '@univerjs/presets'
-import { getCurrentScheduleWorkbook, saveCurrentScheduleWorkbook } from '@/api/guild/schedule'
+import {
+  createRegionSquad,
+  createRegionTeam,
+  deleteScheduleSquad,
+  getCurrentScheduleWorkbook,
+  saveCurrentScheduleWorkbook,
+  syncRegionSquadAssignments,
+  updateRegionSquad
+} from '@/api/guild/schedule'
 import {
   exportScheduleWorkbook,
+  getScheduleRegionsFromWorkbook,
   getTempMembersFromWorkbook,
+  setScheduleRegionsToWorkbook,
   setTempMembersToWorkbook
 } from '../utils/scheduleWorkbook'
 import '@univerjs/preset-sheets-core/lib/index.css'
@@ -87,7 +181,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['assign-member', 'workbook-assignments-change', 'temp-members-change'])
+const emit = defineEmits(['assign-member', 'workbook-assignments-change', 'temp-members-change', 'structure-changed'])
 
 const LARGE_ROW_COUNT = 2000
 const LARGE_COLUMN_COUNT = 200
@@ -109,16 +203,48 @@ const commandDisposable = shallowRef(null)
 const dragOverDisposable = shallowRef(null)
 const dropDisposable = shallowRef(null)
 const dropHighlightDisposable = shallowRef(null)
+const regionHighlightDisposables = shallowRef([])
 const saveTimer = ref(null)
+const regionAssignmentTimer = ref(null)
 const loadingToken = ref(0)
 const suppressCommandSave = ref(false)
 const lastDragPointer = ref(null)
 const lastUniverDropTarget = ref(null)
 const tempMembers = ref([])
+const scheduleRegions = ref({ squads: [], teams: [] })
 const internalCellMove = ref(null)
+const contextMenu = ref({
+  visible: false,
+  left: 0,
+  top: 0,
+  range: null,
+  region: null
+})
+const squadDialogVisible = ref(false)
+const squadSaving = ref(false)
+const squadForm = ref({
+  mode: 'create',
+  squad_id: null,
+  team_id: null,
+  region_id: null,
+  squad_name: '',
+  max_members: 0,
+  range: null,
+  color: ''
+})
+const teamDialogVisible = ref(false)
+const teamSaving = ref(false)
+const teamForm = ref({
+  team_name: '',
+  squad_ids: []
+})
 
 const teams = computed(() => props.schedule?.teams || [])
 const activeDragMember = computed(() => props.draggingMember)
+const contextMenuStyle = computed(() => ({
+  left: `${contextMenu.value.left}px`,
+  top: `${contextMenu.value.top}px`
+}))
 
 watch(
   () => JSON.stringify(props.schedule || {}),
@@ -137,6 +263,9 @@ onBeforeUnmount(() => {
   if (saveTimer.value) {
     clearTimeout(saveTimer.value)
   }
+  if (regionAssignmentTimer.value) {
+    clearTimeout(regionAssignmentTimer.value)
+  }
 })
 
 defineExpose({
@@ -144,7 +273,9 @@ defineExpose({
   saveWorkbookNow,
   upsertTempMember,
   getWorkbookSnapshot,
-  exportWorkbook
+  exportWorkbook,
+  openCreateSquadFromSelection,
+  openCreateTeamDialog
 })
 
 async function loadWorkbook() {
@@ -156,12 +287,14 @@ async function loadWorkbook() {
     if (token !== loadingToken.value) return
     const remoteWorkbook = res.data?.workbook
     workbookData.value = normalizeWorkbookData(remoteWorkbook || buildDefaultWorkbookData())
+    syncRegionsFromWorkbook(workbookData.value)
     syncTempMembersFromWorkbook(workbookData.value)
     emitWorkbookAssignments()
     await nextTick()
     rebuildWorkbook()
   } catch (error) {
     workbookData.value = buildDefaultWorkbookData()
+    syncRegionsFromWorkbook(workbookData.value)
     syncTempMembersFromWorkbook(workbookData.value)
     emitWorkbookAssignments()
     await nextTick()
@@ -179,6 +312,7 @@ function disposeUniver() {
   dragOverDisposable.value?.dispose?.()
   dropDisposable.value?.dispose?.()
   clearDropHighlight()
+  clearRegionHighlights()
   commandDisposable.value = null
   dragOverDisposable.value = null
   dropDisposable.value = null
@@ -188,6 +322,7 @@ function disposeUniver() {
   univerInstance.value = null
   dropPreviewCell.value = null
   lastUniverDropTarget.value = null
+  hideContextMenu()
   cancelInternalCellMove()
 }
 
@@ -218,11 +353,13 @@ function rebuildWorkbook() {
   commandDisposable.value = univerAPI.addEvent?.(univerAPI.Event.CommandExecuted, () => {
     if (!suppressCommandSave.value) {
       scheduleWorkbookSave()
+      scheduleRegionAssignmentsSync()
     }
   })
   registerUniverDropEvents(univerAPI)
   nextTick(() => {
     suppressCommandSave.value = false
+    renderRegionHighlights()
   })
 }
 
@@ -449,7 +586,7 @@ async function upsertTempMember(member) {
     nextMembers.push(normalized)
   }
   tempMembers.value = nextMembers
-  workbookData.value = normalizeWorkbookData(setTempMembersToWorkbook(getWorkbookSnapshot(), tempMembers.value))
+  workbookData.value = normalizeWorkbookData(applyWorkbookCustomData(getWorkbookSnapshot()))
   emitTempMembers()
   await saveWorkbookNow()
 }
@@ -459,8 +596,23 @@ function syncTempMembersFromWorkbook(workbook) {
   emitTempMembers()
 }
 
+function syncRegionsFromWorkbook(workbook) {
+  const regions = getScheduleRegionsFromWorkbook(workbook)
+  scheduleRegions.value = regions
+  if (hasRegionOverlap(regions.squads)) {
+    ElMessage.warning('当前存在历史遗留的重叠小队区域，请右键编辑或删除其中一个')
+  }
+}
+
 function emitTempMembers() {
   emit('temp-members-change', tempMembers.value.map(member => ({ ...member })))
+}
+
+function applyWorkbookCustomData(workbook) {
+  return setScheduleRegionsToWorkbook(
+    setTempMembersToWorkbook(workbook, tempMembers.value),
+    scheduleRegions.value
+  )
 }
 
 function buildSlotMapFromSchedule() {
@@ -522,6 +674,7 @@ function ensurePlayerStyle(styles, className) {
 }
 
 function handleWorkbenchDragOver(event) {
+  hideContextMenu()
   if (!activeDragMember.value) return
   lastDragPointer.value = {
     clientX: event.clientX,
@@ -539,6 +692,8 @@ function handleWorkbenchDragLeave(event) {
 }
 
 function handleWorkbenchPointerDown(event) {
+  if (event.target?.closest?.('.sheet-context-menu')) return
+  hideContextMenu()
   if (event.button !== 0 || !event.altKey || activeDragMember.value || workbookLoading.value) return
   const selectedCell = getSelectedMemberCellForMove()
   if (!selectedCell) return
@@ -646,6 +801,7 @@ async function moveMemberCell(source, target, cellData) {
 
   await saveWorkbookNow()
   emitWorkbookAssignments()
+  scheduleRegionAssignmentsSync(0)
 
   const slot = systemSlotMap.value[getCellKey(target.row, target.column)]
   if (!cellData?.custom?.is_temporary && slot?.team && slot?.squad) {
@@ -751,6 +907,7 @@ async function placeMemberIntoCell(member, target) {
 
   await saveWorkbookNow()
   emitWorkbookAssignments()
+  scheduleRegionAssignmentsSync(0)
 
   const slot = systemSlotMap.value[getCellKey(target.row, target.column)]
   if (!member.is_temporary && slot?.team && slot?.squad) {
@@ -831,6 +988,455 @@ function clearDropPreview() {
   clearDropHighlight()
 }
 
+function handleWorkbenchContextMenu(event) {
+  const range = getActiveRangeBounds()
+  if (!range) return
+  const workbenchRect = containerRef.value?.parentElement?.getBoundingClientRect()
+  if (!workbenchRect) return
+  const region = findFirstIntersectingRegion(range)
+  const x = event.clientX - workbenchRect.left
+  const y = event.clientY - workbenchRect.top
+  const panelWidth = 208
+  const panelHeight = region ? 138 : 96
+  const nativeMenuHeight = 346
+  const left = Math.min(Math.max(8, x), Math.max(8, workbenchRect.width - panelWidth - 8))
+  const belowNativeMenuTop = y + nativeMenuHeight
+  const top = belowNativeMenuTop + panelHeight <= workbenchRect.height - 8
+    ? belowNativeMenuTop
+    : Math.max(8, y - panelHeight - 10)
+  contextMenu.value = {
+    visible: true,
+    left,
+    top,
+    range,
+    region
+  }
+}
+
+function hideContextMenu() {
+  contextMenu.value = {
+    visible: false,
+    left: 0,
+    top: 0,
+    range: null,
+    region: null
+  }
+}
+
+function createSquadFromContextMenu() {
+  const range = contextMenu.value.range
+  hideContextMenu()
+  openCreateSquadFromSelection(range)
+}
+
+function editSquadFromContextMenu() {
+  const region = contextMenu.value.region
+  hideContextMenu()
+  if (region) openEditSquadDialog(region)
+}
+
+function deleteSquadFromContextMenu() {
+  const region = contextMenu.value.region
+  hideContextMenu()
+  if (region) deleteRegionSquad(region)
+}
+
+function openCreateSquadFromSelection(explicitRange = null) {
+  const range = explicitRange || getActiveRangeBounds()
+  if (!range) {
+    ElMessage.warning('请先在表格中选中一块区域')
+    return
+  }
+  const overlap = findFirstIntersectingRegion(range)
+  if (overlap) {
+    ElMessage.warning(`选区和「${overlap.squad_name}」重叠，请换一块不重叠的区域`)
+    return
+  }
+  squadForm.value = {
+    mode: 'create',
+    squad_id: null,
+    team_id: null,
+    region_id: null,
+    squad_name: `小队${scheduleRegions.value.squads.length + 1}`,
+    max_members: getRangeCellCount(range),
+    range,
+    color: getRegionColor(scheduleRegions.value.squads.length)
+  }
+  squadDialogVisible.value = true
+}
+
+function openEditSquadDialog(region) {
+  squadForm.value = {
+    mode: 'edit',
+    squad_id: Number(region.squad_id),
+    team_id: Number(region.team_id || 0),
+    region_id: region.region_id,
+    squad_name: region.squad_name || '',
+    max_members: getRangeCellCount(region.range),
+    range: { ...region.range },
+    color: region.color || getRegionColor(scheduleRegions.value.squads.length)
+  }
+  squadDialogVisible.value = true
+}
+
+function useActiveRangeForEditing() {
+  const range = getActiveRangeBounds()
+  if (!range) {
+    ElMessage.warning('请先在表格中选中新的小队区域')
+    return
+  }
+  const overlap = findFirstIntersectingRegion(range, squadForm.value.region_id)
+  if (overlap) {
+    ElMessage.warning(`选区和「${overlap.squad_name}」重叠，不能保存`)
+    return
+  }
+  squadForm.value = {
+    ...squadForm.value,
+    range,
+    max_members: getRangeCellCount(range)
+  }
+}
+
+async function confirmSaveSquad() {
+  const squadName = squadForm.value.squad_name.trim()
+  if (!squadName) {
+    ElMessage.warning('请输入小队名称')
+    return
+  }
+  const range = squadForm.value.range
+  if (!range) {
+    ElMessage.warning('请先选择小队区域')
+    return
+  }
+  const overlap = findFirstIntersectingRegion(range, squadForm.value.mode === 'edit' ? squadForm.value.region_id : null)
+  if (overlap) {
+    ElMessage.warning(`选区和「${overlap.squad_name}」重叠，不能保存`)
+    return
+  }
+  squadSaving.value = true
+  try {
+    if (squadForm.value.mode === 'edit') {
+      await updateRegionSquad(squadForm.value.squad_id, {
+        squad_name: squadName,
+        max_members: getRangeCellCount(range)
+      })
+      scheduleRegions.value = {
+        ...scheduleRegions.value,
+        squads: scheduleRegions.value.squads.map(region => (
+          region.region_id === squadForm.value.region_id
+            ? {
+                ...region,
+                squad_name: squadName,
+                max_members: getRangeCellCount(range),
+                range: { ...range }
+              }
+            : region
+        ))
+      }
+      await saveWorkbookNow()
+      renderRegionHighlights()
+      await syncRegionAssignments()
+      emit('structure-changed')
+      squadDialogVisible.value = false
+      ElMessage.success('小队已更新')
+      return
+    }
+
+    const res = await createRegionSquad({
+      squad_name: squadName,
+      max_members: getRangeCellCount(range),
+      range
+    })
+    const data = res.data || {}
+    scheduleRegions.value = {
+      ...scheduleRegions.value,
+      squads: [
+        ...scheduleRegions.value.squads,
+        {
+          region_id: `squad-${data.squad_id || Date.now()}`,
+          squad_id: Number(data.squad_id),
+          squad_name: data.squad_name || squadName,
+          team_id: Number(data.team_id || 0),
+          max_members: Number(data.max_members || getRangeCellCount(range)),
+          color: squadForm.value.color || getRegionColor(scheduleRegions.value.squads.length),
+          range
+        }
+      ]
+    }
+    await saveWorkbookNow()
+    renderRegionHighlights()
+    await syncRegionAssignments()
+    emit('structure-changed')
+    squadDialogVisible.value = false
+    ElMessage.success('小队已创建')
+  } catch (error) {
+    ElMessage.error(error?.msg || error?.message || '创建小队失败')
+  } finally {
+    squadSaving.value = false
+  }
+}
+
+async function deleteRegionSquad(region) {
+  try {
+    await ElMessageBox.confirm(`确定删除小队「${region.squad_name}」吗？该小队的结构化排表和区域高亮都会移除，表格里的文字不会被清空。`, '删除小队', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+    if (region.team_id && region.squad_id) {
+      await deleteScheduleSquad(region.team_id, region.squad_id)
+    }
+    const squadId = Number(region.squad_id)
+    scheduleRegions.value = {
+      squads: scheduleRegions.value.squads.filter(item => Number(item.squad_id) !== squadId),
+      teams: scheduleRegions.value.teams
+        .map(team => ({
+          ...team,
+          squad_ids: (team.squad_ids || []).filter(id => Number(id) !== squadId)
+        }))
+        .filter(team => team.squad_ids.length)
+    }
+    await saveWorkbookNow()
+    renderRegionHighlights()
+    emit('structure-changed')
+    ElMessage.success('小队已删除')
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error?.msg || error?.message || '删除小队失败')
+    }
+  }
+}
+
+function openCreateTeamDialog() {
+  if (!scheduleRegions.value.squads.length) {
+    ElMessage.warning('请先创建小队')
+    return
+  }
+  teamForm.value = {
+    team_name: `团队${scheduleRegions.value.teams.length + 1}`,
+    squad_ids: []
+  }
+  teamDialogVisible.value = true
+}
+
+async function confirmCreateTeam() {
+  const teamName = teamForm.value.team_name.trim()
+  if (!teamName) {
+    ElMessage.warning('请输入团队名称')
+    return
+  }
+  if (!teamForm.value.squad_ids.length) {
+    ElMessage.warning('请选择小队')
+    return
+  }
+  teamSaving.value = true
+  try {
+    const res = await createRegionTeam({
+      team_name: teamName,
+      squad_ids: teamForm.value.squad_ids
+    })
+    const data = res.data || {}
+    const teamId = Number(data.team_id)
+    const squadIds = (data.squad_ids || teamForm.value.squad_ids).map(Number)
+    scheduleRegions.value = {
+      squads: scheduleRegions.value.squads.map(region => (
+        squadIds.includes(Number(region.squad_id))
+          ? { ...region, team_id: teamId }
+          : region
+      )),
+      teams: [
+        ...scheduleRegions.value.teams
+          .filter(team => Number(team.team_id) !== teamId)
+          .map(team => ({
+            ...team,
+            squad_ids: (team.squad_ids || []).filter(squadId => !squadIds.includes(Number(squadId)))
+          }))
+          .filter(team => team.squad_ids.length),
+        {
+          team_id: teamId,
+          team_name: data.team_name || teamName,
+          squad_ids: squadIds
+        }
+      ]
+    }
+    await saveWorkbookNow()
+    await syncRegionAssignments()
+    emit('structure-changed')
+    teamDialogVisible.value = false
+    ElMessage.success('团队已创建')
+  } catch (error) {
+    ElMessage.error(error?.msg || error?.message || '创建团队失败')
+  } finally {
+    teamSaving.value = false
+  }
+}
+
+function getActiveRangeBounds() {
+  const workbook = univerAPIInstance.value?.getActiveWorkbook?.()
+  const activeRange = workbook?.getActiveRange?.()
+  const range = activeRange?.getRange?.()
+  if (range) {
+    const startRow = Number(range.startRow)
+    const endRow = Number(range.endRow)
+    const startColumn = Number(range.startColumn)
+    const endColumn = Number(range.endColumn)
+    if (![startRow, endRow, startColumn, endColumn].some(value => !Number.isInteger(value))) {
+      return normalizeRange({ startRow, endRow, startColumn, endColumn })
+    }
+  }
+  const activeCell = workbook?.getActiveCell?.()
+  const row = Number(activeCell?.getRow?.())
+  const column = Number(activeCell?.getColumn?.())
+  if (!Number.isInteger(row) || !Number.isInteger(column)) return null
+  return normalizeRange({ startRow: row, endRow: row, startColumn: column, endColumn: column })
+}
+
+function normalizeRange(range) {
+  return {
+    start_row: Math.min(Number(range.startRow ?? range.start_row), Number(range.endRow ?? range.end_row)),
+    end_row: Math.max(Number(range.startRow ?? range.start_row), Number(range.endRow ?? range.end_row)),
+    start_column: Math.min(Number(range.startColumn ?? range.start_column), Number(range.endColumn ?? range.end_column)),
+    end_column: Math.max(Number(range.startColumn ?? range.start_column), Number(range.endColumn ?? range.end_column))
+  }
+}
+
+function getRangeCellCount(range) {
+  if (!range) return 0
+  return (range.end_row - range.start_row + 1) * (range.end_column - range.start_column + 1)
+}
+
+function findFirstIntersectingRegion(range, ignoredRegionId = null) {
+  return scheduleRegions.value.squads.find(region => (
+    region.region_id !== ignoredRegionId && rangesIntersect(region.range, range)
+  )) || null
+}
+
+function rangesIntersect(left, right) {
+  if (!left || !right) return false
+  return !(
+    left.end_row < right.start_row
+    || left.start_row > right.end_row
+    || left.end_column < right.start_column
+    || left.start_column > right.end_column
+  )
+}
+
+function hasRegionOverlap(regions = []) {
+  for (let index = 0; index < regions.length; index += 1) {
+    for (let nextIndex = index + 1; nextIndex < regions.length; nextIndex += 1) {
+      if (rangesIntersect(regions[index].range, regions[nextIndex].range)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function formatRangeLabel(range) {
+  if (!range) return '未选择'
+  const start = formatCellPosition({ row: range.start_row, column: range.start_column })
+  const end = formatCellPosition({ row: range.end_row, column: range.end_column })
+  return start === end ? start : `${start}:${end}`
+}
+
+function getRegionColor(index) {
+  const colors = ['#0ea5e9', '#f97316', '#22c55e', '#a855f7', '#ef4444', '#14b8a6']
+  return colors[index % colors.length]
+}
+
+function renderRegionHighlights() {
+  clearRegionHighlights()
+  const worksheet = getActiveWorksheet()
+  if (!worksheet?.highlightRanges) return
+  regionHighlightDisposables.value = scheduleRegions.value.squads
+    .map((region) => {
+      const range = getWorksheetRange(worksheet, region.range)
+      if (!range) return null
+      return worksheet.highlightRanges(
+        [range],
+        {
+          stroke: region.color || '#0ea5e9',
+          strokeWidth: 3,
+          fill: colorToTransparent(region.color || '#0ea5e9', 0.08),
+          rowHeaderFill: colorToTransparent(region.color || '#0ea5e9', 0.14),
+          columnHeaderFill: colorToTransparent(region.color || '#0ea5e9', 0.14),
+          widgets: {}
+        }
+      )
+    })
+    .filter(Boolean)
+}
+
+function clearRegionHighlights() {
+  regionHighlightDisposables.value.forEach(disposable => disposable?.dispose?.())
+  regionHighlightDisposables.value = []
+}
+
+function getWorksheetRange(worksheet, range) {
+  try {
+    return worksheet.getRange?.(
+      range.start_row,
+      range.start_column,
+      range.end_row - range.start_row + 1,
+      range.end_column - range.start_column + 1
+    )
+  } catch {
+    return worksheet.getRange?.(range.start_row, range.start_column)
+  }
+}
+
+function colorToTransparent(color, alpha) {
+  const hex = String(color || '#0ea5e9').replace('#', '')
+  if (hex.length !== 6) return `rgba(14, 165, 233, ${alpha})`
+  const red = parseInt(hex.slice(0, 2), 16)
+  const green = parseInt(hex.slice(2, 4), 16)
+  const blue = parseInt(hex.slice(4, 6), 16)
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
+function scheduleRegionAssignmentsSync(delay = 800) {
+  if (regionAssignmentTimer.value) {
+    clearTimeout(regionAssignmentTimer.value)
+  }
+  regionAssignmentTimer.value = setTimeout(() => {
+    syncRegionAssignments().catch(() => {
+      ElMessage.warning('小队区域成员同步失败，请稍后重试')
+    })
+  }, delay)
+}
+
+async function syncRegionAssignments() {
+  if (!scheduleRegions.value.squads.length) return
+  const workbook = getWorkbookSnapshot()
+  const sheetId = workbook?.sheetOrder?.[0] || Object.keys(workbook?.sheets || {})[0]
+  const sheet = sheetId ? workbook?.sheets?.[sheetId] : null
+  if (!sheet) return
+  for (const region of scheduleRegions.value.squads) {
+    if (!region.squad_id) continue
+    const members = extractRegionMembers(sheet, region.range)
+    await syncRegionSquadAssignments(region.squad_id, { members })
+  }
+  emit('structure-changed')
+}
+
+function extractRegionMembers(sheet, range) {
+  const members = []
+  const seen = new Set()
+  for (let row = range.start_row; row <= range.end_row; row += 1) {
+    for (let column = range.start_column; column <= range.end_column; column += 1) {
+      const cell = sheet.cellData?.[row]?.[column]
+      const memberId = Number(cell?.custom?.member_id)
+      if (!Number.isFinite(memberId) || cell?.custom?.is_temporary || seen.has(memberId)) continue
+      seen.add(memberId)
+      members.push({
+        member_id: memberId,
+        order_num: members.length + 1
+      })
+    }
+  }
+  return members
+}
+
 function getCurrentSheetData(liveSnapshot = false) {
   const workbook = liveSnapshot
     ? normalizeWorkbookData(univerAPIInstance.value?.getActiveWorkbook?.()?.save?.() || workbookData.value)
@@ -882,7 +1488,7 @@ async function saveWorkbookNow() {
   }
   const snapshot = univerAPIInstance.value.getActiveWorkbook?.()?.save?.()
   if (!snapshot) return
-  workbookData.value = normalizeWorkbookData(setTempMembersToWorkbook(snapshot, tempMembers.value))
+  workbookData.value = normalizeWorkbookData(applyWorkbookCustomData(snapshot))
   emitWorkbookAssignments()
   try {
     await saveCurrentScheduleWorkbook(workbookData.value)
@@ -893,7 +1499,7 @@ async function saveWorkbookNow() {
 
 function getWorkbookSnapshot() {
   const snapshot = univerAPIInstance.value?.getActiveWorkbook?.()?.save?.() || workbookData.value || buildDefaultWorkbookData()
-  return normalizeWorkbookData(setTempMembersToWorkbook(snapshot, tempMembers.value))
+  return normalizeWorkbookData(applyWorkbookCustomData(snapshot))
 }
 
 async function exportWorkbook(filename = '约战排表.xlsx', sourceWorkbook = null) {
@@ -1129,6 +1735,157 @@ function columnToName(index) {
   font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
   font-size: 15px;
   letter-spacing: 0.04em;
+}
+
+.sheet-context-menu {
+  position: absolute;
+  z-index: 100000;
+  width: 208px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 0 0 12px 12px;
+  padding: 6px;
+  background:
+    linear-gradient(180deg, rgba(248, 252, 255, 0.99), rgba(234, 244, 255, 0.99));
+  box-shadow:
+    0 18px 34px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+  backdrop-filter: blur(12px);
+}
+
+.sheet-context-menu::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 10px;
+  right: 10px;
+  height: 1px;
+  background: rgba(59, 130, 246, 0.26);
+}
+
+.sheet-context-menu-head {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 3px;
+  margin-bottom: 4px;
+  border-radius: 9px;
+  padding: 7px 9px;
+  background:
+    linear-gradient(135deg, rgba(219, 234, 254, 0.9), rgba(224, 242, 254, 0.82));
+  color: #0f172a;
+}
+
+.sheet-context-menu-head strong {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sheet-context-menu-head span {
+  color: #475569;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.sheet-context-menu button {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 9px;
+  background: transparent;
+  color: #172554;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.sheet-context-menu button + button {
+  margin-top: 4px;
+}
+
+.sheet-context-menu button strong,
+.sheet-context-menu button span {
+  display: block;
+}
+
+.sheet-context-menu button span {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.sheet-context-menu button:hover {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  transform: translateX(2px);
+}
+
+.sheet-context-menu button.danger {
+  color: #991b1b;
+}
+
+.sheet-context-menu button.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.region-range-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  width: 100%;
+}
+
+.region-empty-note {
+  border: 1px dashed rgba(100, 116, 139, 0.34);
+  border-radius: 14px;
+  padding: 18px;
+  background: rgba(248, 250, 252, 0.78);
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
+}
+
+.region-squad-checks {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.region-squad-checks :deep(.el-checkbox) {
+  height: auto;
+  margin-right: 0;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.region-squad-checks :deep(.el-checkbox__label) {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  gap: 12px;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.region-squad-checks :deep(.el-checkbox__label span:last-child) {
+  color: #64748b;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {

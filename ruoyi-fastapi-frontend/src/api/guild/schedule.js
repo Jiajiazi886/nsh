@@ -51,6 +51,38 @@ export function deleteScheduleSquad(teamId, squadId) {
   })
 }
 
+export function createRegionSquad(data) {
+  return request({
+    url: '/guild/schedule/region/squad',
+    method: 'post',
+    data
+  })
+}
+
+export function syncRegionSquadAssignments(squadId, data) {
+  return request({
+    url: `/guild/schedule/region/squad/${squadId}/assignments`,
+    method: 'put',
+    data
+  })
+}
+
+export function updateRegionSquad(squadId, data) {
+  return request({
+    url: `/guild/schedule/region/squad/${squadId}`,
+    method: 'put',
+    data
+  })
+}
+
+export function createRegionTeam(data) {
+  return request({
+    url: '/guild/schedule/region/team',
+    method: 'post',
+    data
+  })
+}
+
 export function saveScheduleAssignment(data) {
   return request({
     url: '/guild/schedule/assignment',

@@ -9,11 +9,17 @@ from module_guild.entity.do.schedule_do import GuildSchedule, GuildScheduleTeam
 from module_guild.entity.vo.schedule_vo import (
     ScheduleAssignmentModel,
     ScheduleHistoryRenameModel,
+    ScheduleRegionAssignmentsModel,
+    ScheduleRegionSquadCreateModel,
+    ScheduleRegionSquadUpdateModel,
+    ScheduleRegionTeamCreateModel,
     ScheduleSnapshotModel,
     ScheduleSquadCreateModel,
     ScheduleTeamCreateModel,
     ScheduleWorkbookModel,
 )
+
+UNASSIGNED_REGION_TEAM_NAME = '未分团'
 
 
 class ScheduleService:
@@ -154,6 +160,140 @@ class ScheduleService:
         })
         await db.commit()
         return CrudResponseModel(is_success=True, message='小队创建成功')
+
+    @classmethod
+    async def create_region_squad_service(
+        cls, db: AsyncSession, current_user, data: ScheduleRegionSquadCreateModel
+    ) -> dict:
+        user_id = current_user.user.user_id
+        schedule = await cls._ensure_active_schedule(db, user_id)
+        squad_name = data.squad_name.strip()
+        if not squad_name:
+            raise ServiceException(message='请输入小队名称')
+
+        region_range = data.range
+        if region_range.end_row < region_range.start_row or region_range.end_column < region_range.start_column:
+            raise ServiceException(message='请选择有效的小队区域')
+        max_members = (
+            (region_range.end_row - region_range.start_row + 1)
+            * (region_range.end_column - region_range.start_column + 1)
+        )
+        if max_members < 1:
+            raise ServiceException(message='请选择有效的小队区域')
+
+        team = await cls._ensure_unassigned_region_team(db, schedule.schedule_id)
+        squad_count = await ScheduleDao.count_squads(db, team.team_id)
+        squad = await ScheduleDao.create_squad(db, {
+            'team_id': team.team_id,
+            'squad_name': squad_name,
+            'max_members': max_members,
+            'order_num': squad_count + 1,
+        })
+        region_payload = region_range.model_dump() if hasattr(region_range, 'model_dump') else region_range.dict()
+        result = {
+            'team_id': team.team_id,
+            'team_name': team.team_name,
+            'squad_id': squad.squad_id,
+            'squad_name': squad.squad_name,
+            'max_members': squad.max_members,
+            'range': region_payload,
+        }
+        await db.commit()
+        return result
+
+    @classmethod
+    async def sync_region_squad_assignments_service(
+        cls, db: AsyncSession, current_user, squad_id: int, data: ScheduleRegionAssignmentsModel
+    ) -> CrudResponseModel:
+        user_id = current_user.user.user_id
+        schedule = await cls._ensure_active_schedule(db, user_id)
+        squad = await cls._get_owned_squad(db, schedule, squad_id)
+        team = await cls._get_owned_team(db, schedule, squad.team_id)
+
+        seen_member_ids: set[int] = set()
+        normalized_members = []
+        for item in data.members:
+            if item.member_id in seen_member_ids:
+                continue
+            seen_member_ids.add(item.member_id)
+            if item.order_num < 1 or item.order_num > squad.max_members:
+                raise ServiceException(message=f'位置必须在 1-{squad.max_members} 之间')
+            member = await ScheduleDao.get_member(db, user_id, item.member_id)
+            if not member:
+                raise ServiceException(message=f'成员 {item.member_id} 不存在')
+            normalized_members.append((item, member))
+
+        if len(normalized_members) > squad.max_members:
+            raise ServiceException(message=f'每个小队最多 {squad.max_members} 人')
+
+        await ScheduleDao.clear_squad_assignments(db, schedule.schedule_id, squad.squad_id)
+        for item, member in normalized_members:
+            await ScheduleDao.upsert_assignment(db, {
+                'schedule_id': schedule.schedule_id,
+                'team_id': team.team_id,
+                'squad_id': squad.squad_id,
+                'member_id': member.member_id,
+                'player_name': member.player_name,
+                'player_class': member.player_class or '',
+                'secondary_class': member.secondary_class or '',
+                'order_num': item.order_num,
+            })
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='小队成员已同步')
+
+    @classmethod
+    async def update_region_squad_service(
+        cls, db: AsyncSession, current_user, squad_id: int, data: ScheduleRegionSquadUpdateModel
+    ) -> CrudResponseModel:
+        user_id = current_user.user.user_id
+        schedule = await cls._ensure_active_schedule(db, user_id)
+        await cls._get_owned_squad(db, schedule, squad_id)
+        squad_name = data.squad_name.strip()
+        if not squad_name:
+            raise ServiceException(message='请输入小队名称')
+        await ScheduleDao.update_squad_region_info(db, squad_id, squad_name, data.max_members)
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='小队已更新')
+
+    @classmethod
+    async def create_region_team_service(
+        cls, db: AsyncSession, current_user, data: ScheduleRegionTeamCreateModel
+    ) -> dict:
+        user_id = current_user.user.user_id
+        schedule = await cls._ensure_active_schedule(db, user_id)
+        team_name = data.team_name.strip()
+        if not team_name:
+            raise ServiceException(message='请输入团队名称')
+        squad_ids = list(dict.fromkeys(data.squad_ids or []))
+        if not squad_ids:
+            raise ServiceException(message='请选择小队')
+
+        teams = await ScheduleDao.list_schedule_teams(db, schedule.schedule_id)
+        if any(team.team_name == team_name for team in teams):
+            raise ServiceException(message=f'团队 {team_name} 已存在')
+
+        owned_squads = []
+        for squad_id in squad_ids:
+            owned_squads.append(await cls._get_owned_squad(db, schedule, squad_id))
+
+        team = await ScheduleDao.create_team(db, {
+            'schedule_id': schedule.schedule_id,
+            'team_name': team_name,
+            'order_num': len(teams) + 1,
+        })
+        team_id = team.team_id
+        response_squad_ids = [squad.squad_id for squad in owned_squads]
+        for index, squad in enumerate(owned_squads, start=1):
+            await ScheduleDao.update_squad_team(db, squad.squad_id, team_id, index)
+            await ScheduleDao.update_assignments_team_by_squad(db, schedule.schedule_id, squad.squad_id, team_id)
+
+        result = {
+            'team_id': team_id,
+            'team_name': team_name,
+            'squad_ids': response_squad_ids,
+        }
+        await db.commit()
+        return result
 
     @classmethod
     async def delete_team_service(cls, db: AsyncSession, current_user, team_id: int) -> CrudResponseModel:
@@ -358,6 +498,28 @@ class ScheduleService:
         if not team or team.schedule_id != schedule.schedule_id:
             raise ServiceException(message='团队不存在')
         return team
+
+    @classmethod
+    async def _get_owned_squad(cls, db: AsyncSession, schedule: GuildSchedule, squad_id: int):
+        squad = await ScheduleDao.get_squad(db, squad_id)
+        if not squad:
+            raise ServiceException(message='小队不存在')
+        team = await ScheduleDao.get_team(db, squad.team_id)
+        if not team or team.schedule_id != schedule.schedule_id:
+            raise ServiceException(message='小队不存在')
+        return squad
+
+    @classmethod
+    async def _ensure_unassigned_region_team(cls, db: AsyncSession, schedule_id: int) -> GuildScheduleTeam:
+        team = await ScheduleDao.get_team_by_name(db, schedule_id, UNASSIGNED_REGION_TEAM_NAME)
+        if team:
+            return team
+        team_count = await ScheduleDao.count_teams(db, schedule_id)
+        return await ScheduleDao.create_team(db, {
+            'schedule_id': schedule_id,
+            'team_name': UNASSIGNED_REGION_TEAM_NAME,
+            'order_num': team_count + 1,
+        })
 
     @classmethod
     async def _build_schedule_detail(cls, db: AsyncSession, user_id: int, schedule_id: int) -> dict:

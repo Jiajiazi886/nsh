@@ -116,9 +116,26 @@ class ScheduleDao:
         return result.scalar_one_or_none()
 
     @classmethod
+    async def get_team_by_name(cls, db: AsyncSession, schedule_id: int, team_name: str) -> GuildScheduleTeam | None:
+        result = await db.execute(
+            select(GuildScheduleTeam).where(
+                GuildScheduleTeam.schedule_id == schedule_id,
+                GuildScheduleTeam.team_name == team_name,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @classmethod
     async def get_squad(cls, db: AsyncSession, squad_id: int) -> GuildScheduleSquad | None:
         result = await db.execute(select(GuildScheduleSquad).where(GuildScheduleSquad.squad_id == squad_id))
         return result.scalar_one_or_none()
+
+    @classmethod
+    async def list_squads_by_ids(cls, db: AsyncSession, squad_ids: list[int]) -> list[GuildScheduleSquad]:
+        if not squad_ids:
+            return []
+        result = await db.execute(select(GuildScheduleSquad).where(GuildScheduleSquad.squad_id.in_(squad_ids)))
+        return result.scalars().all()
 
     @classmethod
     async def count_teams(cls, db: AsyncSession, schedule_id: int) -> int:
@@ -182,6 +199,24 @@ class ScheduleDao:
         return squad
 
     @classmethod
+    async def update_squad_team(cls, db: AsyncSession, squad_id: int, team_id: int, order_num: int) -> None:
+        await db.execute(
+            update(GuildScheduleSquad)
+            .where(GuildScheduleSquad.squad_id == squad_id)
+            .values(team_id=team_id, order_num=order_num)
+        )
+        await db.flush()
+
+    @classmethod
+    async def update_squad_region_info(cls, db: AsyncSession, squad_id: int, squad_name: str, max_members: int) -> None:
+        await db.execute(
+            update(GuildScheduleSquad)
+            .where(GuildScheduleSquad.squad_id == squad_id)
+            .values(squad_name=squad_name, max_members=max_members)
+        )
+        await db.flush()
+
+    @classmethod
     async def delete_team(cls, db: AsyncSession, schedule_id: int, team_id: int) -> None:
         await db.execute(delete(GuildScheduleAssignment).where(GuildScheduleAssignment.team_id == team_id))
         await db.execute(delete(GuildScheduleSquad).where(GuildScheduleSquad.team_id == team_id))
@@ -241,6 +276,28 @@ class ScheduleDao:
                 GuildScheduleAssignment.schedule_id == schedule_id,
                 GuildScheduleAssignment.member_id == member_id,
             )
+        )
+        await db.flush()
+
+    @classmethod
+    async def clear_squad_assignments(cls, db: AsyncSession, schedule_id: int, squad_id: int) -> None:
+        await db.execute(
+            delete(GuildScheduleAssignment).where(
+                GuildScheduleAssignment.schedule_id == schedule_id,
+                GuildScheduleAssignment.squad_id == squad_id,
+            )
+        )
+        await db.flush()
+
+    @classmethod
+    async def update_assignments_team_by_squad(cls, db: AsyncSession, schedule_id: int, squad_id: int, team_id: int) -> None:
+        await db.execute(
+            update(GuildScheduleAssignment)
+            .where(
+                GuildScheduleAssignment.schedule_id == schedule_id,
+                GuildScheduleAssignment.squad_id == squad_id,
+            )
+            .values(team_id=team_id)
         )
         await db.flush()
 

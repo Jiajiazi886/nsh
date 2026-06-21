@@ -45,6 +45,33 @@ export function setTempMembersToWorkbook(workbook, tempMembers = []) {
   return nextWorkbook
 }
 
+export function getScheduleRegionsFromWorkbook(workbook) {
+  const custom = workbook?.custom || {}
+  const regions = custom.guildScheduleRegions || {}
+  return {
+    squads: Array.isArray(regions.squads)
+      ? regions.squads.map(normalizeSquadRegion).filter(Boolean)
+      : [],
+    teams: Array.isArray(regions.teams)
+      ? regions.teams.map(normalizeTeamRegion).filter(Boolean)
+      : []
+  }
+}
+
+export function setScheduleRegionsToWorkbook(workbook, regions = {}) {
+  const nextWorkbook = cloneWorkbook(workbook)
+  const custom = getWorkbookCustom(nextWorkbook)
+  custom.guildScheduleRegions = {
+    squads: Array.isArray(regions.squads)
+      ? regions.squads.map(normalizeSquadRegion).filter(Boolean)
+      : [],
+    teams: Array.isArray(regions.teams)
+      ? regions.teams.map(normalizeTeamRegion).filter(Boolean)
+      : []
+  }
+  return nextWorkbook
+}
+
 export function getUsedRange(workbook, options = {}) {
   const firstSheet = getFirstSheet(workbook)
   if (!firstSheet) return null
@@ -78,6 +105,13 @@ export function getUsedRange(workbook, options = {}) {
     maxRow = Math.max(maxRow, Number(merge.endRow || 0))
     minColumn = Math.min(minColumn, Number(merge.startColumn || 0))
     maxColumn = Math.max(maxColumn, Number(merge.endColumn || 0))
+  })
+
+  getScheduleRegionsFromWorkbook(workbook).squads.forEach((region) => {
+    minRow = Math.min(minRow, region.range.start_row)
+    maxRow = Math.max(maxRow, region.range.end_row)
+    minColumn = Math.min(minColumn, region.range.start_column)
+    maxColumn = Math.max(maxColumn, region.range.end_column)
   })
 
   if (!Number.isFinite(minRow) || !Number.isFinite(minColumn)) {
@@ -187,6 +221,7 @@ export async function exportScheduleWorkbook(workbook, filename = '约战排表.
   if (!range) return
   const { sheet, minRow, maxRow, minColumn, maxColumn } = range
   const styles = workbook?.styles || {}
+  const squadRegions = getScheduleRegionsFromWorkbook(workbook).squads
   const excelWorkbook = new ExcelJS.Workbook()
   const excelSheet = excelWorkbook.addWorksheet(sheet.name || '约战排表')
 
@@ -199,11 +234,12 @@ export async function exportScheduleWorkbook(workbook, filename = '约战排表.
     const excelRow = excelSheet.getRow(row - minRow + 1)
     excelRow.height = excelHeightFromPixels(sheet.rowData?.[row]?.h || sheet.defaultRowHeight || 30)
     for (let column = minColumn; column <= maxColumn; column += 1) {
-      const sourceCell = sheet.cellData?.[row]?.[column]
-      if (!sourceCell) continue
+      const sourceCell = sheet.cellData?.[row]?.[column] || {}
+      const regionBorder = getRegionBorder(row, column, squadRegions)
+      if (!sourceCell.v && !sourceCell.s && !regionBorder) continue
       const excelCell = excelRow.getCell(column - minColumn + 1)
       excelCell.value = sourceCell.v ?? ''
-      applyExcelCellStyle(excelCell, resolveCellStyle(sourceCell, styles))
+      applyExcelCellStyle(excelCell, resolveCellStyle(sourceCell, styles), regionBorder)
     }
   }
 
@@ -235,6 +271,51 @@ function resolveCellStyle(cell, styles) {
   return cell.s
 }
 
+function normalizeSquadRegion(region) {
+  const range = normalizeRegionRange(region?.range)
+  const squadId = Number(region?.squad_id)
+  if (!range || !Number.isFinite(squadId)) return null
+  return {
+    region_id: String(region.region_id || `squad-${squadId}`),
+    squad_id: squadId,
+    squad_name: String(region.squad_name || ''),
+    team_id: Number(region.team_id || 0),
+    max_members: Number(region.max_members || getRegionCellCount(range)),
+    color: String(region.color || '#0ea5e9'),
+    range
+  }
+}
+
+function normalizeTeamRegion(region) {
+  const teamId = Number(region?.team_id)
+  if (!Number.isFinite(teamId)) return null
+  return {
+    team_id: teamId,
+    team_name: String(region.team_name || ''),
+    squad_ids: Array.isArray(region.squad_ids)
+      ? region.squad_ids.map(value => Number(value)).filter(Number.isFinite)
+      : []
+  }
+}
+
+function normalizeRegionRange(range) {
+  const startRow = Number(range?.start_row)
+  const endRow = Number(range?.end_row)
+  const startColumn = Number(range?.start_column)
+  const endColumn = Number(range?.end_column)
+  if ([startRow, endRow, startColumn, endColumn].some(value => !Number.isFinite(value))) return null
+  return {
+    start_row: Math.min(startRow, endRow),
+    end_row: Math.max(startRow, endRow),
+    start_column: Math.min(startColumn, endColumn),
+    end_column: Math.max(startColumn, endColumn)
+  }
+}
+
+function getRegionCellCount(range) {
+  return (range.end_row - range.start_row + 1) * (range.end_column - range.start_column + 1)
+}
+
 function toCssStyle(style) {
   return {
     backgroundColor: normalizeCssColor(style?.bg?.rgb) || '#ffffff',
@@ -246,7 +327,7 @@ function toCssStyle(style) {
   }
 }
 
-function applyExcelCellStyle(excelCell, style) {
+function applyExcelCellStyle(excelCell, style, regionBorder = null) {
   const fillColor = normalizeExcelColor(style?.bg?.rgb)
   const fontColor = normalizeExcelColor(style?.cl?.rgb)
   excelCell.alignment = {
@@ -272,6 +353,38 @@ function applyExcelCellStyle(excelCell, style) {
     bottom: { style: 'thin', color: { argb: 'FFD6DCE8' } },
     right: { style: 'thin', color: { argb: 'FFD6DCE8' } }
   }
+  if (regionBorder) {
+    const color = { argb: normalizeExcelColor(regionBorder.color) || 'FF0EA5E9' }
+    excelCell.border = {
+      ...excelCell.border,
+      ...(regionBorder.top ? { top: { style: 'medium', color } } : {}),
+      ...(regionBorder.left ? { left: { style: 'medium', color } } : {}),
+      ...(regionBorder.bottom ? { bottom: { style: 'medium', color } } : {}),
+      ...(regionBorder.right ? { right: { style: 'medium', color } } : {})
+    }
+  }
+}
+
+function getRegionBorder(row, column, regions = []) {
+  for (const region of regions) {
+    const range = region.range
+    if (
+      row < range.start_row ||
+      row > range.end_row ||
+      column < range.start_column ||
+      column > range.end_column
+    ) {
+      continue
+    }
+    return {
+      color: region.color,
+      top: row === range.start_row,
+      left: column === range.start_column,
+      bottom: row === range.end_row,
+      right: column === range.end_column
+    }
+  }
+  return null
 }
 
 function normalizeCssColor(value) {
