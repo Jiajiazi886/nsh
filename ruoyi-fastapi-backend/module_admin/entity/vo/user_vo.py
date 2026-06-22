@@ -38,6 +38,7 @@ class UserModel(BaseModel):
     avatar: str | None = Field(default=None, description='头像地址')
     password: str | None = Field(default=None, description='密码')
     status: Literal['0', '1'] | None = Field(default=None, description='帐号状态（0正常 1停用）')
+    is_vip: Literal['0', '1'] | None = Field(default='0', description='VIP标识（0非VIP 1VIP）')
     del_flag: Literal['0', '2'] | None = Field(default=None, description='删除标志（0代表存在 2代表删除）')
     login_ip: str | None = Field(default=None, description='最后登录IP')
     login_date: datetime | None = Field(default=None, description='最后登录时间')

@@ -95,6 +95,10 @@ async def add_system_user(
     current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
     role_data_scope_sql: Annotated[ColumnElement, DataScopeDependency(SysDept)],
 ) -> Response:
+    if not UserService.is_admin_role(current_user):
+        if add_user.is_vip == '1':
+            return ResponseUtil.failure(msg='无权修改用户VIP状态')
+        add_user.is_vip = '0'
     if not current_user.user.admin:
         await RoleService.check_role_data_scope_services(
             query_db, ','.join([str(item) for item in add_user.role_ids]), role_data_scope_sql
@@ -129,6 +133,8 @@ async def edit_system_user(
     role_data_scope_sql: Annotated[ColumnElement, DataScopeDependency(SysDept)],
 ) -> Response:
     await UserService.check_user_allowed_services(edit_user)
+    if not UserService.is_admin_role(current_user) and 'is_vip' in edit_user.model_fields_set:
+        return ResponseUtil.failure(msg='无权修改用户VIP状态')
     if not current_user.user.admin:
         await UserService.check_user_data_scope_services(query_db, edit_user.user_id, user_data_scope_sql)
         await RoleService.check_role_data_scope_services(
@@ -136,6 +142,39 @@ async def edit_system_user(
         )
     edit_user.update_by = current_user.user.user_name
     edit_user.update_time = datetime.now()
+    edit_user_result = await UserService.edit_user_services(query_db, edit_user)
+    logger.info(edit_user_result.message)
+
+    return ResponseUtil.success(msg=edit_user_result.message)
+
+
+@user_controller.put(
+    '/changeVip',
+    summary='修改用户VIP状态接口',
+    description='用于修改用户VIP状态',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:user:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_PERMISSION_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def change_system_user_vip(
+    request: Request,
+    change_user: EditUserModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改用户VIP状态')
+    if change_user.user_id is None or change_user.is_vip not in {'0', '1'}:
+        return ResponseUtil.failure(msg='VIP状态参数错误')
+    await UserService.check_user_allowed_services(change_user)
+    edit_user = EditUserModel(
+        userId=change_user.user_id,
+        isVip=change_user.is_vip,
+        updateBy=current_user.user.user_name,
+        updateTime=datetime.now(),
+        type='vip',
+    )
     edit_user_result = await UserService.edit_user_services(query_db, edit_user)
     logger.info(edit_user_result.message)
 

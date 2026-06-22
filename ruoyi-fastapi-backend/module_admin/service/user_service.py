@@ -97,6 +97,13 @@ class UserService:
         for row in rows:
             row['role'] = CamelCaseUtil.transform_result(role_map.get(row.get('userId'), []))
 
+    @staticmethod
+    def is_admin_role(current_user: CurrentUserModel) -> bool:
+        """
+        判断当前用户是否拥有admin角色。
+        """
+        return 'admin' in (current_user.roles or [])
+
     @classmethod
     async def get_register_cleanup_rule_services(
         cls, request: Request, query_db: AsyncSession
@@ -311,7 +318,7 @@ class UserService:
         :param edit_user: 编辑用户字典
         :return: None
         """
-        if page_object.type not in ['status', 'avatar', 'pwd']:
+        if page_object.type not in ['status', 'avatar', 'pwd', 'vip']:
             edit_user.pop('role_ids', None)
             edit_user.pop('role', None)
         else:
@@ -330,7 +337,7 @@ class UserService:
         cls._deal_edit_user(page_object, edit_user)
         user_info = await cls.user_detail_services(query_db, edit_user.get('user_id'))
         if user_info.data and user_info.data.user_id:
-            if page_object.type not in ['status', 'avatar', 'pwd']:
+            if page_object.type not in ['status', 'avatar', 'pwd', 'vip']:
                 if not await cls.check_user_name_unique_services(query_db, page_object):
                     raise ServiceException(message=f'修改用户{page_object.user_name}失败，登录账号已存在')
                 if page_object.phonenumber and not await cls.check_phonenumber_unique_services(query_db, page_object):
@@ -339,7 +346,7 @@ class UserService:
                     raise ServiceException(message=f'修改用户{page_object.user_name}失败，邮箱账号已存在')
             try:
                 await UserDao.edit_user_dao(query_db, edit_user)
-                if page_object.type not in {'status', 'avatar', 'pwd'}:
+                if page_object.type not in {'status', 'avatar', 'pwd', 'vip'}:
                     await UserDao.delete_user_role_dao(query_db, UserRoleModel(userId=page_object.user_id))
                     if page_object.role_ids:
                         for role in page_object.role_ids:

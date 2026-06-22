@@ -9,7 +9,8 @@ INSERT INTO sys_menu (
   (3000, '个人管理', 0, 5, 'personal', 'Layout', '', '', 1, 0, 'M', '0', '0', '', 'user', 'admin', NOW(), '', NULL, '个人管理目录'),
   (3001, '加入帮会', 3000, 1, 'join', 'personal/coming-soon/index', '', '', 1, 0, 'C', '0', '0', 'personal:join:list', 'people', 'admin', NOW(), '', NULL, '加入帮会占位菜单'),
   (3002, '内功管理', 3000, 2, 'skill', 'personal/coming-soon/index', '', '', 1, 0, 'C', '0', '0', 'personal:skill:list', 'skill', 'admin', NOW(), '', NULL, '内功管理占位菜单'),
-  (3003, '个人信息编辑', 3000, 3, 'profile-edit', 'personal/coming-soon/index', '', '', 1, 0, 'C', '0', '0', 'personal:profile:edit', 'edit', 'admin', NOW(), '', NULL, '个人信息编辑占位菜单')
+  (3003, '个人信息编辑', 3000, 3, 'profile-edit', 'personal/coming-soon/index', '', '', 1, 0, 'C', '0', '0', 'personal:profile:edit', 'edit', 'admin', NOW(), '', NULL, '个人信息编辑占位菜单'),
+  (3004, '内功数值编辑', 3002, 1, '', '', '', '', 1, 0, 'F', '0', '0', 'personal:skill:value-edit', '#', 'admin', NOW(), '', NULL, '内功管理按钮权限：编辑内功种类与基础增伤')
 ON DUPLICATE KEY UPDATE
   menu_name = VALUES(menu_name),
   parent_id = VALUES(parent_id),
@@ -31,4 +32,5 @@ ON DUPLICATE KEY UPDATE
 
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
   (1, 3000), (1, 3001), (1, 3002), (1, 3003),
+  (1, 3004),
   (2, 3000), (2, 3001), (2, 3002), (2, 3003);

@@ -70,6 +70,19 @@ export function changeUserStatus(userId, status) {
   })
 }
 
+// 用户VIP状态修改
+export function changeUserVip(userId, isVip) {
+  const data = {
+    userId,
+    isVip
+  }
+  return request({
+    url: '/system/user/changeVip',
+    method: 'put',
+    data: data
+  })
+}
+
 // 查询用户个人信息
 export function getUserProfile() {
   return request({

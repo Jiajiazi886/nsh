@@ -135,7 +135,7 @@
           <right-toolbar
             v-model:showSearch="showSearch"
             @queryTable="getList"
-            :columns="columns"
+            :columns="toolbarColumns"
           ></right-toolbar>
         </el-row>
 
@@ -187,6 +187,23 @@
                 </el-tag>
                 <span v-if="!scope.row.role || scope.row.role.length === 0">--</span>
               </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="VIP"
+            align="center"
+            key="isVip"
+            v-if="canManageVip && columns.isVip.visible"
+            width="96"
+          >
+            <template #default="scope">
+              <el-switch
+                v-model="scope.row.isVip"
+                active-value="1"
+                inactive-value="0"
+                :disabled="scope.row.userId === 1"
+                @change="handleVipChange(scope.row)"
+              ></el-switch>
             </template>
           </el-table-column>
           <el-table-column
@@ -379,6 +396,19 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-row v-if="canManageVip">
+          <el-col :span="12">
+            <el-form-item label="VIP">
+              <el-switch
+                v-model="form.isVip"
+                active-value="1"
+                inactive-value="0"
+                active-text="VIP"
+                inactive-text="普通"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-row>
           <el-col :span="24">
             <el-form-item label="备注">
@@ -451,7 +481,9 @@
 
 <script setup name="User">
 import { getToken } from "@/utils/auth";
+import useUserStore from "@/store/modules/user";
 import {
+  changeUserVip,
   changeUserStatus,
   listUser,
   resetUserPwd,
@@ -464,6 +496,7 @@ import {
 } from "@/api/system/user";
 
 const router = useRouter();
+const userStore = useUserStore();
 const { proxy } = getCurrentInstance();
 const { sys_normal_disable, sys_user_sex } = proxy.useDict(
   "sys_normal_disable",
@@ -484,6 +517,7 @@ const initPassword = ref(undefined);
 const roleOptions = ref([]);
 const registerCleanupEnabled = ref(false);
 const registerCleanupLoading = ref(false);
+const canManageVip = computed(() => (userStore.roles || []).includes("admin"));
 const upload = reactive({
   open: false,
   title: "",
@@ -498,8 +532,15 @@ const columns = ref({
   userName: { label: "用户名称", visible: true },
   nickName: { label: "用户昵称", visible: true },
   role: { label: "角色", visible: true },
+  isVip: { label: "VIP", visible: true },
   status: { label: "状态", visible: true },
   createTime: { label: "创建时间", visible: true },
+});
+const toolbarColumns = computed(() => {
+  if (canManageVip.value) {
+    return columns.value;
+  }
+  return Object.fromEntries(Object.entries(columns.value).filter(([key]) => key !== "isVip"));
 });
 
 const data = reactive({
@@ -555,7 +596,10 @@ function getList() {
   listUser(proxy.addDateRange(queryParams.value, dateRange.value)).then(
     (res) => {
       loading.value = false;
-      userList.value = res.rows;
+      userList.value = (res.rows || []).map((item) => ({
+        ...item,
+        isVip: item.isVip || "0",
+      }));
       total.value = res.total;
     }
   );
@@ -626,6 +670,20 @@ function handleStatusChange(row) {
     })
     .catch(function () {
       row.status = row.status === "0" ? "1" : "0";
+    });
+}
+function handleVipChange(row) {
+  const text = row.isVip === "1" ? "设为VIP" : "取消VIP";
+  proxy.$modal
+    .confirm('确认要将"' + row.userName + '"用户' + text + "吗?")
+    .then(function () {
+      return changeUserVip(row.userId, row.isVip);
+    })
+    .then(() => {
+      proxy.$modal.msgSuccess(text + "成功");
+    })
+    .catch(function () {
+      row.isVip = row.isVip === "1" ? "0" : "1";
     });
 }
 function handleCommand(command, row) {
@@ -726,6 +784,7 @@ function reset() {
     email: undefined,
     sex: undefined,
     status: "0",
+    isVip: "0",
     remark: undefined,
     roleIds: [],
   };
@@ -747,6 +806,9 @@ function buildUserPayload() {
   if (form.value.password) {
     payload.password = form.value.password;
   }
+  if (canManageVip.value) {
+    payload.isVip = form.value.isVip === "1" ? "1" : "0";
+  }
   return payload;
 }
 function cancel() {
@@ -760,6 +822,7 @@ function handleAdd() {
     open.value = true;
     title.value = "添加用户";
     form.value.password = initPassword.value;
+    form.value.isVip = "0";
   });
 }
 function handleUpdate(row) {
@@ -769,6 +832,7 @@ function handleUpdate(row) {
     form.value = response.data;
     roleOptions.value = response.roles;
     form.value.roleIds = response.roleIds;
+    form.value.isVip = response.data?.isVip || "0";
     open.value = true;
     title.value = "修改用户";
     form.value.password = undefined;

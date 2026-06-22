@@ -250,6 +250,10 @@ class LoginService:
                 permissions = ['*:*:*']
             else:
                 permissions = [row.perms for row in query_user.get('user_menu_info')]
+            if query_user.get('user_basic_info').is_vip == '1':
+                for vip_permission in ('vip:*:*', 'vip:ad:skip'):
+                    if vip_permission not in permissions:
+                        permissions.append(vip_permission)
             post_ids = ','.join([str(row.post_id) for row in (query_user.get('user_post_info') or [])])
             role_ids = ','.join([str(row.role_id) for row in query_user.get('user_role_info')])
             roles = [row.role_key for row in query_user.get('user_role_info')]

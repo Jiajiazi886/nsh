@@ -31,6 +31,7 @@ class SysUser(Base):
     avatar = Column(String(100), nullable=True, server_default="''", comment='头像地址')
     password = Column(String(100), nullable=True, server_default="''", comment='密码')
     status = Column(CHAR(1), nullable=True, server_default='0', comment='帐号状态（0正常 1停用）')
+    is_vip = Column(CHAR(1), nullable=True, server_default='0', comment='VIP标识（0非VIP 1VIP）')
     del_flag = Column(CHAR(1), nullable=True, server_default='0', comment='删除标志（0代表存在 2代表删除）')
     login_ip = Column(String(128), nullable=True, server_default="''", comment='最后登录IP')
     login_date = Column(DateTime, nullable=True, comment='最后登录时间')

@@ -7,6 +7,7 @@
         <p>先把内功、词条和五行配比管理起来；随机数值与后端同步留给下一轮。</p>
       </div>
       <div class="hero-actions">
+        <el-button v-if="canEditPowerValues" plain @click="openValueEditor">内功数值编辑</el-button>
         <el-button plain @click="resetSamples">重置示例</el-button>
         <el-button type="primary" @click="createPower">新增内功</el-button>
       </div>
@@ -68,6 +69,7 @@
               :value="item.key"
             />
           </el-select>
+          <el-button v-if="canEditPowerValues" plain @click="openValueEditor">内功数值编辑</el-button>
           <el-button plain @click="resetSamples">重置示例</el-button>
           <el-button type="primary" @click="createPower">新增内功</el-button>
         </div>
@@ -84,8 +86,8 @@
           <button class="delete-card" type="button" @click.stop="deletePower(item)">×</button>
           <div class="score-badge">
             <strong>{{ formatBonus(getPowerScore(item)) }}</strong>
-            <span>特性：{{ formatBonus(item.bonusPercent * 0.62) }}</span>
-            <span>词条：{{ formatBonus(item.bonusPercent * 0.38) }}</span>
+            <span>特性：{{ formatBonus(getPowerScore(item) * 0.62) }}</span>
+            <span>词条：{{ formatBonus(getPowerScore(item) * 0.38) }}</span>
           </div>
 
           <div class="card-center">
@@ -157,7 +159,7 @@
                 </el-form-item>
 
                 <el-form-item label="内功种类" prop="category">
-                  <el-select v-model="draft.category" placeholder="请选择种类" style="width: 100%">
+                  <el-select v-model="draft.category" placeholder="请选择种类" style="width: 100%" @change="handleCategoryChange">
                     <el-option
                       v-for="item in categoryOptions"
                       :key="item.value"
@@ -171,7 +173,7 @@
                   <el-input v-model.trim="draft.categoryTrait" maxlength="40" placeholder="例如：偏爆发 / 偏承伤 / 偏恢复" />
                 </el-form-item>
 
-                <el-form-item label="百分比加成" prop="bonusPercent">
+                <el-form-item label="基础百分比增伤" prop="bonusPercent">
                   <div class="bonus-editor">
                     <el-slider v-model="draft.bonusPercent" :min="0" :max="100" :step="0.1" />
                     <el-input-number v-model="draft.bonusPercent" :min="0" :max="100" :precision="1" controls-position="right" />
@@ -281,6 +283,67 @@
         </footer>
       </main>
     </el-drawer>
+
+    <el-dialog
+      v-model="valueEditorVisible"
+      title="内功数值编辑"
+      width="min(1120px, 96vw)"
+      append-to-body
+      class="power-value-dialog"
+    >
+      <div class="value-editor-intro">
+        <div>
+          <strong>新赛年内功种类与基础增伤</strong>
+          <span>这些数值只表示内功本体固定基础增伤，不包含随机词条。当前保存在本机浏览器，后续可迁移到后端。</span>
+        </div>
+        <div class="value-editor-actions">
+          <el-button plain @click="addCatalogRow">新增种类</el-button>
+          <el-button plain @click="resetCatalogDraft">恢复默认</el-button>
+        </div>
+      </div>
+
+      <div class="catalog-table">
+        <div class="catalog-head">
+          <span>内功种类</span>
+          <span>赛年</span>
+          <span>级别</span>
+          <span>推荐元素</span>
+          <span>基础增伤</span>
+          <span>特性</span>
+          <span>操作</span>
+        </div>
+        <div v-for="(item, index) in catalogDraft" :key="item.id" class="catalog-row">
+          <el-input v-model.trim="item.name" placeholder="内功名" />
+          <el-tag effect="plain" type="success">新赛年</el-tag>
+          <el-select v-model="item.rarity" placeholder="级别">
+            <el-option label="稀有" value="rare" />
+            <el-option label="普通" value="common" />
+          </el-select>
+          <el-select v-model="item.primaryElement" placeholder="元素">
+            <el-option label="不限定" value="mixed" />
+            <el-option
+              v-for="element in elementOptions"
+              :key="element.key"
+              :label="element.label"
+              :value="element.key"
+            />
+          </el-select>
+          <el-input-number v-model="item.baseBonus" :min="0" :max="100" :precision="1" controls-position="right" />
+          <el-input v-model.trim="item.trait" placeholder="例如：偏爆发 / 通用增伤" />
+          <el-button text type="danger" @click="removeCatalogRow(index)">删除</el-button>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="value-dialog-footer">
+          <span>保存后，新建内功和切换种类会自动带出基础增伤。</span>
+          <div>
+            <el-button @click="valueEditorVisible = false">取消</el-button>
+            <el-button type="primary" @click="saveCatalogDraft">保存配置</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -288,6 +351,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import useUserStore from '@/store/modules/user'
+import { checkPermi } from '@/utils/permission'
 
 const userStore = useUserStore()
 const formRef = ref(null)
@@ -296,19 +360,15 @@ const selectedId = ref('')
 const draft = ref(null)
 const savedDraftSignature = ref('')
 const editingVisible = ref(false)
+const valueEditorVisible = ref(false)
+const powerCatalog = ref([])
+const catalogDraft = ref([])
 
 const filters = reactive({
   keyword: '',
   category: '',
   element: ''
 })
-
-const categoryOptions = [
-  { label: '攻击', value: '攻击' },
-  { label: '防御', value: '防御' },
-  { label: '治疗', value: '治疗' },
-  { label: '通用', value: '通用' }
-]
 
 const elementOptions = [
   { key: 'metal', label: '金', color: '#c7922e', bg: 'rgba(199, 146, 46, 0.14)' },
@@ -327,6 +387,21 @@ const rules = {
 const storageKey = computed(() => {
   const identity = userStore.id || userStore.name || 'anonymous'
   return `personal-skill:internal-powers:v1:${identity}`
+})
+const catalogStorageKey = 'personal-skill:power-catalog:v1'
+const canEditPowerValues = computed(() => checkPermi(['personal:skill:value-edit']))
+
+const categoryOptions = computed(() => {
+  const options = powerCatalog.value.map(item => ({
+    label: `${item.name} · ${formatBonus(item.baseBonus)}`,
+    value: item.name
+  }))
+  const existingCategories = powers.value
+    .map(item => item.category)
+    .filter(Boolean)
+    .filter(category => !powerCatalog.value.some(item => item.name === category))
+    .map(category => ({ label: `${category} · 自定义`, value: category }))
+  return [...options, ...existingCategories]
 })
 
 const filteredPowers = computed(() => {
@@ -362,7 +437,7 @@ const emptySlots = computed(() => {
 
 const averageBonus = computed(() => {
   if (!powers.value.length) return '0.0'
-  const total = powers.value.reduce((sum, item) => sum + Number(item.bonusPercent || 0), 0)
+  const total = powers.value.reduce((sum, item) => sum + getPowerScore(item), 0)
   return (total / powers.value.length).toFixed(1)
 })
 
@@ -385,17 +460,43 @@ const elementSummaryText = computed(() => {
 watch(powers, persistPowers, { deep: true })
 
 onMounted(() => {
+  loadPowerCatalog()
   loadPowers()
 })
+
+function loadPowerCatalog() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(catalogStorageKey) || '[]')
+    powerCatalog.value = mergePowerCatalog(Array.isArray(stored) ? stored : [])
+  } catch {
+    powerCatalog.value = createDefaultPowerCatalog()
+  }
+}
+
+function persistPowerCatalog() {
+  localStorage.setItem(catalogStorageKey, JSON.stringify(powerCatalog.value))
+}
 
 function loadPowers() {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey.value) || '[]')
-    powers.value = Array.isArray(stored) && stored.length ? stored.map(normalizePower) : createSamplePowers()
+    if (Array.isArray(stored) && stored.length) {
+      const normalized = stored.map(normalizePower)
+      powers.value = isLegacySampleLibrary(normalized) ? createSamplePowers() : normalized
+    } else {
+      powers.value = createSamplePowers()
+    }
   } catch {
     powers.value = createSamplePowers()
   }
   if (!powers.value.length) powers.value = createSamplePowers()
+}
+
+function isLegacySampleLibrary(items = []) {
+  const legacyCategories = new Set(['攻击', '防御', '治疗', '通用'])
+  const hasNewSeasonCategory = items.some(item => powerCatalog.value.some(catalog => catalog.name === item.category))
+  const hasLegacyCategory = items.some(item => legacyCategories.has(item.category))
+  return hasLegacyCategory && !hasNewSeasonCategory
 }
 
 function persistPowers() {
@@ -411,15 +512,16 @@ function selectPower(id) {
 }
 
 function createPower() {
+  const firstCatalog = powerCatalog.value[0] || null
   selectedId.value = ''
   draft.value = normalizePower({
     id: createId(),
-    name: '新内功',
-    category: '通用',
-    categoryTrait: '等待定位',
-    bonusPercent: 0,
+    name: firstCatalog?.name || '新内功',
+    category: firstCatalog?.name || '通用',
+    categoryTrait: firstCatalog?.trait || '等待定位',
+    bonusPercent: firstCatalog?.baseBonus || 0,
     entries: [],
-    elements: { metal: 1, wood: 1, water: 1, fire: 1, earth: 1 },
+    elements: createElementsFromPrimary(firstCatalog?.primaryElement),
     remark: '',
     updatedAt: new Date().toISOString()
   })
@@ -545,6 +647,78 @@ function addEntry() {
   })
 }
 
+function handleCategoryChange(value) {
+  if (!draft.value) return
+  const catalog = getCatalogByName(value)
+  if (!catalog) return
+  if (!draft.value.name || draft.value.name === '新内功' || powerCatalog.value.some(item => item.name === draft.value.name)) {
+    draft.value.name = catalog.name
+  }
+  draft.value.categoryTrait = catalog.trait
+  draft.value.bonusPercent = catalog.baseBonus
+  draft.value.elements = createElementsFromPrimary(catalog.primaryElement)
+}
+
+function openValueEditor() {
+  catalogDraft.value = powerCatalog.value.map(item => ({ ...item }))
+  valueEditorVisible.value = true
+}
+
+function addCatalogRow() {
+  catalogDraft.value.push(normalizeCatalogItem({
+    id: createId(),
+    name: '新内功种类',
+    rarity: 'common',
+    primaryElement: 'mixed',
+    baseBonus: 4,
+    trait: '待配置'
+  }))
+}
+
+function removeCatalogRow(index) {
+  catalogDraft.value.splice(index, 1)
+}
+
+function resetCatalogDraft() {
+  catalogDraft.value = createDefaultPowerCatalog().map(item => ({ ...item }))
+}
+
+function saveCatalogDraft() {
+  const seen = new Set()
+  const nextCatalog = []
+  for (const item of catalogDraft.value) {
+    const normalized = normalizeCatalogItem(item)
+    if (!normalized.name) {
+      ElMessage.warning('内功种类名称不能为空')
+      return
+    }
+    if (seen.has(normalized.name)) {
+      ElMessage.warning(`内功种类「${normalized.name}」重复`)
+      return
+    }
+    seen.add(normalized.name)
+    nextCatalog.push(normalized)
+  }
+  if (!nextCatalog.length) {
+    ElMessage.warning('至少保留一个内功种类')
+    return
+  }
+  powerCatalog.value = nextCatalog
+  powers.value = powers.value.map(power => {
+    const catalog = nextCatalog.find(item => item.name === power.category)
+    if (!catalog) return power
+    return normalizePower({
+      ...power,
+      name: power.name || catalog.name,
+      categoryTrait: catalog.trait,
+      bonusPercent: catalog.baseBonus
+    })
+  })
+  persistPowerCatalog()
+  valueEditorVisible.value = false
+  ElMessage.success('内功数值配置已保存')
+}
+
 function removeEntry(index) {
   draft.value.entries.splice(index, 1)
 }
@@ -571,7 +745,12 @@ function formatElementCounts(elements = {}) {
 }
 
 function getPowerScore(power = {}) {
-  return Number(power.bonusPercent || 0)
+  const catalog = getCatalogByName(power.category)
+  return Number(catalog?.baseBonus ?? power.bonusPercent ?? 0)
+}
+
+function getCatalogByName(name) {
+  return powerCatalog.value.find(item => item.name === name) || null
 }
 
 function changeElement(key, delta) {
@@ -616,6 +795,16 @@ function createEmptyElements() {
   return { metal: 0, wood: 0, water: 0, fire: 0, earth: 0 }
 }
 
+function createElementsFromPrimary(primaryElement = 'mixed') {
+  if (primaryElement && primaryElement !== 'mixed') {
+    return {
+      ...createEmptyElements(),
+      [primaryElement]: 5
+    }
+  }
+  return { metal: 1, wood: 1, water: 1, fire: 1, earth: 1 }
+}
+
 function clonePower(value) {
   return value ? JSON.parse(JSON.stringify(value)) : null
 }
@@ -630,64 +819,73 @@ function createId() {
   return `skill-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function createSamplePowers() {
+function normalizeCatalogItem(value = {}) {
+  return {
+    id: String(value.id || createId()),
+    name: String(value.name || '').trim(),
+    season: 'new',
+    rarity: value.rarity === 'rare' ? 'rare' : 'common',
+    primaryElement: ['metal', 'wood', 'water', 'fire', 'earth', 'mixed'].includes(value.primaryElement)
+      ? value.primaryElement
+      : 'mixed',
+    baseBonus: clampBonus(value.baseBonus),
+    trait: String(value.trait || '').trim() || '待配置'
+  }
+}
+
+function mergePowerCatalog(stored = []) {
+  const storedMap = new Map(stored.map(item => [String(item.name || '').trim(), item]))
+  const defaults = createDefaultPowerCatalog()
+  const merged = defaults.map(item => normalizeCatalogItem({ ...item, ...(storedMap.get(item.name) || {}) }))
+  stored.forEach(item => {
+    const name = String(item.name || '').trim()
+    if (name && !merged.some(defaultItem => defaultItem.name === name)) {
+      merged.push(normalizeCatalogItem(item))
+    }
+  })
+  return merged
+}
+
+function createDefaultPowerCatalog() {
   return [
-    normalizePower({
-      id: 'sample-poxiao',
-      name: '破晓',
-      category: '攻击',
-      categoryTrait: '偏爆发',
-      bonusPercent: 12.8,
-      entries: [
-        { id: 'sample-poxiao-1', name: '会心伤害', value: '待随机' },
-        { id: 'sample-poxiao-2', name: '首领克制', value: '待随机' }
-      ],
-      elements: { metal: 4, wood: 0, water: 0, fire: 1, earth: 0 },
-      remark: '适合需要快速压血线的输出配置。',
-      updatedAt: '2026-06-20T08:00:00.000Z'
-    }),
-    normalizePower({
-      id: 'sample-guixu',
-      name: '归墟',
-      category: '防御',
-      categoryTrait: '偏承伤',
-      bonusPercent: 9.6,
-      entries: [
-        { id: 'sample-guixu-1', name: '承受伤害降低', value: '待随机' },
-        { id: 'sample-guixu-2', name: '护盾效率', value: '待随机' }
-      ],
-      elements: { metal: 0, wood: 1, water: 3, fire: 0, earth: 1 },
-      remark: '给前排或需要抗压的人准备。',
-      updatedAt: '2026-06-20T07:00:00.000Z'
-    }),
-    normalizePower({
-      id: 'sample-changfeng',
-      name: '长风',
-      category: '治疗',
-      categoryTrait: '偏恢复',
-      bonusPercent: 11.2,
-      entries: [
-        { id: 'sample-changfeng-1', name: '治疗值', value: '待随机' },
-        { id: 'sample-changfeng-2', name: '复活冷却', value: '待随机' }
-      ],
-      elements: { metal: 0, wood: 3, water: 2, fire: 0, earth: 0 },
-      remark: '用于治疗向内功池，后续可接自动评分。',
-      updatedAt: '2026-06-20T06:00:00.000Z'
-    }),
-    normalizePower({
-      id: 'sample-xinghe',
-      name: '星河',
-      category: '通用',
-      categoryTrait: '均衡循环',
-      bonusPercent: 7.5,
-      entries: [
-        { id: 'sample-xinghe-1', name: '技能循环', value: '待随机' }
-      ],
-      elements: { metal: 1, wood: 1, water: 1, fire: 1, earth: 1 },
-      remark: '测试五行平均模板。',
-      updatedAt: '2026-06-20T05:00:00.000Z'
-    })
-  ]
+    { id: 'catalog-rare-ry-fire', name: '日月两仪·火', rarity: 'rare', primaryElement: 'fire', baseBonus: 6, trait: '稀有火系基础增伤' },
+    { id: 'catalog-rare-ry-earth', name: '日月两仪·土', rarity: 'rare', primaryElement: 'earth', baseBonus: 6, trait: '稀有土系基础增伤' },
+    { id: 'catalog-rare-jd-metal', name: '绝电惊沙·金', rarity: 'rare', primaryElement: 'metal', baseBonus: 6, trait: '稀有金系基础增伤' },
+    { id: 'catalog-rare-jd-wood', name: '绝电惊沙·木', rarity: 'rare', primaryElement: 'wood', baseBonus: 6, trait: '稀有木系基础增伤' },
+    { id: 'catalog-rare-cy-fire', name: '承影锋烁·火', rarity: 'rare', primaryElement: 'fire', baseBonus: 6, trait: '稀有火系基础增伤' },
+    { id: 'catalog-rare-cy-metal', name: '承影锋烁·金', rarity: 'rare', primaryElement: 'metal', baseBonus: 6, trait: '稀有金系基础增伤' },
+    { id: 'catalog-rare-bd-wood', name: '不动明王·木', rarity: 'rare', primaryElement: 'wood', baseBonus: 6, trait: '稀有木系基础增伤' },
+    { id: 'catalog-rare-bd-water', name: '不动明王·水', rarity: 'rare', primaryElement: 'water', baseBonus: 6, trait: '稀有水系基础增伤' },
+    { id: 'catalog-common-wyy', name: '五韵谣', rarity: 'common', primaryElement: 'mixed', baseBonus: 4, trait: '普通通用基础增伤' },
+    { id: 'catalog-common-wjc', name: '望惊川', rarity: 'common', primaryElement: 'water', baseBonus: 4, trait: '普通水系基础增伤' },
+    { id: 'catalog-common-zm', name: '珠明', rarity: 'common', primaryElement: 'water', baseBonus: 4, trait: '普通水系基础增伤' },
+    { id: 'catalog-common-gx', name: '固玺', rarity: 'common', primaryElement: 'earth', baseBonus: 4, trait: '普通土系基础增伤' },
+    { id: 'catalog-common-yqz', name: '御千嶂', rarity: 'common', primaryElement: 'earth', baseBonus: 4, trait: '普通土系基础增伤' },
+    { id: 'catalog-common-pzy', name: '破重云', rarity: 'common', primaryElement: 'wood', baseBonus: 4, trait: '普通木系基础增伤' },
+    { id: 'catalog-common-lq', name: '凌穹', rarity: 'common', primaryElement: 'wood', baseBonus: 4, trait: '普通木系基础增伤' },
+    { id: 'catalog-common-pf', name: '破釜', rarity: 'common', primaryElement: 'fire', baseBonus: 4, trait: '普通火系基础增伤' },
+    { id: 'catalog-common-gsy', name: '贯山月', rarity: 'common', primaryElement: 'metal', baseBonus: 4, trait: '普通金系基础增伤' },
+    { id: 'catalog-common-zmiao', name: '众妙', rarity: 'common', primaryElement: 'fire', baseBonus: 4, trait: '普通火系基础增伤' },
+    { id: 'catalog-common-cy', name: '炽原', rarity: 'common', primaryElement: 'fire', baseBonus: 4, trait: '普通火系基础增伤' }
+  ].map(normalizeCatalogItem)
+}
+
+function createSamplePowers() {
+  const samples = powerCatalog.value.length ? powerCatalog.value : createDefaultPowerCatalog()
+  return samples.map((item, index) => normalizePower({
+    id: `sample-${item.id}`,
+    name: item.name,
+    category: item.name,
+    categoryTrait: item.trait,
+    bonusPercent: item.baseBonus,
+    entries: [
+      { id: `sample-${item.id}-entry-1`, name: '固定基础', value: formatBonus(item.baseBonus) },
+      { id: `sample-${item.id}-entry-2`, name: '随机词条', value: '待随机' }
+    ],
+    elements: createElementsFromPrimary(item.primaryElement),
+    remark: item.rarity === 'rare' ? '新赛年稀有内功，基础数值可在权限面板调整。' : '新赛年普通内功，基础数值可在权限面板调整。',
+    updatedAt: new Date(Date.UTC(2026, 5, 20, 8, 0, 0) - index * 60000).toISOString()
+  }))
 }
 </script>
 
@@ -1396,6 +1594,106 @@ function createSamplePowers() {
   overflow: auto;
 }
 
+.value-editor-intro {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 12% 16%, rgba(199, 146, 46, 0.13), transparent 28%),
+    linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(239, 246, 255, 0.92));
+}
+
+.value-editor-intro strong,
+.value-editor-intro span {
+  display: block;
+}
+
+.value-editor-intro strong {
+  color: #172033;
+  font-size: 16px;
+}
+
+.value-editor-intro span {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.value-editor-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.catalog-table {
+  display: grid;
+  gap: 8px;
+  max-height: min(62vh, 620px);
+  margin-top: 14px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.catalog-head,
+.catalog-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) 74px 96px 112px 126px minmax(180px, 1fr) 64px;
+  gap: 8px;
+  align-items: center;
+}
+
+.catalog-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #18202d;
+  color: #fff8e8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.catalog-row {
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.value-dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.value-dialog-footer span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.value-dialog-footer > div {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+:deep(.power-value-dialog .el-dialog) {
+  border-radius: 18px;
+}
+
+:deep(.power-value-dialog .el-dialog__body) {
+  padding-top: 10px;
+}
+
 @media (max-width: 1180px) {
   .summary-grid {
     grid-template-columns: 1fr;
@@ -1425,6 +1723,14 @@ function createSamplePowers() {
 
   .element-controls {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .catalog-head {
+    display: none;
+  }
+
+  .catalog-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1545,6 +1851,26 @@ function createSamplePowers() {
   .filters :deep(.el-input),
   .filters :deep(.el-select) {
     width: 100%;
+  }
+
+  .value-editor-intro,
+  .value-dialog-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .value-editor-actions,
+  .value-dialog-footer > div {
+    width: 100%;
+  }
+
+  .value-editor-actions :deep(.el-button),
+  .value-dialog-footer :deep(.el-button) {
+    flex: 1;
+  }
+
+  .catalog-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>
