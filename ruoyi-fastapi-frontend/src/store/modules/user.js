@@ -16,6 +16,11 @@ const useUserStore = defineStore(
       nickName: '',
       avatar: '',
       isVip: '0',
+      isVipEffective: false,
+      vipExpireTime: '',
+      aiImageRecognitionCount: 0,
+      maxInternalPowerCount: 20,
+      effectiveInternalPowerLimit: 20,
       roles: [],
       permissions: []
     }),
@@ -54,6 +59,11 @@ const useUserStore = defineStore(
             this.nickName = user.nickName
             this.avatar = avatar
             this.isVip = user.isVip || '0'
+            this.isVipEffective = !!user.isVipEffective
+            this.vipExpireTime = user.vipExpireTime || ''
+            this.aiImageRecognitionCount = Number(user.aiImageRecognitionCount || 0)
+            this.maxInternalPowerCount = user.maxInternalPowerCount || 20
+            this.effectiveInternalPowerLimit = user.effectiveInternalPowerLimit ?? null
             /* 初始密码提示 */
             if(res.isDefaultModifyPwd) {
               ElMessageBox.confirm('您的密码还是初始密码，请修改密码！',  '安全提示', {  confirmButtonText: '确定',  cancelButtonText: '取消',  type: 'warning' }).then(() => {
@@ -77,9 +87,21 @@ const useUserStore = defineStore(
         return new Promise((resolve, reject) => {
           logout(this.token).then(() => {
             this.token = ''
+            this.id = ''
+            this.name = ''
+            this.nickName = ''
+            this.avatar = ''
             this.isVip = '0'
+            this.isVipEffective = false
+            this.vipExpireTime = ''
+            this.aiImageRecognitionCount = 0
+            this.maxInternalPowerCount = 20
+            this.effectiveInternalPowerLimit = 20
             this.roles = []
             this.permissions = []
+            Object.keys(sessionStorage)
+              .filter(key => key.startsWith('personal-skill:skip-delete-confirm:v1:'))
+              .forEach(key => sessionStorage.removeItem(key))
             useGuildMemberStore().reset()
             removeToken()
             resolve()

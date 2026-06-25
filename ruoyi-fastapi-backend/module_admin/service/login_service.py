@@ -250,7 +250,7 @@ class LoginService:
                 permissions = ['*:*:*']
             else:
                 permissions = [row.perms for row in query_user.get('user_menu_info')]
-            if query_user.get('user_basic_info').is_vip == '1':
+            if UserService.is_effective_vip(query_user.get('user_basic_info')):
                 for vip_permission in ('vip:*:*', 'vip:ad:skip'):
                     if vip_permission not in permissions:
                         permissions.append(vip_permission)
@@ -264,16 +264,19 @@ class LoginService:
                 request, query_user.get('user_basic_info').pwd_update_date
             )
 
+            user_info = UserInfoModel(
+                **CamelCaseUtil.transform_result(query_user.get('user_basic_info')),
+                postIds=post_ids,
+                roleIds=role_ids,
+                dept=CamelCaseUtil.transform_result(query_user.get('user_dept_info')),
+                role=CamelCaseUtil.transform_result(query_user.get('user_role_info')),
+            )
+            UserService.decorate_user_model(user_info, roles)
+
             current_user = CurrentUserModel(
                 permissions=permissions,
                 roles=roles,
-                user=UserInfoModel(
-                    **CamelCaseUtil.transform_result(query_user.get('user_basic_info')),
-                    postIds=post_ids,
-                    roleIds=role_ids,
-                    dept=CamelCaseUtil.transform_result(query_user.get('user_dept_info')),
-                    role=CamelCaseUtil.transform_result(query_user.get('user_role_info')),
-                ),
+                user=user_info,
                 isDefaultModifyPwd=is_default_modify_pwd,
                 isPasswordExpired=is_password_expired,
             )

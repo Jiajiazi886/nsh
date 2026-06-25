@@ -132,6 +132,16 @@
               />
             </div>
           </el-col>
+          <el-col v-if="canManageVip" :span="1.5">
+            <el-button
+              type="primary"
+              plain
+              icon="SetUp"
+              :disabled="multiple"
+              @click="openBatchLimitDialog"
+              v-hasPermi="['system:user:edit']"
+            >批量内功上限</el-button>
+          </el-col>
           <right-toolbar
             v-model:showSearch="showSearch"
             @queryTable="getList"
@@ -194,16 +204,71 @@
             align="center"
             key="isVip"
             v-if="canManageVip && columns.isVip.visible"
-            width="96"
+            min-width="150"
           >
             <template #default="scope">
-              <el-switch
-                v-model="scope.row.isVip"
-                active-value="1"
-                inactive-value="0"
-                :disabled="scope.row.userId === 1"
-                @change="handleVipChange(scope.row)"
-              ></el-switch>
+              <div class="vip-cell">
+                <el-tag :type="getVipTagType(scope.row)" effect="light">
+                  {{ getVipLabel(scope.row) }}
+                </el-tag>
+                <small v-if="scope.row.vipExpireTime">{{ parseTime(scope.row.vipExpireTime) }}</small>
+                <el-button
+                  v-if="scope.row.userId !== 1"
+                  link
+                  type="primary"
+                  @click="openVipDialog(scope.row)"
+                  v-hasPermi="['system:user:edit']"
+                >设置</el-button>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="AI识图次数"
+            align="center"
+            key="aiImageRecognitionCount"
+            v-if="canManageVip && columns.aiImageRecognitionCount.visible"
+            min-width="140"
+          >
+            <template #default="scope">
+              <el-input-number
+                v-model="scope.row.aiImageRecognitionCount"
+                :min="0"
+                :precision="0"
+                :step="1"
+                controls-position="right"
+                size="small"
+                class="inline-limit-input"
+                :disabled="scope.row.userId === 1 || scope.row._aiCountSaving"
+                @change="(value, oldValue) => handleInlineAiCountChange(scope.row, value, oldValue)"
+                v-hasPermi="['system:user:edit']"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="最大内功数"
+            align="center"
+            key="maxInternalPowerCount"
+            v-if="canManageVip && columns.maxInternalPowerCount.visible"
+            min-width="130"
+          >
+            <template #default="scope">
+              <div class="limit-cell">
+                <el-input-number
+                  v-model="scope.row.maxInternalPowerCount"
+                  :min="20"
+                  :precision="0"
+                  :step="1"
+                  controls-position="right"
+                  size="small"
+                  class="inline-limit-input"
+                  :disabled="scope.row.userId === 1 || scope.row._limitSaving"
+                  @change="(value, oldValue) => handleInlineLimitChange(scope.row, value, oldValue)"
+                  v-hasPermi="['system:user:edit']"
+                />
+                <small v-if="scope.row.effectiveInternalPowerLimit == null">
+                  {{ scope.row.isVipEffective ? 'VIP不限' : '管理员不限' }}
+                </small>
+              </div>
             </template>
           </el-table-column>
           <el-table-column
@@ -398,13 +463,22 @@
         </el-row>
         <el-row v-if="canManageVip">
           <el-col :span="12">
-            <el-form-item label="VIP">
-              <el-switch
-                v-model="form.isVip"
-                active-value="1"
-                inactive-value="0"
-                active-text="VIP"
-                inactive-text="普通"
+            <el-form-item label="AI识图次数">
+              <el-input-number
+                v-model="form.aiImageRecognitionCount"
+                :min="0"
+                :precision="0"
+                controls-position="right"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="最大内功数">
+              <el-input-number
+                v-model="form.maxInternalPowerCount"
+                :min="20"
+                :precision="0"
+                controls-position="right"
               />
             </el-form-item>
           </el-col>
@@ -425,6 +499,61 @@
         <div class="dialog-footer">
           <el-button type="primary" @click="submitForm">确 定</el-button>
           <el-button @click="cancel">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="vipDialog.open" title="设置 VIP 授权" width="440px" append-to-body>
+      <el-form label-width="96px">
+        <el-form-item label="用户">
+          <strong>{{ vipDialog.row?.userName }}</strong>
+        </el-form-item>
+        <el-form-item label="授权方式">
+          <el-radio-group v-model="vipDialog.mode" @change="handleVipModeChange">
+            <el-radio-button label="week">一周</el-radio-button>
+            <el-radio-button label="month">一个月</el-radio-button>
+            <el-radio-button label="quarter">三个月</el-radio-button>
+            <el-radio-button label="custom">自定义</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="到期时间">
+          <el-date-picker
+            v-model="vipDialog.expireTime"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="请选择到期时间"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button v-if="vipDialog.row?.isVip === '1'" type="danger" plain @click="cancelVip">取消 VIP</el-button>
+          <el-button @click="vipDialog.open = false">取 消</el-button>
+          <el-button type="primary" @click="submitVipDialog">保存 VIP</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="limitDialog.open" :title="limitDialog.batch ? '批量设置最大内功数' : '设置最大内功数'" width="420px" append-to-body>
+      <el-form label-width="108px">
+        <el-form-item label="目标用户">
+          <span>{{ limitDialog.batch ? `${ids.length} 个用户` : limitDialog.row?.userName }}</span>
+        </el-form-item>
+        <el-form-item label="最大内功数">
+          <el-input-number
+            v-model="limitDialog.maxInternalPowerCount"
+            :min="20"
+            :precision="0"
+            controls-position="right"
+            style="width: 180px"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="limitDialog.open = false">取 消</el-button>
+          <el-button type="primary" @click="submitLimitDialog">确 定</el-button>
         </div>
       </template>
     </el-dialog>
@@ -481,8 +610,12 @@
 
 <script setup name="User">
 import { getToken } from "@/utils/auth";
+import { parseTime } from "@/utils/ruoyi";
 import useUserStore from "@/store/modules/user";
 import {
+  batchInternalPowerLimit,
+  changeAiRecognitionCount,
+  changeInternalPowerLimit,
   changeUserVip,
   changeUserStatus,
   listUser,
@@ -518,6 +651,18 @@ const roleOptions = ref([]);
 const registerCleanupEnabled = ref(false);
 const registerCleanupLoading = ref(false);
 const canManageVip = computed(() => (userStore.roles || []).includes("admin"));
+const vipDialog = reactive({
+  open: false,
+  row: null,
+  mode: "month",
+  expireTime: "",
+});
+const limitDialog = reactive({
+  open: false,
+  batch: false,
+  row: null,
+  maxInternalPowerCount: 20,
+});
 const upload = reactive({
   open: false,
   title: "",
@@ -533,6 +678,8 @@ const columns = ref({
   nickName: { label: "用户昵称", visible: true },
   role: { label: "角色", visible: true },
   isVip: { label: "VIP", visible: true },
+  aiImageRecognitionCount: { label: "AI识图次数", visible: true },
+  maxInternalPowerCount: { label: "最大内功数", visible: true },
   status: { label: "状态", visible: true },
   createTime: { label: "创建时间", visible: true },
 });
@@ -540,7 +687,7 @@ const toolbarColumns = computed(() => {
   if (canManageVip.value) {
     return columns.value;
   }
-  return Object.fromEntries(Object.entries(columns.value).filter(([key]) => key !== "isVip"));
+  return Object.fromEntries(Object.entries(columns.value).filter(([key]) => !["isVip", "aiImageRecognitionCount", "maxInternalPowerCount"].includes(key)));
 });
 
 const data = reactive({
@@ -599,6 +746,10 @@ function getList() {
       userList.value = (res.rows || []).map((item) => ({
         ...item,
         isVip: item.isVip || "0",
+        isVipEffective: !!item.isVipEffective,
+        aiImageRecognitionCount: Number(item.aiImageRecognitionCount || 0),
+        maxInternalPowerCount: item.maxInternalPowerCount || 20,
+        effectiveInternalPowerLimit: item.effectiveInternalPowerLimit,
       }));
       total.value = res.total;
     }
@@ -672,19 +823,107 @@ function handleStatusChange(row) {
       row.status = row.status === "0" ? "1" : "0";
     });
 }
-function handleVipChange(row) {
-  const text = row.isVip === "1" ? "设为VIP" : "取消VIP";
-  proxy.$modal
-    .confirm('确认要将"' + row.userName + '"用户' + text + "吗?")
-    .then(function () {
-      return changeUserVip(row.userId, row.isVip);
-    })
+function getVipLabel(row) {
+  if (row.isVip === "1" && row.isVipEffective) return "VIP有效";
+  if (row.isVip === "1" && row.vipExpireTime) return "已过期";
+  return "普通";
+}
+function getVipTagType(row) {
+  if (row.isVip === "1" && row.isVipEffective) return "warning";
+  if (row.isVip === "1" && row.vipExpireTime) return "danger";
+  return "info";
+}
+function getFutureTime(mode) {
+  const date = new Date();
+  if (mode === "week") date.setDate(date.getDate() + 7);
+  if (mode === "month") date.setMonth(date.getMonth() + 1);
+  if (mode === "quarter") date.setMonth(date.getMonth() + 3);
+  return parseTime(date, "{y}-{m}-{d} {h}:{i}:{s}");
+}
+function openVipDialog(row) {
+  vipDialog.row = row;
+  vipDialog.mode = "month";
+  vipDialog.expireTime = row.vipExpireTime && row.isVipEffective ? row.vipExpireTime : getFutureTime("month");
+  vipDialog.open = true;
+}
+function handleVipModeChange(mode) {
+  if (mode !== "custom") {
+    vipDialog.expireTime = getFutureTime(mode);
+  }
+}
+function submitVipDialog() {
+  if (!vipDialog.row || !vipDialog.expireTime) {
+    proxy.$modal.msgError("请选择VIP到期时间");
+    return;
+  }
+  changeUserVip(vipDialog.row.userId, "1", vipDialog.expireTime).then(() => {
+    proxy.$modal.msgSuccess("VIP授权已更新");
+    vipDialog.open = false;
+    getList();
+  });
+}
+function cancelVip() {
+  if (!vipDialog.row) return;
+  changeUserVip(vipDialog.row.userId, "0", null).then(() => {
+    proxy.$modal.msgSuccess("已取消VIP");
+    vipDialog.open = false;
+    getList();
+  });
+}
+function handleInlineAiCountChange(row, value, oldValue) {
+  const nextValue = Math.max(0, Number(value || 0));
+  const previousValue = Math.max(0, Number(oldValue ?? row.aiImageRecognitionCount ?? 0));
+  if (nextValue === previousValue) {
+    row.aiImageRecognitionCount = nextValue;
+    return;
+  }
+  row.aiImageRecognitionCount = nextValue;
+  row._aiCountSaving = true;
+  changeAiRecognitionCount(row.userId, nextValue)
     .then(() => {
-      proxy.$modal.msgSuccess(text + "成功");
+      proxy.$modal.msgSuccess("AI识图次数已更新");
     })
-    .catch(function () {
-      row.isVip = row.isVip === "1" ? "0" : "1";
+    .catch(() => {
+      row.aiImageRecognitionCount = previousValue;
+    })
+    .finally(() => {
+      row._aiCountSaving = false;
     });
+}
+function openBatchLimitDialog() {
+  limitDialog.open = true;
+  limitDialog.batch = true;
+  limitDialog.row = null;
+  limitDialog.maxInternalPowerCount = 20;
+}
+function handleInlineLimitChange(row, value, oldValue) {
+  const nextValue = Math.max(20, Number(value || 20));
+  const previousValue = Math.max(20, Number(oldValue || row.maxInternalPowerCount || 20));
+  if (nextValue === previousValue) {
+    row.maxInternalPowerCount = nextValue;
+    return;
+  }
+  row.maxInternalPowerCount = nextValue;
+  row._limitSaving = true;
+  changeInternalPowerLimit(row.userId, nextValue)
+    .then(() => {
+      proxy.$modal.msgSuccess("最大内功数已更新");
+      row.effectiveInternalPowerLimit = row.effectiveInternalPowerLimit == null ? null : nextValue;
+    })
+    .catch(() => {
+      row.maxInternalPowerCount = previousValue;
+    })
+    .finally(() => {
+      row._limitSaving = false;
+    });
+}
+function submitLimitDialog() {
+  const maxCount = Math.max(20, Number(limitDialog.maxInternalPowerCount || 20));
+  batchInternalPowerLimit(ids.value, maxCount).then(() => {
+    proxy.$modal.msgSuccess("最大内功数已更新");
+    limitDialog.open = false;
+    getList();
+  });
 }
 function handleCommand(command, row) {
   switch (command) {
@@ -785,6 +1024,8 @@ function reset() {
     sex: undefined,
     status: "0",
     isVip: "0",
+    aiImageRecognitionCount: 0,
+    maxInternalPowerCount: 20,
     remark: undefined,
     roleIds: [],
   };
@@ -808,6 +1049,8 @@ function buildUserPayload() {
   }
   if (canManageVip.value) {
     payload.isVip = form.value.isVip === "1" ? "1" : "0";
+    payload.aiImageRecognitionCount = Math.max(0, Number(form.value.aiImageRecognitionCount || 0));
+    payload.maxInternalPowerCount = Math.max(20, Number(form.value.maxInternalPowerCount || 20));
   }
   return payload;
 }
@@ -823,6 +1066,8 @@ function handleAdd() {
     title.value = "添加用户";
     form.value.password = initPassword.value;
     form.value.isVip = "0";
+    form.value.aiImageRecognitionCount = 0;
+    form.value.maxInternalPowerCount = 20;
   });
 }
 function handleUpdate(row) {
@@ -833,6 +1078,8 @@ function handleUpdate(row) {
     roleOptions.value = response.roles;
     form.value.roleIds = response.roleIds;
     form.value.isVip = response.data?.isVip || "0";
+    form.value.aiImageRecognitionCount = Number(response.data?.aiImageRecognitionCount || 0);
+    form.value.maxInternalPowerCount = response.data?.maxInternalPowerCount || 20;
     open.value = true;
     title.value = "修改用户";
     form.value.password = undefined;
@@ -885,5 +1132,34 @@ onMounted(() => {
   color: var(--el-text-color-regular);
   font-size: 13px;
   white-space: nowrap;
+}
+
+.vip-cell,
+.limit-cell {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.vip-cell small {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.limit-cell strong {
+  color: var(--el-color-primary);
+}
+
+.limit-cell small {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.inline-limit-input {
+  width: 116px;
+}
+
+.inline-limit-input :deep(.el-input__wrapper) {
+  border-radius: 999px;
 }
 </style>

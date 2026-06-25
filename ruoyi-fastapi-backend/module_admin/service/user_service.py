@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 from fastapi import Request, UploadFile
-from sqlalchemy import ColumnElement
+from sqlalchemy import ColumnElement, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.constant import CommonConstant
@@ -15,7 +15,7 @@ from exceptions.exception import ServiceException
 from module_admin.dao.config_dao import ConfigDao
 from module_admin.dao.job_dao import JobDao
 from module_admin.dao.user_dao import UserDao
-from module_admin.entity.do.user_do import SysUserRole
+from module_admin.entity.do.user_do import SysUser, SysUserRole
 from module_admin.entity.vo.config_vo import ConfigModel
 from module_admin.entity.vo.job_vo import JobModel
 from module_admin.entity.vo.user_vo import (
@@ -76,6 +76,7 @@ class UserService:
         if is_page:
             user_rows = [{**row, 'dept': None} for row in query_result.rows]
             await cls._attach_roles_to_user_rows(query_db, user_rows)
+            cls._decorate_user_rows(user_rows)
             user_list_result = PageModel[UserRowModel](
                 **{
                     **query_result.model_dump(by_alias=True),
@@ -87,6 +88,7 @@ class UserService:
             if query_result:
                 user_list_result = [{**row, 'dept': None} for row in query_result]
                 await cls._attach_roles_to_user_rows(query_db, user_list_result)
+                cls._decorate_user_rows(user_list_result)
 
         return user_list_result
 
@@ -103,6 +105,41 @@ class UserService:
         判断当前用户是否拥有admin角色。
         """
         return 'admin' in (current_user.roles or [])
+
+    @staticmethod
+    def is_effective_vip(user: Any) -> bool:
+        """
+        判断用户VIP授权是否仍然有效。
+        """
+        expire_time = getattr(user, 'vip_expire_time', None)
+        return getattr(user, 'is_vip', '0') == '1' and expire_time is not None and expire_time > datetime.now()
+
+    @staticmethod
+    def decorate_user_model(
+        user: UserInfoModel | UserModel, roles: list[str] | None = None
+    ) -> UserInfoModel | UserModel:
+        """
+        补充前端展示用的有效VIP和有效内功额度字段。
+        """
+        is_admin = bool(getattr(user, 'admin', False)) or 'admin' in (roles or [])
+        is_effective_vip = UserService.is_effective_vip(user)
+        user.is_vip_effective = is_effective_vip
+        user.effective_internal_power_limit = None if is_admin or is_effective_vip else max(
+            20, int(getattr(user, 'max_internal_power_count', 20) or 20)
+        )
+        return user
+
+    @classmethod
+    def _decorate_user_rows(cls, rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            role_keys = [role.get('roleKey') for role in row.get('role', []) if isinstance(role, dict)]
+            is_admin = row.get('admin') or 'admin' in role_keys
+            expire_time = row.get('vipExpireTime')
+            is_effective_vip = row.get('isVip') == '1' and isinstance(expire_time, datetime) and expire_time > datetime.now()
+            row['isVipEffective'] = bool(is_effective_vip)
+            row['effectiveInternalPowerLimit'] = None if is_admin or is_effective_vip else max(
+                20, int(row.get('maxInternalPowerCount') or 20)
+            )
 
     @classmethod
     async def get_register_cleanup_rule_services(
@@ -318,7 +355,7 @@ class UserService:
         :param edit_user: 编辑用户字典
         :return: None
         """
-        if page_object.type not in ['status', 'avatar', 'pwd', 'vip']:
+        if page_object.type not in ['status', 'avatar', 'pwd', 'vip', 'limit', 'aiRecognition']:
             edit_user.pop('role_ids', None)
             edit_user.pop('role', None)
         else:
@@ -337,7 +374,7 @@ class UserService:
         cls._deal_edit_user(page_object, edit_user)
         user_info = await cls.user_detail_services(query_db, edit_user.get('user_id'))
         if user_info.data and user_info.data.user_id:
-            if page_object.type not in ['status', 'avatar', 'pwd', 'vip']:
+            if page_object.type not in ['status', 'avatar', 'pwd', 'vip', 'limit', 'aiRecognition']:
                 if not await cls.check_user_name_unique_services(query_db, page_object):
                     raise ServiceException(message=f'修改用户{page_object.user_name}失败，登录账号已存在')
                 if page_object.phonenumber and not await cls.check_phonenumber_unique_services(query_db, page_object):
@@ -346,7 +383,7 @@ class UserService:
                     raise ServiceException(message=f'修改用户{page_object.user_name}失败，邮箱账号已存在')
             try:
                 await UserDao.edit_user_dao(query_db, edit_user)
-                if page_object.type not in {'status', 'avatar', 'pwd', 'vip'}:
+                if page_object.type not in {'status', 'avatar', 'pwd', 'vip', 'limit', 'aiRecognition'}:
                     await UserDao.delete_user_role_dao(query_db, UserRoleModel(userId=page_object.user_id))
                     if page_object.role_ids:
                         for role in page_object.role_ids:
@@ -404,14 +441,16 @@ class UserService:
             role_ids = ','.join([str(row.role_id) for row in query_user.get('user_role_info')])
             role_ids_list = [row.role_id for row in query_user.get('user_role_info')]
 
+            data = UserInfoModel(
+                **CamelCaseUtil.transform_result(query_user.get('user_basic_info')),
+                postIds='',
+                roleIds=role_ids,
+                dept=CamelCaseUtil.transform_result(query_user.get('user_dept_info')),
+                role=CamelCaseUtil.transform_result(query_user.get('user_role_info')),
+            )
+            cls.decorate_user_model(data, [row.role_key for row in query_user.get('user_role_info')])
             return UserDetailModel(
-                data=UserInfoModel(
-                    **CamelCaseUtil.transform_result(query_user.get('user_basic_info')),
-                    postIds='',
-                    roleIds=role_ids,
-                    dept=CamelCaseUtil.transform_result(query_user.get('user_dept_info')),
-                    role=CamelCaseUtil.transform_result(query_user.get('user_role_info')),
-                ),
+                data=data,
                 postIds=[],
                 roleIds=role_ids_list,
                 roles=roles,
@@ -432,14 +471,17 @@ class UserService:
         role_ids = ','.join([str(row.role_id) for row in query_user.get('user_role_info')])
         role_group = ','.join([row.role_name for row in query_user.get('user_role_info')])
 
+        data = UserInfoModel(
+            **CamelCaseUtil.transform_result(query_user.get('user_basic_info')),
+            postIds='',
+            roleIds=role_ids,
+            dept=CamelCaseUtil.transform_result(query_user.get('user_dept_info')),
+            role=CamelCaseUtil.transform_result(query_user.get('user_role_info')),
+        )
+        cls.decorate_user_model(data, [row.role_key for row in query_user.get('user_role_info')])
+
         return UserProfileModel(
-            data=UserInfoModel(
-                **CamelCaseUtil.transform_result(query_user.get('user_basic_info')),
-                postIds='',
-                roleIds=role_ids,
-                dept=CamelCaseUtil.transform_result(query_user.get('user_dept_info')),
-                role=CamelCaseUtil.transform_result(query_user.get('user_role_info')),
-            ),
+            data=data,
             postGroup='',
             roleGroup=role_group,
         )
@@ -472,6 +514,86 @@ class UserService:
         except Exception as e:
             await query_db.rollback()
             raise e
+
+    @classmethod
+    async def change_internal_power_limit_services(
+        cls, query_db: AsyncSession, user_id: int, max_count: int, update_by: str
+    ) -> CrudResponseModel:
+        """
+        修改单个用户最大内功数。
+        """
+        if max_count < 20:
+            raise ServiceException(message='最大内功数不能低于20')
+        await UserDao.edit_user_dao(
+            query_db,
+            {
+                'user_id': user_id,
+                'max_internal_power_count': max_count,
+                'update_by': update_by,
+                'update_time': datetime.now(),
+            },
+        )
+        await query_db.commit()
+        return CrudResponseModel(is_success=True, message='内功上限已更新')
+
+    @classmethod
+    async def change_ai_recognition_count_services(
+        cls, query_db: AsyncSession, user_id: int, count: int, update_by: str
+    ) -> CrudResponseModel:
+        """
+        修改单个用户AI识图剩余次数。
+        """
+        if count < 0:
+            raise ServiceException(message='AI识图次数不能小于0')
+        await UserDao.edit_user_dao(
+            query_db,
+            {
+                'user_id': user_id,
+                'ai_image_recognition_count': count,
+                'update_by': update_by,
+                'update_time': datetime.now(),
+            },
+        )
+        await query_db.commit()
+        return CrudResponseModel(is_success=True, message='AI识图次数已更新')
+
+    @classmethod
+    async def batch_change_internal_power_limit_services(
+        cls, query_db: AsyncSession, user_ids: list[int], max_count: int, update_by: str
+    ) -> CrudResponseModel:
+        """
+        批量修改用户最大内功数。
+        """
+        if not user_ids:
+            raise ServiceException(message='请选择需要修改的用户')
+        if max_count < 20:
+            raise ServiceException(message='最大内功数不能低于20')
+        now = datetime.now()
+        for user_id in user_ids:
+            await UserDao.edit_user_dao(
+                query_db,
+                {
+                    'user_id': user_id,
+                    'max_internal_power_count': max_count,
+                    'update_by': update_by,
+                    'update_time': now,
+                },
+            )
+        await query_db.commit()
+        return CrudResponseModel(is_success=True, message='批量内功上限已更新')
+
+    @classmethod
+    async def expire_vip_users_services(cls, query_db: AsyncSession) -> int:
+        """
+        将已过期VIP实时落库为非VIP。
+        """
+        result = await query_db.execute(
+            update(SysUser)
+            .where(SysUser.is_vip == '1', SysUser.vip_expire_time.is_not(None), SysUser.vip_expire_time <= datetime.now())
+            .values(is_vip='0', update_by='system', update_time=datetime.now())
+        )
+        await query_db.commit()
+        return result.rowcount or 0
 
     @classmethod
     def _set_row_sex_value(cls, row: pd.Series) -> None:

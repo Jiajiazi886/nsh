@@ -1,4 +1,4 @@
--- Personal management menu placeholders.
+-- Personal calculator placeholder menus.
 -- Safe to run more than once against the local MySQL development database.
 
 INSERT INTO sys_menu (
@@ -6,11 +6,6 @@ INSERT INTO sys_menu (
   is_frame, is_cache, menu_type, visible, status, perms, icon,
   create_by, create_time, update_by, update_time, remark
 ) VALUES
-  (3000, '个人管理', 0, 5, 'personal', 'Layout', '', '', 1, 0, 'M', '0', '0', '', 'user', 'admin', NOW(), '', NULL, '个人管理目录'),
-  (3001, '加入帮会', 3000, 1, 'join', 'personal/coming-soon/index', '', '', 1, 0, 'C', '0', '0', 'personal:join:list', 'people', 'admin', NOW(), '', NULL, '加入帮会占位菜单'),
-  (3002, '内功管理', 3000, 2, 'skill', 'personal/coming-soon/index', '', '', 1, 0, 'C', '0', '0', 'personal:skill:list', 'skill', 'admin', NOW(), '', NULL, '内功管理占位菜单'),
-  (3003, '个人信息编辑', 3000, 3, 'profile-edit', 'personal/coming-soon/index', '', '', 1, 0, 'C', '0', '0', 'personal:profile:edit', 'edit', 'admin', NOW(), '', NULL, '个人信息编辑占位菜单'),
-  (3004, '内功数值编辑', 3002, 1, '', '', '', '', 1, 0, 'F', '0', '0', 'personal:skill:value-edit', '#', 'admin', NOW(), '', NULL, '内功管理按钮权限：编辑内功种类与基础增伤'),
   (3005, '防守计算器', 3000, 4, 'defense-calculator', 'personal/calculator/index', '', '', 1, 0, 'C', '0', '0', 'personal:defense-calculator:list', 'shield', 'admin', NOW(), '', NULL, '防守计算器占位菜单'),
   (3006, '拆塔计算器', 3000, 5, 'tower-calculator', 'personal/calculator/index', '', '', 1, 0, 'C', '0', '0', 'personal:tower-calculator:list', 'build', 'admin', NOW(), '', NULL, '拆塔计算器占位菜单'),
   (3007, '素/鸿计算器', 3000, 6, 'suhong-calculator', 'personal/calculator/index', '', '', 1, 0, 'C', '0', '0', 'personal:suhong-calculator:list', 'calculator', 'admin', NOW(), '', NULL, '素/鸿计算器占位菜单')
@@ -34,7 +29,5 @@ ON DUPLICATE KEY UPDATE
   remark = VALUES(remark);
 
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-  (1, 3000), (1, 3001), (1, 3002), (1, 3003),
-  (1, 3004), (1, 3005), (1, 3006), (1, 3007),
-  (2, 3000), (2, 3001), (2, 3002), (2, 3003),
+  (1, 3005), (1, 3006), (1, 3007),
   (2, 3005), (2, 3006), (2, 3007);

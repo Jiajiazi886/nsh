@@ -7,9 +7,11 @@
         <p>先把内功、词条和五行配比管理起来；随机数值与后端同步留给下一轮。</p>
       </div>
       <div class="hero-actions">
+        <el-tag effect="plain" type="info">AI识图剩余 {{ aiRecognitionCount }} 次</el-tag>
+        <el-button plain @click="openRecognitionDialog">图片识别</el-button>
         <el-button v-if="canEditPowerValues" plain @click="openValueEditor">内功数值编辑</el-button>
         <el-button plain @click="resetSamples">重置示例</el-button>
-        <el-button type="primary" @click="createPower">新增内功</el-button>
+        <el-button type="primary" :disabled="!canCreateMore" @click="createPower">新增内功</el-button>
       </div>
     </section>
 
@@ -17,7 +19,7 @@
       <article class="summary-card">
         <span>内功数量</span>
         <strong>{{ powers.length }}</strong>
-        <small>当前账号本地保存</small>
+        <small>{{ quotaSummaryText }}</small>
       </article>
       <article class="summary-card">
         <span>平均加成</span>
@@ -28,6 +30,11 @@
         <span>词条总数</span>
         <strong>{{ totalEntries }}</strong>
         <small>可手动维护占位</small>
+      </article>
+      <article class="summary-card">
+        <span>AI识图次数</span>
+        <strong>{{ aiRecognitionCount }}</strong>
+        <small>每张图片消耗 1 次</small>
       </article>
       <article class="summary-card element-summary">
         <span>五行分布</span>
@@ -42,12 +49,12 @@
       </article>
     </section>
 
-    <section class="power-board">
+    <section class="power-board" v-loading="pageLoading">
       <div class="board-header">
         <div class="panel-title">
           <div>
             <strong>内功库（{{ Math.max(filteredPowers.length, 20) }}个槽位）</strong>
-            <span>{{ filteredPowers.length }} 个内功 · {{ powers.length }} 个已保存</span>
+        <span>{{ filteredPowers.length }} 个内功 · {{ limitText }}</span>
           </div>
         </div>
 
@@ -70,8 +77,18 @@
             />
           </el-select>
           <el-button v-if="canEditPowerValues" plain @click="openValueEditor">内功数值编辑</el-button>
+          <el-button plain :disabled="!powers.length" @click="toggleBatchMode">
+            {{ batchMode ? '退出批量' : '批量管理' }}
+          </el-button>
+          <el-button v-if="batchMode" plain :disabled="!filteredPowers.length" @click="toggleSelectAllFiltered">
+            {{ isAllFilteredSelected ? '取消全选' : '全选当前' }}
+          </el-button>
+          <el-button v-if="batchMode" type="danger" plain :disabled="!selectedBatchPowers.length" @click="deleteBatchPowers">
+            删除选中 {{ selectedBatchPowers.length }}
+          </el-button>
+          <el-button type="danger" plain :disabled="!powers.length" @click="clearAllPowers">清空内功</el-button>
           <el-button plain @click="resetSamples">重置示例</el-button>
-          <el-button type="primary" @click="createPower">新增内功</el-button>
+          <el-button type="primary" :disabled="!canCreateMore" @click="createPower">新增内功</el-button>
         </div>
       </div>
 
@@ -80,9 +97,16 @@
           v-for="item in filteredPowers"
           :key="item.id"
           class="power-card"
-          :class="{ active: item.id === selectedId }"
-          @click="selectPower(item.id)"
+          :class="{ active: item.id === selectedId, 'batch-selected': isPowerSelected(item.id) }"
+          @click="handleCardClick(item)"
         >
+          <el-checkbox
+            v-if="batchMode"
+            class="batch-checkbox"
+            :model-value="isPowerSelected(item.id)"
+            @click.stop
+            @change="togglePowerSelection(item.id)"
+          />
           <button class="delete-card" type="button" @click.stop="deletePower(item)">×</button>
           <div class="score-badge">
             <strong>{{ formatBonus(getPowerScore(item)) }}</strong>
@@ -107,6 +131,7 @@
           :key="slot"
           type="button"
           class="empty-slot-card"
+          :disabled="!canCreateMore"
           @click="createPower"
         >
           <span>+</span>
@@ -117,6 +142,78 @@
 
       <el-empty v-if="!filteredPowers.length && !emptySlots.length" description="没有匹配的内功" />
     </section>
+
+    <el-dialog
+      v-model="deleteConfirmVisible"
+      :title="deleteConfirmTitle"
+      width="420px"
+      append-to-body
+      destroy-on-close
+      class="delete-confirm-dialog"
+      @close="cancelDeleteConfirm"
+    >
+      <p class="delete-confirm-message">{{ deleteConfirmMessage }}</p>
+      <el-checkbox v-model="deleteConfirmSkipForSession">本次登录不再提示删除确认</el-checkbox>
+      <template #footer>
+        <el-button @click="cancelDeleteConfirm">取消</el-button>
+        <el-button type="danger" @click="acceptDeleteConfirm">确认删除</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="recognitionDialogVisible"
+      title="内功图片识别"
+      width="620px"
+      append-to-body
+      destroy-on-close
+      class="recognition-dialog"
+      @closed="resetRecognitionDialog"
+    >
+      <div class="recognition-panel">
+        <el-alert
+          title="当前是占位功能：会正常扣除次数，但后端暂时返回空识别结果。"
+          type="info"
+          show-icon
+          :closable="false"
+        />
+        <div class="recognition-quota">
+          <span>剩余次数</span>
+          <strong>{{ aiRecognitionCount }}</strong>
+          <small>已选择 {{ recognitionFileList.length }} 张，将消耗 {{ recognitionFileList.length }} 次</small>
+        </div>
+        <el-upload
+          drag
+          multiple
+          accept="image/*"
+          :auto-upload="false"
+          :file-list="recognitionFileList"
+          :on-change="handleRecognitionFileChange"
+          :on-remove="handleRecognitionFileRemove"
+        >
+          <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+          <div class="el-upload__text">拖入内功截图，或 <em>点击选择图片</em></div>
+          <template #tip>
+            <div class="el-upload__tip">支持多张图片；每张图片消耗 1 次 AI 识图次数。</div>
+          </template>
+        </el-upload>
+        <div v-if="recognitionResult" class="recognition-result">
+          <strong>识别结果</strong>
+          <p>AI识图结果待接入，当前返回空对象。</p>
+          <code>{{ recognitionResult }}</code>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="recognitionDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="recognitionSubmitting"
+          :disabled="!recognitionFileList.length || recognitionFileList.length > aiRecognitionCount"
+          @click="submitRecognition"
+        >
+          开始识别
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-drawer
       v-model="editingVisible"
@@ -348,21 +445,42 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import useUserStore from '@/store/modules/user'
 import { checkPermi } from '@/utils/permission'
+import {
+  addInternalPower,
+  deleteInternalPower,
+  importLocalInternalPowers,
+  listInternalPowers,
+  recognizeInternalPowerImages,
+  updateInternalPower
+} from '@/api/personal/internalPower'
 
 const userStore = useUserStore()
 const formRef = ref(null)
 const powers = ref([])
+const quota = ref({ count: 0, maxCount: 20, unlimited: false, isVip: '0', vipExpireTime: null })
+const pageLoading = ref(false)
 const selectedId = ref('')
+const batchMode = ref(false)
+const selectedBatchIds = ref([])
 const draft = ref(null)
 const savedDraftSignature = ref('')
 const editingVisible = ref(false)
 const valueEditorVisible = ref(false)
 const powerCatalog = ref([])
 const catalogDraft = ref([])
+const deleteConfirmVisible = ref(false)
+const deleteConfirmTitle = ref('删除内功')
+const deleteConfirmMessage = ref('')
+const deleteConfirmSkipForSession = ref(false)
+const deleteConfirmResolve = ref(null)
+const recognitionDialogVisible = ref(false)
+const recognitionFileList = ref([])
+const recognitionSubmitting = ref(false)
+const recognitionResult = ref(null)
 
 const filters = reactive({
   keyword: '',
@@ -385,11 +503,26 @@ const rules = {
 }
 
 const storageKey = computed(() => {
-  const identity = userStore.id || userStore.name || 'anonymous'
-  return `personal-skill:internal-powers:v1:${identity}`
+  if (!userStore.id) return ''
+  return `personal-skill:internal-powers:v1:${userStore.id}`
+})
+const migrationKey = computed(() => {
+  if (!userStore.id) return ''
+  return `personal-skill:migrated-to-backend:v1:${userStore.id}`
+})
+const deleteConfirmSkipKey = computed(() => {
+  if (!userStore.id) return ''
+  return `personal-skill:skip-delete-confirm:v1:${userStore.id}`
 })
 const catalogStorageKey = 'personal-skill:power-catalog:v1'
 const canEditPowerValues = computed(() => checkPermi(['personal:skill:value-edit']))
+const aiRecognitionCount = computed(() => Number(userStore.aiImageRecognitionCount || 0))
+const canCreateMore = computed(() => quota.value.unlimited || powers.value.length < Number(quota.value.maxCount || 20))
+const limitText = computed(() => quota.value.unlimited ? `${powers.value.length} 个已保存 · 不限上限` : `${powers.value.length}/${quota.value.maxCount || 20} 个已保存`)
+const quotaSummaryText = computed(() => {
+  if (quota.value.unlimited) return quota.value.isVip === '1' ? 'VIP不限内功数' : '管理员不限内功数'
+  return `后端保存 · 上限 ${quota.value.maxCount || 20}`
+})
 
 const categoryOptions = computed(() => {
   const options = powerCatalog.value.map(item => ({
@@ -417,6 +550,10 @@ const filteredPowers = computed(() => {
 })
 
 const selectedPower = computed(() => powers.value.find(item => item.id === selectedId.value) || null)
+const selectedBatchPowers = computed(() => powers.value.filter(item => selectedBatchIds.value.includes(item.id)))
+const isAllFilteredSelected = computed(() => {
+  return !!filteredPowers.value.length && filteredPowers.value.every(item => selectedBatchIds.value.includes(item.id))
+})
 const elementTotal = computed(() => sumElements(draft.value?.elements))
 const canSave = computed(() => draft.value && elementTotal.value === 5)
 const isDirty = computed(() => draft.value && savedDraftSignature.value !== JSON.stringify(draft.value))
@@ -424,14 +561,15 @@ const editorStatusText = computed(() => {
   if (!selectedPower.value) {
     return isDirty.value ? '新建内功有未保存内容' : '新建内功，保存后进入卡片墙'
   }
-  return isDirty.value ? '有未保存改动，保存后同步到卡片墙' : '已保存到本地内功库'
+  return isDirty.value ? '有未保存改动，保存后同步到卡片墙' : '已保存到后端内功库'
 })
 const footerStatusText = computed(() => {
   if (!canSave.value) return '五行数量未满足 5 个'
   return selectedPower.value ? '可以保存当前改动' : '保存后新增到内功库'
 })
 const emptySlots = computed(() => {
-  const slotCount = Math.max(0, 20 - filteredPowers.value.length)
+  const visibleSlots = quota.value.unlimited ? Math.max(20, filteredPowers.value.length + 1) : Math.max(20, quota.value.maxCount || 20)
+  const slotCount = Math.max(0, visibleSlots - filteredPowers.value.length)
   return Array.from({ length: slotCount }, (_, index) => `slot-${index}`)
 })
 
@@ -457,11 +595,9 @@ const elementSummaryText = computed(() => {
   return elementOptions.map(item => `${item.label}${elementTotals.value[item.key] || 0}`).join(' / ')
 })
 
-watch(powers, persistPowers, { deep: true })
-
-onMounted(() => {
+onMounted(async () => {
   loadPowerCatalog()
-  loadPowers()
+  await loadPowers()
 })
 
 function loadPowerCatalog() {
@@ -477,19 +613,17 @@ function persistPowerCatalog() {
   localStorage.setItem(catalogStorageKey, JSON.stringify(powerCatalog.value))
 }
 
-function loadPowers() {
+async function loadPowers() {
+  pageLoading.value = true
   try {
-    const stored = JSON.parse(localStorage.getItem(storageKey.value) || '[]')
-    if (Array.isArray(stored) && stored.length) {
-      const normalized = stored.map(normalizePower)
-      powers.value = isLegacySampleLibrary(normalized) ? createSamplePowers() : normalized
-    } else {
-      powers.value = createSamplePowers()
-    }
-  } catch {
-    powers.value = createSamplePowers()
+    const response = await listInternalPowers()
+    applyPowerResponse(response)
+    await migrateLocalPowersIfNeeded(response.powers || [])
+  } catch (error) {
+    ElMessage.error('内功列表加载失败，请稍后重试')
+  } finally {
+    pageLoading.value = false
   }
-  if (!powers.value.length) powers.value = createSamplePowers()
 }
 
 function isLegacySampleLibrary(items = []) {
@@ -499,8 +633,98 @@ function isLegacySampleLibrary(items = []) {
   return hasLegacyCategory && !hasNewSeasonCategory
 }
 
-function persistPowers() {
-  localStorage.setItem(storageKey.value, JSON.stringify(powers.value))
+function isGeneratedSampleLibrary(items = []) {
+  return items.length > 0 && items.every(item => String(item.id || '').startsWith('sample-'))
+}
+
+async function migrateLocalPowersIfNeeded(serverPowers = []) {
+  if (!userStore.id || !migrationKey.value || !storageKey.value) return
+  if (localStorage.getItem(migrationKey.value) === '1') return
+  if (serverPowers.length) {
+    localStorage.setItem(migrationKey.value, '1')
+    return
+  }
+  let localPowers = []
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey.value) || '[]')
+    if (Array.isArray(stored) && stored.length) {
+      const normalized = stored.map(normalizePower)
+      localPowers = (isLegacySampleLibrary(normalized) || isGeneratedSampleLibrary(normalized)) ? [] : normalized
+    }
+  } catch {
+    localPowers = []
+  }
+  if (!localPowers.length) {
+    localStorage.setItem(migrationKey.value, '1')
+    return
+  }
+  const response = await importLocalInternalPowers(localPowers.map(toPowerPayload))
+  applyPowerResponse(response)
+  localStorage.setItem(migrationKey.value, '1')
+}
+
+function applyPowerResponse(response = {}) {
+  powers.value = (response.powers || []).map(normalizePower)
+  quota.value = {
+    count: response.quota?.count ?? powers.value.length,
+    maxCount: response.quota?.maxCount ?? 20,
+    unlimited: !!response.quota?.unlimited,
+    isVip: response.quota?.isVip || '0',
+    vipExpireTime: response.quota?.vipExpireTime || null
+  }
+}
+
+function updateQuotaCount() {
+  quota.value = {
+    ...quota.value,
+    count: powers.value.length
+  }
+}
+
+function openRecognitionDialog() {
+  recognitionDialogVisible.value = true
+}
+
+function handleRecognitionFileChange(file, fileList) {
+  recognitionResult.value = null
+  recognitionFileList.value = fileList.filter(item => item.raw?.type?.startsWith('image/'))
+  if (recognitionFileList.value.length !== fileList.length) {
+    ElMessage.warning('只能选择图片文件')
+  }
+}
+
+function handleRecognitionFileRemove(file, fileList) {
+  recognitionResult.value = null
+  recognitionFileList.value = fileList
+}
+
+function resetRecognitionDialog() {
+  recognitionFileList.value = []
+  recognitionSubmitting.value = false
+  recognitionResult.value = null
+}
+
+async function submitRecognition() {
+  const files = recognitionFileList.value.map(item => item.raw).filter(Boolean)
+  if (!files.length) {
+    ElMessage.warning('请先选择图片')
+    return
+  }
+  if (files.length > aiRecognitionCount.value) {
+    ElMessage.warning(`AI识图次数不足，当前剩余 ${aiRecognitionCount.value} 次`)
+    return
+  }
+  recognitionSubmitting.value = true
+  try {
+    const response = await recognizeInternalPowerImages(files)
+    const remaining = Number(response.remainingAiImageRecognitionCount ?? aiRecognitionCount.value - files.length)
+    userStore.aiImageRecognitionCount = Math.max(0, remaining)
+    recognitionResult.value = JSON.stringify(response.result || {}, null, 2)
+    recognitionFileList.value = []
+    ElMessage.success(response.msg || '识别完成，AI结果待接入')
+  } finally {
+    recognitionSubmitting.value = false
+  }
 }
 
 function selectPower(id) {
@@ -511,7 +735,47 @@ function selectPower(id) {
   nextTick(() => formRef.value?.clearValidate())
 }
 
+function handleCardClick(item) {
+  if (batchMode.value) {
+    togglePowerSelection(item.id)
+    return
+  }
+  selectPower(item.id)
+}
+
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value
+  selectedBatchIds.value = []
+}
+
+function isPowerSelected(id) {
+  return selectedBatchIds.value.includes(id)
+}
+
+function togglePowerSelection(id) {
+  if (selectedBatchIds.value.includes(id)) {
+    selectedBatchIds.value = selectedBatchIds.value.filter(item => item !== id)
+    return
+  }
+  selectedBatchIds.value = [...selectedBatchIds.value, id]
+}
+
+function toggleSelectAllFiltered() {
+  if (isAllFilteredSelected.value) {
+    const filteredIds = new Set(filteredPowers.value.map(item => item.id))
+    selectedBatchIds.value = selectedBatchIds.value.filter(id => !filteredIds.has(id))
+    return
+  }
+  const nextIds = new Set(selectedBatchIds.value)
+  filteredPowers.value.forEach(item => nextIds.add(item.id))
+  selectedBatchIds.value = Array.from(nextIds)
+}
+
 function createPower() {
+  if (!canCreateMore.value) {
+    ElMessage.warning('已超过当前内功上限，请删除后再新增或联系管理员调整上限')
+    return
+  }
   const firstCatalog = powerCatalog.value[0] || null
   selectedId.value = ''
   draft.value = normalizePower({
@@ -545,17 +809,22 @@ async function saveDraft() {
     ...draft.value,
     updatedAt: new Date().toISOString()
   })
-  const index = powers.value.findIndex(item => item.id === nextPower.id)
+  const response = nextPower.powerId
+    ? await updateInternalPower(nextPower.powerId, toPowerPayload(nextPower))
+    : await addInternalPower(toPowerPayload(nextPower))
+  const savedPower = normalizePower(response)
+  const index = powers.value.findIndex(item => item.id === savedPower.id)
   if (index >= 0) {
-    powers.value.splice(index, 1, nextPower)
+    powers.value.splice(index, 1, savedPower)
   } else {
-    powers.value.unshift(nextPower)
+    powers.value.unshift(savedPower)
   }
-  selectedId.value = nextPower.id
-  draft.value = clonePower(nextPower)
+  updateQuotaCount()
+  selectedId.value = savedPower.id
+  draft.value = clonePower(savedPower)
   savedDraftSignature.value = JSON.stringify(draft.value)
   editingVisible.value = false
-  ElMessage.success('内功已保存到本地')
+  ElMessage.success('内功已保存到后端')
 }
 
 function restoreDraft() {
@@ -568,62 +837,131 @@ function restoreDraft() {
   nextTick(() => formRef.value?.clearValidate())
 }
 
-function duplicateSelected() {
+async function duplicateSelected() {
   if (!draft.value) return
+  if (!canCreateMore.value) {
+    ElMessage.warning('已超过当前内功上限，请删除后再复制')
+    return
+  }
   const copy = normalizePower({
     ...clonePower(draft.value),
     id: createId(),
+    powerId: undefined,
     name: `${draft.value.name || '未命名'} 副本`,
     updatedAt: new Date().toISOString()
   })
-  powers.value.unshift(copy)
-  selectPower(copy.id)
+  const savedPower = normalizePower(await addInternalPower(toPowerPayload(copy)))
+  powers.value.unshift(savedPower)
+  updateQuotaCount()
+  selectPower(savedPower.id)
   ElMessage.success('已复制内功')
 }
 
 async function deletePower(power) {
   if (!power) return
-  try {
-    await ElMessageBox.confirm(`确认删除「${power.name}」吗？`, '删除内功', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    })
-  } catch {
+  const confirmed = await confirmDeleteAction({
+    title: '删除内功',
+    message: `确认删除「${power.name || '未命名内功'}」吗？`
+  })
+  if (!confirmed) {
     return
   }
-  powers.value = powers.value.filter(item => item.id !== power.id)
-  if (selectedId.value === power.id) {
-    selectedId.value = ''
-    draft.value = null
-    savedDraftSignature.value = ''
-    editingVisible.value = false
-  }
+  await removePowers([power])
   ElMessage.success('已删除')
 }
 
 async function deleteSelected() {
   if (!selectedPower.value) return
-  try {
-    await ElMessageBox.confirm(`确认删除「${selectedPower.value.name}」吗？`, '删除内功', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    })
-  } catch {
+  const power = selectedPower.value
+  const confirmed = await confirmDeleteAction({
+    title: '删除内功',
+    message: `确认删除「${power.name || '未命名内功'}」吗？`
+  })
+  if (!confirmed) {
     return
   }
-  powers.value = powers.value.filter(item => item.id !== selectedId.value)
-  selectedId.value = ''
-  draft.value = null
-  savedDraftSignature.value = ''
-  editingVisible.value = false
+  await removePowers([power])
   ElMessage.success('已删除')
+}
+
+async function deleteBatchPowers() {
+  if (!selectedBatchPowers.value.length) return
+  const count = selectedBatchPowers.value.length
+  const confirmed = await confirmDeleteAction({
+    title: '批量删除内功',
+    message: `确认删除已选中的 ${count} 个内功吗？`
+  })
+  if (!confirmed) return
+  await removePowers(selectedBatchPowers.value)
+  selectedBatchIds.value = []
+  batchMode.value = false
+  ElMessage.success(`已删除 ${count} 个内功`)
+}
+
+async function clearAllPowers() {
+  if (!powers.value.length) return
+  const count = powers.value.length
+  const confirmed = await confirmDeleteAction({
+    title: '清空内功',
+    message: `确认清空当前账号的全部 ${count} 个内功吗？此操作不可恢复。`
+  })
+  if (!confirmed) return
+  await removePowers([...powers.value])
+  selectedBatchIds.value = []
+  batchMode.value = false
+  ElMessage.success('内功已清空')
+}
+
+async function removePowers(targetPowers = []) {
+  const targets = targetPowers.filter(Boolean)
+  for (const power of targets) {
+    if (power.powerId) {
+      await deleteInternalPower(power.powerId)
+    }
+  }
+  const removeIds = new Set(targets.map(item => item.id))
+  powers.value = powers.value.filter(item => !removeIds.has(item.id))
+  selectedBatchIds.value = selectedBatchIds.value.filter(id => !removeIds.has(id))
+  if (removeIds.has(selectedId.value)) {
+    selectedId.value = ''
+    draft.value = null
+    savedDraftSignature.value = ''
+    editingVisible.value = false
+  }
+  updateQuotaCount()
+}
+
+function confirmDeleteAction({ title, message }) {
+  if (deleteConfirmSkipKey.value && sessionStorage.getItem(deleteConfirmSkipKey.value) === '1') {
+    return Promise.resolve(true)
+  }
+  deleteConfirmTitle.value = title
+  deleteConfirmMessage.value = message
+  deleteConfirmSkipForSession.value = false
+  deleteConfirmVisible.value = true
+  return new Promise(resolve => {
+    deleteConfirmResolve.value = resolve
+  })
+}
+
+function acceptDeleteConfirm() {
+  if (deleteConfirmSkipForSession.value && deleteConfirmSkipKey.value) {
+    sessionStorage.setItem(deleteConfirmSkipKey.value, '1')
+  }
+  deleteConfirmResolve.value?.(true)
+  deleteConfirmResolve.value = null
+  deleteConfirmVisible.value = false
+}
+
+function cancelDeleteConfirm() {
+  deleteConfirmResolve.value?.(false)
+  deleteConfirmResolve.value = null
+  deleteConfirmVisible.value = false
 }
 
 async function resetSamples() {
   try {
-    await ElMessageBox.confirm('这会覆盖当前账号本地保存的内功示例，是否继续？', '重置示例', {
+    await ElMessageBox.confirm('这会覆盖当前账号后端保存的内功示例，是否继续？', '重置示例', {
       type: 'warning',
       confirmButtonText: '重置',
       cancelButtonText: '取消'
@@ -631,7 +969,13 @@ async function resetSamples() {
   } catch {
     return
   }
-  powers.value = createSamplePowers()
+  for (const power of powers.value) {
+    if (power.powerId) {
+      await deleteInternalPower(power.powerId)
+    }
+  }
+  const response = await importLocalInternalPowers(getSamplePowersForQuota().map(toPowerPayload))
+  applyPowerResponse(response)
   selectedId.value = ''
   draft.value = null
   savedDraftSignature.value = ''
@@ -761,7 +1105,8 @@ function changeElement(key, delta) {
 
 function normalizePower(value) {
   return {
-    id: String(value.id || createId()),
+    id: String(value.id || value.powerId || createId()),
+    powerId: value.powerId || value.power_id || undefined,
     name: String(value.name || ''),
     category: String(value.category || '通用'),
     categoryTrait: String(value.categoryTrait || ''),
@@ -776,6 +1121,21 @@ function normalizePower(value) {
     elements: normalizeElements(value.elements),
     remark: String(value.remark || ''),
     updatedAt: value.updatedAt || new Date().toISOString()
+  }
+}
+
+function toPowerPayload(power) {
+  return {
+    id: power.id,
+    powerId: power.powerId,
+    name: power.name,
+    category: power.category,
+    categoryTrait: power.categoryTrait,
+    bonusPercent: power.bonusPercent,
+    entries: power.entries || [],
+    elements: power.elements || createEmptyElements(),
+    remark: power.remark || '',
+    updatedAt: power.updatedAt
   }
 }
 
@@ -887,6 +1247,12 @@ function createSamplePowers() {
     updatedAt: new Date(Date.UTC(2026, 5, 20, 8, 0, 0) - index * 60000).toISOString()
   }))
 }
+
+function getSamplePowersForQuota() {
+  const samples = createSamplePowers()
+  if (quota.value.unlimited) return samples
+  return samples.slice(0, Math.max(20, Number(quota.value.maxCount || 20)))
+}
 </script>
 
 <style scoped>
@@ -967,7 +1333,7 @@ function createSamplePowers() {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px;
   margin: 16px 0;
 }
@@ -1084,6 +1450,23 @@ function createSamplePowers() {
   box-shadow: 0 12px 28px rgba(59, 130, 246, 0.14);
 }
 
+.power-card.batch-selected {
+  border-color: #7c3aed;
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.1), #ffffff 38%);
+  box-shadow: 0 14px 30px rgba(124, 58, 237, 0.18);
+}
+
+.batch-checkbox {
+  position: absolute;
+  top: 10px;
+  left: 102px;
+  z-index: 2;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
 .score-badge {
   position: absolute;
   top: 8px;
@@ -1195,6 +1578,11 @@ function createSamplePowers() {
   color: #2563eb;
 }
 
+.empty-slot-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .empty-slot-card span {
   font-size: 28px;
   line-height: 1;
@@ -1207,6 +1595,14 @@ function createSamplePowers() {
 
 .empty-slot-card small {
   font-size: 12px;
+}
+
+.delete-confirm-message {
+  margin: 0 0 14px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.7;
 }
 
 .full-elements {
@@ -1692,6 +2088,54 @@ function createSamplePowers() {
 
 :deep(.power-value-dialog .el-dialog__body) {
   padding-top: 10px;
+}
+
+.recognition-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.recognition-quota {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.9), rgba(255, 247, 237, 0.78));
+}
+
+.recognition-quota span,
+.recognition-quota small {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.recognition-quota strong {
+  color: #2563eb;
+  font-size: 28px;
+  font-weight: 950;
+}
+
+.recognition-result {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #0f172a;
+  color: #dbeafe;
+}
+
+.recognition-result p {
+  margin: 0;
+  color: #93a4bd;
+  font-size: 13px;
+}
+
+.recognition-result code {
+  white-space: pre-wrap;
+  color: #bfdbfe;
 }
 
 @media (max-width: 1180px) {

@@ -70,16 +70,53 @@ export function changeUserStatus(userId, status) {
   })
 }
 
-// 用户VIP状态修改
-export function changeUserVip(userId, isVip) {
+// 用户VIP授权修改
+export function changeUserVip(userId, isVip, vipExpireTime) {
   const data = {
     userId,
-    isVip
+    isVip,
+    vipExpireTime
   }
   return request({
     url: '/system/user/changeVip',
     method: 'put',
     data: data
+  })
+}
+
+// 用户最大内功数修改
+export function changeInternalPowerLimit(userId, maxInternalPowerCount) {
+  return request({
+    url: '/system/user/changeInternalPowerLimit',
+    method: 'put',
+    data: {
+      userId,
+      maxInternalPowerCount
+    }
+  })
+}
+
+// 用户AI识图次数修改
+export function changeAiRecognitionCount(userId, aiImageRecognitionCount) {
+  return request({
+    url: '/system/user/changeAiRecognitionCount',
+    method: 'put',
+    data: {
+      userId,
+      aiImageRecognitionCount
+    }
+  })
+}
+
+// 批量修改用户最大内功数
+export function batchInternalPowerLimit(userIds, maxInternalPowerCount) {
+  return request({
+    url: '/system/user/batchInternalPowerLimit',
+    method: 'put',
+    data: {
+      userIds,
+      maxInternalPowerCount
+    }
   })
 }
 

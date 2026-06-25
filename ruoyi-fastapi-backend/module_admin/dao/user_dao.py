@@ -25,6 +25,14 @@ class UserDao:
     用户管理模块数据库操作层
     """
 
+    @staticmethod
+    def _only_sys_user_columns(user: dict) -> dict:
+        """
+        只保留sys_user真实字段，避免展示/计算字段进入ORM写入链路。
+        """
+        sys_user_columns = set(SysUser.__table__.columns.keys())
+        return {key: value for key, value in user.items() if key in sys_user_columns}
+
     @classmethod
     async def get_user_by_name(cls, db: AsyncSession, user_name: str) -> SysUser | None:
         """
@@ -319,7 +327,7 @@ class UserDao:
         :param user: 用户对象
         :return: 新增校验结果
         """
-        db_user = SysUser(**user.model_dump(exclude={'admin'}))
+        db_user = SysUser(**cls._only_sys_user_columns(user.model_dump(exclude={'admin'})))
         db.add(db_user)
         await db.flush()
 
@@ -334,7 +342,7 @@ class UserDao:
         :param user: 需要更新的用户字典
         :return: 编辑校验结果
         """
-        await db.execute(update(SysUser), [user])
+        await db.execute(update(SysUser), [cls._only_sys_user_columns(user)])
 
     @classmethod
     async def delete_user_dao(cls, db: AsyncSession, user: UserModel) -> None:

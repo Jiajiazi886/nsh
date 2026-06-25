@@ -39,6 +39,11 @@ class UserModel(BaseModel):
     password: str | None = Field(default=None, description='密码')
     status: Literal['0', '1'] | None = Field(default=None, description='帐号状态（0正常 1停用）')
     is_vip: Literal['0', '1'] | None = Field(default='0', description='VIP标识（0非VIP 1VIP）')
+    vip_expire_time: datetime | None = Field(default=None, description='VIP到期时间')
+    ai_image_recognition_count: int = Field(default=0, ge=0, description='AI识图剩余次数')
+    max_internal_power_count: int = Field(default=20, ge=20, description='最大内功数')
+    effective_internal_power_limit: int | None = Field(default=20, description='有效内功上限，null表示不限')
+    is_vip_effective: bool = Field(default=False, description='VIP是否仍在有效期内')
     del_flag: Literal['0', '2'] | None = Field(default=None, description='删除标志（0代表存在 2代表删除）')
     login_ip: str | None = Field(default=None, description='最后登录IP')
     login_date: datetime | None = Field(default=None, description='最后登录时间')
@@ -222,6 +227,41 @@ class EditUserModel(AddUserModel):
     """
 
     role: list | None = Field(default=[], description='角色信息')
+
+
+class ChangeVipModel(BaseModel):
+    """
+    修改用户VIP授权模型
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    user_id: int = Field(description='用户ID')
+    is_vip: Literal['0', '1'] = Field(description='VIP标识（0非VIP 1VIP）')
+    vip_expire_time: datetime | None = Field(default=None, description='VIP到期时间')
+
+
+class InternalPowerLimitModel(BaseModel):
+    """
+    修改用户最大内功数模型
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    user_id: int | None = Field(default=None, description='用户ID')
+    user_ids: list[int] | None = Field(default=None, description='用户ID列表')
+    max_internal_power_count: int = Field(default=20, ge=20, description='最大内功数')
+
+
+class AiRecognitionCountModel(BaseModel):
+    """
+    修改用户AI识图剩余次数模型
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    user_id: int | None = Field(default=None, description='用户ID')
+    ai_image_recognition_count: int = Field(default=0, ge=0, description='AI识图剩余次数')
 
 
 class ResetPasswordModel(BaseModel):

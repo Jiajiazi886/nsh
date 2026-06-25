@@ -24,12 +24,15 @@ from config.env import UploadConfig
 from module_admin.entity.do.dept_do import SysDept
 from module_admin.entity.do.user_do import SysUser
 from module_admin.entity.vo.user_vo import (
+    AiRecognitionCountModel,
     AddUserModel,
     AvatarModel,
+    ChangeVipModel,
     CrudUserRoleModel,
     CurrentUserModel,
     DeleteUserModel,
     EditUserModel,
+    InternalPowerLimitModel,
     RegisterCleanupRuleModel,
     ResetPasswordModel,
     ResetUserModel,
@@ -99,6 +102,7 @@ async def add_system_user(
         if add_user.is_vip == '1':
             return ResponseUtil.failure(msg='无权修改用户VIP状态')
         add_user.is_vip = '0'
+        add_user.ai_image_recognition_count = 0
     if not current_user.user.admin:
         await RoleService.check_role_data_scope_services(
             query_db, ','.join([str(item) for item in add_user.role_ids]), role_data_scope_sql
@@ -133,8 +137,13 @@ async def edit_system_user(
     role_data_scope_sql: Annotated[ColumnElement, DataScopeDependency(SysDept)],
 ) -> Response:
     await UserService.check_user_allowed_services(edit_user)
-    if not UserService.is_admin_role(current_user) and 'is_vip' in edit_user.model_fields_set:
-        return ResponseUtil.failure(msg='无权修改用户VIP状态')
+    if not UserService.is_admin_role(current_user):
+        if 'is_vip' in edit_user.model_fields_set or 'vip_expire_time' in edit_user.model_fields_set:
+            return ResponseUtil.failure(msg='无权修改用户VIP状态')
+        if 'ai_image_recognition_count' in edit_user.model_fields_set:
+            return ResponseUtil.failure(msg='无权修改AI识图次数')
+        if 'max_internal_power_count' in edit_user.model_fields_set:
+            return ResponseUtil.failure(msg='无权修改最大内功数')
     if not current_user.user.admin:
         await UserService.check_user_data_scope_services(query_db, edit_user.user_id, user_data_scope_sql)
         await RoleService.check_role_data_scope_services(
@@ -159,7 +168,7 @@ async def edit_system_user(
 @Log(title='用户管理', business_type=BusinessType.UPDATE)
 async def change_system_user_vip(
     request: Request,
-    change_user: EditUserModel,
+    change_user: ChangeVipModel,
     query_db: Annotated[AsyncSession, DBSessionDependency()],
     current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
 ) -> Response:
@@ -167,10 +176,15 @@ async def change_system_user_vip(
         return ResponseUtil.failure(msg='无权修改用户VIP状态')
     if change_user.user_id is None or change_user.is_vip not in {'0', '1'}:
         return ResponseUtil.failure(msg='VIP状态参数错误')
-    await UserService.check_user_allowed_services(change_user)
+    if change_user.is_vip == '1' and (
+        change_user.vip_expire_time is None or change_user.vip_expire_time <= datetime.now()
+    ):
+        return ResponseUtil.failure(msg='VIP到期时间必须晚于当前时间')
+    await UserService.check_user_allowed_services(UserModel(userId=change_user.user_id))
     edit_user = EditUserModel(
         userId=change_user.user_id,
         isVip=change_user.is_vip,
+        vipExpireTime=change_user.vip_expire_time if change_user.is_vip == '1' else None,
         updateBy=current_user.user.user_name,
         updateTime=datetime.now(),
         type='vip',
@@ -179,6 +193,101 @@ async def change_system_user_vip(
     logger.info(edit_user_result.message)
 
     return ResponseUtil.success(msg=edit_user_result.message)
+
+
+@user_controller.put(
+    '/changeInternalPowerLimit',
+    summary='修改用户最大内功数接口',
+    description='用于修改单个用户最大内功数',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:user:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_INFO_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def change_system_user_internal_power_limit(
+    request: Request,
+    change_user: InternalPowerLimitModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改最大内功数')
+    if change_user.user_id is None:
+        return ResponseUtil.failure(msg='用户ID不能为空')
+    await UserService.check_user_allowed_services(UserModel(userId=change_user.user_id))
+    result = await UserService.change_internal_power_limit_services(
+        query_db,
+        change_user.user_id,
+        change_user.max_internal_power_count,
+        current_user.user.user_name,
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
+@user_controller.put(
+    '/changeAiRecognitionCount',
+    summary='修改用户AI识图次数接口',
+    description='用于修改单个用户AI识图剩余次数',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:user:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_INFO_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def change_system_user_ai_recognition_count(
+    request: Request,
+    change_user: AiRecognitionCountModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改AI识图次数')
+    if change_user.user_id is None:
+        return ResponseUtil.failure(msg='用户ID不能为空')
+    await UserService.check_user_allowed_services(UserModel(userId=change_user.user_id))
+    result = await UserService.change_ai_recognition_count_services(
+        query_db,
+        change_user.user_id,
+        change_user.ai_image_recognition_count,
+        current_user.user.user_name,
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
+@user_controller.put(
+    '/batchInternalPowerLimit',
+    summary='批量修改用户最大内功数接口',
+    description='用于批量修改用户最大内功数',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:user:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_INFO_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def batch_change_system_user_internal_power_limit(
+    request: Request,
+    change_user: InternalPowerLimitModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改最大内功数')
+    user_ids = change_user.user_ids or []
+    if not user_ids:
+        return ResponseUtil.failure(msg='请选择需要修改的用户')
+    for user_id in user_ids:
+        await UserService.check_user_allowed_services(UserModel(userId=user_id))
+    result = await UserService.batch_change_internal_power_limit_services(
+        query_db,
+        user_ids,
+        change_user.max_internal_power_count,
+        current_user.user.user_name,
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
 
 
 @user_controller.delete(

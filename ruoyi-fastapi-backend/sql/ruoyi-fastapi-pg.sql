@@ -67,6 +67,9 @@ create table sys_user (
     password varchar(100) default '',
     status char(1) default '0',
     is_vip char(1) default '0',
+    vip_expire_time timestamp(0),
+    ai_image_recognition_count int4 default 0 not null,
+    max_internal_power_count int4 default 20 not null,
     del_flag char(1) default '0',
     login_ip varchar(128) default '',
     login_date timestamp(0),
@@ -91,6 +94,9 @@ comment on column sys_user.avatar is '头像地址';
 comment on column sys_user.password is '密码';
 comment on column sys_user.status is '帐号状态（0正常 1停用）';
 comment on column sys_user.is_vip is 'VIP标识（0非VIP 1VIP）';
+comment on column sys_user.vip_expire_time is 'VIP到期时间';
+comment on column sys_user.ai_image_recognition_count is 'AI识图剩余次数';
+comment on column sys_user.max_internal_power_count is '最大内功数';
 comment on column sys_user.del_flag is '删除标志（0代表存在 2代表删除）';
 comment on column sys_user.login_ip is '最后登录IP';
 comment on column sys_user.login_date is '最后登录时间';
@@ -105,8 +111,40 @@ comment on table sys_user is '用户信息表';
 -- ----------------------------
 -- 初始化-用户信息表数据
 -- ----------------------------
-insert into sys_user values(1,  103, 'admin',   '超级管理员', '00', 'niangao@163.com', '15888888888', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '1', '0', '127.0.0.1', current_timestamp, current_timestamp, 'admin', current_timestamp, '', null, '管理员');
-insert into sys_user values(2,  105, 'niangao', '年糕', 			'00', 'niangao@qq.com',  '15666666666', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '0', '0', '127.0.0.1', current_timestamp, current_timestamp, 'admin', current_timestamp, '', null, '测试员');
+insert into sys_user values(1,  103, 'admin',   '超级管理员', '00', 'niangao@163.com', '15888888888', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '1', '2099-12-31 23:59:59', 0, 20, '0', '127.0.0.1', current_timestamp, current_timestamp, 'admin', current_timestamp, '', null, '管理员');
+insert into sys_user values(2,  105, 'niangao', '年糕', 			'00', 'niangao@qq.com',  '15666666666', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '0', null, 0, 20, '0', '127.0.0.1', current_timestamp, current_timestamp, 'admin', current_timestamp, '', null, '测试员');
+
+-- ----------------------------
+-- 2-1、个人内功表
+-- ----------------------------
+drop table if exists personal_internal_power;
+create table personal_internal_power (
+    power_id bigserial not null,
+    user_id bigint not null,
+    name varchar(64) not null,
+    category varchar(64) default '',
+    category_trait varchar(128) default '',
+    bonus_percent float8 default 0 not null,
+    entries_json text,
+    elements_json text,
+    remark varchar(500) default '',
+    create_time timestamp(0),
+    update_time timestamp(0),
+    primary key (power_id)
+);
+create index idx_personal_internal_power_user_id on personal_internal_power(user_id);
+comment on column personal_internal_power.power_id is '内功ID';
+comment on column personal_internal_power.user_id is '用户ID';
+comment on column personal_internal_power.name is '内功名称';
+comment on column personal_internal_power.category is '内功种类';
+comment on column personal_internal_power.category_trait is '种类特性';
+comment on column personal_internal_power.bonus_percent is '基础百分比加成';
+comment on column personal_internal_power.entries_json is '词条JSON';
+comment on column personal_internal_power.elements_json is '五行JSON';
+comment on column personal_internal_power.remark is '备注';
+comment on column personal_internal_power.create_time is '创建时间';
+comment on column personal_internal_power.update_time is '更新时间';
+comment on table personal_internal_power is '个人内功表';
 
 -- ----------------------------
 -- 3、岗位信息表
@@ -837,6 +875,7 @@ comment on table sys_job is '定时任务调度表';
 insert into sys_job values(1, '系统默认（无参）', 'default', 'default', 'module_task.scheduler_test.job', null,   null, '0/10 * * * * ?', '3', '1', '1', 'admin', current_timestamp, '', null, '');
 insert into sys_job values(2, '系统默认（有参）', 'default', 'default', 'module_task.scheduler_test.job', 'test', null, '0/15 * * * * ?', '3', '1', '1', 'admin', current_timestamp, '', null, '');
 insert into sys_job values(3, '系统默认（多参）', 'default', 'default', 'module_task.scheduler_test.job', 'new',  '{test: 111}', '0/20 * * * * ?', '3', '1', '1', 'admin', current_timestamp, '', null, '');
+insert into sys_job values(4, 'VIP到期自动清理', 'default', 'default', 'module_task.user_vip.expire_user_vip', null, null, '0 0 * * * ?', '3', '1', '0', 'admin', current_timestamp, '', null, '每小时清理已过期VIP授权');
 
 -- ----------------------------
 -- 16、定时任务调度日志表

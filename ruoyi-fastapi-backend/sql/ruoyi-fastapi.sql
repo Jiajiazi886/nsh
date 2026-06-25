@@ -52,6 +52,9 @@ create table sys_user (
   password          varchar(100)    default ''                 comment '密码',
   status            char(1)         default '0'                comment '帐号状态（0正常 1停用）',
   is_vip            char(1)         default '0'                comment 'VIP标识（0非VIP 1VIP）',
+  vip_expire_time   datetime                                   comment 'VIP到期时间',
+  ai_image_recognition_count int    default 0                  comment 'AI识图剩余次数',
+  max_internal_power_count int      default 20                 comment '最大内功数',
   del_flag          char(1)         default '0'                comment '删除标志（0代表存在 2代表删除）',
   login_ip          varchar(128)    default ''                 comment '最后登录IP',
   login_date        datetime                                   comment '最后登录时间',
@@ -67,8 +70,28 @@ create table sys_user (
 -- ----------------------------
 -- 初始化-用户信息表数据
 -- ----------------------------
-insert into sys_user values(1,  103, 'admin',   '超级管理员', '00', 'niangao@163.com', '15888888888', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '1', '0', '127.0.0.1', sysdate(), sysdate(), 'admin', sysdate(), '', null, '管理员');
-insert into sys_user values(2,  105, 'niangao', '年糕', 			'00', 'niangao@qq.com',  '15666666666', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '0', '0', '127.0.0.1', sysdate(), sysdate(), 'admin', sysdate(), '', null, '测试员');
+insert into sys_user values(1,  103, 'admin',   '超级管理员', '00', 'niangao@163.com', '15888888888', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '1', '2099-12-31 23:59:59', 0, 20, '0', '127.0.0.1', sysdate(), sysdate(), 'admin', sysdate(), '', null, '管理员');
+insert into sys_user values(2,  105, 'niangao', '年糕', 			'00', 'niangao@qq.com',  '15666666666', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '0', null, 0, 20, '0', '127.0.0.1', sysdate(), sysdate(), 'admin', sysdate(), '', null, '测试员');
+
+-- ----------------------------
+-- 2-1、个人内功表
+-- ----------------------------
+drop table if exists personal_internal_power;
+create table personal_internal_power (
+  power_id          bigint(20)      not null auto_increment    comment '内功ID',
+  user_id           bigint(20)      not null                   comment '用户ID',
+  name              varchar(64)     not null                   comment '内功名称',
+  category          varchar(64)     default ''                 comment '内功种类',
+  category_trait    varchar(128)    default ''                 comment '种类特性',
+  bonus_percent     double          default 0                  comment '基础百分比加成',
+  entries_json      longtext                                   comment '词条JSON',
+  elements_json     longtext                                   comment '五行JSON',
+  remark            varchar(500)    default ''                 comment '备注',
+  create_time       datetime                                   comment '创建时间',
+  update_time       datetime                                   comment '更新时间',
+  primary key (power_id),
+  key idx_personal_internal_power_user_id (user_id)
+) engine=innodb auto_increment=1 comment = '个人内功表';
 
 
 -- ----------------------------
@@ -655,6 +678,7 @@ create table sys_job (
 insert into sys_job values(1, '系统默认（无参）', 'default', 'default', 'module_task.scheduler_test.job', NULL,   NULL, '0/10 * * * * ?', '3', '1', '1', 'admin', sysdate(), '', null, '');
 insert into sys_job values(2, '系统默认（有参）', 'default', 'default', 'module_task.scheduler_test.job', 'test', NULL, '0/15 * * * * ?', '3', '1', '1', 'admin', sysdate(), '', null, '');
 insert into sys_job values(3, '系统默认（多参）', 'default', 'default', 'module_task.scheduler_test.job', 'new',  '{\"test\": 111}', '0/20 * * * * ?', '3', '1', '1', 'admin', sysdate(), '', null, '');
+insert into sys_job values(4, 'VIP到期自动清理', 'default', 'default', 'module_task.user_vip.expire_user_vip', NULL, NULL, '0 0 * * * ?', '3', '1', '0', 'admin', sysdate(), '', null, '每小时清理已过期VIP授权');
 
 
 -- ----------------------------
