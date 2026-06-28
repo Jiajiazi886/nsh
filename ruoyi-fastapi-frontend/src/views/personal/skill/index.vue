@@ -115,6 +115,10 @@
           </div>
 
           <div class="card-center">
+            <div class="power-card-media" :class="{ empty: !resolvePowerImage(item) }">
+              <img v-if="resolvePowerImage(item)" :src="resolvePowerImage(item)" :alt="`${item.name || '内功'}图片`" />
+              <span v-else>内功图片</span>
+            </div>
             <h2>{{ item.name || '未命名内功' }}</h2>
             <p class="element-sequence" :title="formatElementCounts(item.elements)">
               {{ formatElementSequence(item.elements) }}
@@ -256,14 +260,101 @@
                 </el-form-item>
 
                 <el-form-item label="内功种类" prop="category">
-                  <el-select v-model="draft.category" placeholder="请选择种类" style="width: 100%" @change="handleCategoryChange">
-                    <el-option
-                      v-for="item in categoryOptions"
-                      :key="item.value"
-                      :label="item.label"
-                      :value="item.value"
-                    />
-                  </el-select>
+                  <el-popover
+                    v-model:visible="categoryPickerVisible"
+                    trigger="click"
+                    placement="bottom-start"
+                    :width="380"
+                    popper-class="power-category-popper"
+                  >
+                    <template #reference>
+                      <button
+                        type="button"
+                        class="category-picker-trigger"
+                        :class="{ empty: !selectedCategoryCatalog }"
+                      >
+                        <span class="category-picker-thumb" :class="{ empty: !resolveCatalogImage(selectedCategoryCatalog) }">
+                          <img
+                            v-if="resolveCatalogImage(selectedCategoryCatalog)"
+                            :src="resolveCatalogImage(selectedCategoryCatalog)"
+                            :alt="`${selectedCategoryCatalog?.name || '内功'}图片`"
+                          />
+                          <span v-else>图</span>
+                        </span>
+                        <span class="category-picker-main">
+                          <strong>{{ selectedCategoryCatalog?.displayName || '请选择内功种类' }}</strong>
+                          <small>{{ selectedCategoryCatalog ? formatCategoryMeta(selectedCategoryCatalog) : '按元素文件夹选择预设内功' }}</small>
+                        </span>
+                        <el-icon class="category-picker-caret"><ArrowDown /></el-icon>
+                      </button>
+                    </template>
+
+                    <div class="power-category-tree">
+                      <button
+                        v-for="item in rootCategoryOptions"
+                        :key="item.value"
+                        type="button"
+                        class="category-file-row root-file"
+                        :class="{ active: draft.category === item.value }"
+                        @click="selectCategoryPreset(item)"
+                      >
+                        <span class="category-file-thumb" :class="{ empty: !resolveCatalogImage(item) }">
+                          <img v-if="resolveCatalogImage(item)" :src="resolveCatalogImage(item)" :alt="`${item.name}图片`" />
+                          <span v-else>图</span>
+                        </span>
+                        <span class="category-file-main">
+                          <strong>{{ item.displayName }}</strong>
+                          <small>{{ formatCategoryMeta(item) }}</small>
+                        </span>
+                        <span class="category-file-bonus">{{ formatBonus(item.baseBonus) }}</span>
+                      </button>
+
+                      <section
+                        v-for="folder in elementCategoryFolders"
+                        :key="folder.key"
+                        class="element-folder"
+                        :class="{ collapsed: isElementFolderCollapsed(folder.key) }"
+                      >
+                        <button
+                          type="button"
+                          class="element-folder-header"
+                          :aria-expanded="!isElementFolderCollapsed(folder.key)"
+                          @click="toggleElementFolder(folder.key)"
+                        >
+                          <span class="element-folder-left">
+                            <el-icon class="element-folder-caret"><ArrowRightBold /></el-icon>
+                            <el-icon class="element-folder-icon" :style="{ color: folder.color }">
+                              <Folder v-if="isElementFolderCollapsed(folder.key)" />
+                              <FolderOpened v-else />
+                            </el-icon>
+                            <strong>{{ folder.label }}元素</strong>
+                          </span>
+                          <span class="element-folder-count">{{ folder.items.length }}</span>
+                        </button>
+
+                        <div v-show="!isElementFolderCollapsed(folder.key)" class="element-folder-body">
+                          <button
+                            v-for="item in folder.items"
+                            :key="item.value"
+                            type="button"
+                            class="category-file-row"
+                            :class="{ active: draft.category === item.value }"
+                            @click="selectCategoryPreset(item)"
+                          >
+                            <span class="category-file-thumb" :class="{ empty: !resolveCatalogImage(item) }">
+                              <img v-if="resolveCatalogImage(item)" :src="resolveCatalogImage(item)" :alt="`${item.name}图片`" />
+                              <span v-else>图</span>
+                            </span>
+                            <span class="category-file-main">
+                              <strong>{{ item.displayName }}</strong>
+                              <small>{{ formatCategoryMeta(item) }}</small>
+                            </span>
+                            <span class="category-file-bonus">{{ formatBonus(item.baseBonus) }}</span>
+                          </button>
+                        </div>
+                      </section>
+                    </div>
+                  </el-popover>
                 </el-form-item>
 
                 <el-form-item label="种类特性" prop="categoryTrait">
@@ -285,9 +376,9 @@
                 <span>{{ formatElementCounts(draft.elements) }}</span>
               </div>
               <div class="elements-editor">
-                <div class="element-total" :class="{ invalid: elementTotal !== 5 }">
-                  <span>当前 {{ elementTotal }} / 5</span>
-                  <strong>{{ elementTotal === 5 ? '配比完整' : '必须刚好 5 个元素' }}</strong>
+                <div class="element-total" :class="{ invalid: !isElementTotalValid }">
+                  <span>当前 {{ elementTotal }} / {{ expectedElementTotal }}</span>
+                  <strong>{{ isElementTotalValid ? '配比完整' : `必须符合 ${expectedElementTotal} 个元素` }}</strong>
                 </div>
                 <div class="element-controls">
                   <div
@@ -318,12 +409,20 @@
                   :key="entry.id"
                   class="entry-row"
                 >
-                  <el-input v-model.trim="entry.name" placeholder="词条名称，例如：会心伤害" />
+                  <el-select v-model="entry.name" filterable placeholder="请选择词条">
+                    <el-option
+                      v-for="item in entryOptions"
+                      :key="item.entryName"
+                      :label="formatEntryOptionLabel(item)"
+                      :value="item.entryName"
+                    />
+                  </el-select>
                   <el-input v-model.trim="entry.value" placeholder="数值占位，例如：随机" />
                   <el-button text type="danger" @click="removeEntry(index)">删除</el-button>
                 </div>
-                <el-button plain @click="addEntry">添加词条占位</el-button>
+                <el-button plain :disabled="!entryOptions.length" @click="addEntry">添加词条占位</el-button>
                 <p v-if="!draft.entries.length" class="placeholder-note">暂无词条，等待后期随机开发。</p>
+                <p v-if="!entryOptions.length" class="placeholder-note">暂无启用词条，请先在系统管理中维护内功词条。</p>
               </div>
             </section>
 
@@ -343,6 +442,10 @@
 
           <aside class="preview-panel">
             <div class="preview-card">
+              <div class="preview-image" :class="{ empty: !resolvePowerImage(draft) }">
+                <img v-if="resolvePowerImage(draft)" :src="resolvePowerImage(draft)" :alt="`${draft.name || '内功'}图片`" />
+                <span v-else>内功图片</span>
+              </div>
               <div class="seal">内</div>
               <h2>{{ draft.name || '未命名' }}</h2>
               <p>{{ draft.category }} · {{ draft.categoryTrait || '未设特性' }}</p>
@@ -366,7 +469,7 @@
             </div>
             <div class="editor-note-card">
               <strong>卡片预览</strong>
-              <span>保存后会同步到内功库卡片墙。五行必须刚好 5 个，词条可先用“待随机”占位。</span>
+              <span>保存后会同步到内功库卡片墙。五行数量跟随所选预设，词条先保留空数据。</span>
             </div>
           </aside>
         </div>
@@ -447,13 +550,15 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown, ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
-import { checkPermi } from '@/utils/permission'
 import {
   addInternalPower,
   deleteInternalPower,
   importLocalInternalPowers,
+  listInternalPowerEntries,
   listInternalPowers,
+  listInternalPowerPresets,
   recognizeInternalPowerImages,
   updateInternalPower
 } from '@/api/personal/internalPower'
@@ -470,8 +575,12 @@ const draft = ref(null)
 const savedDraftSignature = ref('')
 const editingVisible = ref(false)
 const valueEditorVisible = ref(false)
+const categoryPickerVisible = ref(false)
+const collapsedElementFolders = ref(new Set())
 const powerCatalog = ref([])
+const entryOptions = ref([])
 const catalogDraft = ref([])
+const baseApi = import.meta.env.VITE_APP_BASE_API
 const deleteConfirmVisible = ref(false)
 const deleteConfirmTitle = ref('删除内功')
 const deleteConfirmMessage = ref('')
@@ -514,8 +623,7 @@ const deleteConfirmSkipKey = computed(() => {
   if (!userStore.id) return ''
   return `personal-skill:skip-delete-confirm:v1:${userStore.id}`
 })
-const catalogStorageKey = 'personal-skill:power-catalog:v1'
-const canEditPowerValues = computed(() => checkPermi(['personal:skill:value-edit']))
+const canEditPowerValues = computed(() => false)
 const aiRecognitionCount = computed(() => Number(userStore.aiImageRecognitionCount || 0))
 const canCreateMore = computed(() => quota.value.unlimited || powers.value.length < Number(quota.value.maxCount || 20))
 const limitText = computed(() => quota.value.unlimited ? `${powers.value.length} 个已保存 · 不限上限` : `${powers.value.length}/${quota.value.maxCount || 20} 个已保存`)
@@ -526,15 +634,25 @@ const quotaSummaryText = computed(() => {
 
 const categoryOptions = computed(() => {
   const options = powerCatalog.value.map(item => ({
-    label: `${item.name} · ${formatBonus(item.baseBonus)}`,
-    value: item.name
+    label: `${item.displayName || item.name} · ${formatBonus(item.baseBonus)}`,
+    value: item.value
   }))
   const existingCategories = powers.value
     .map(item => item.category)
     .filter(Boolean)
-    .filter(category => !powerCatalog.value.some(item => item.name === category))
+    .filter(category => !powerCatalog.value.some(item => item.value === category))
     .map(category => ({ label: `${category} · 自定义`, value: category }))
   return [...options, ...existingCategories]
+})
+const selectedCategoryCatalog = computed(() => draft.value ? getCatalogByName(draft.value.category) : null)
+const rootCategoryOptions = computed(() => powerCatalog.value.filter(item => item.elementKey === 'mixed'))
+const elementCategoryFolders = computed(() => {
+  return elementOptions
+    .map(element => ({
+      ...element,
+      items: powerCatalog.value.filter(item => item.elementKey === element.key)
+    }))
+    .filter(folder => folder.items.length)
 })
 
 const filteredPowers = computed(() => {
@@ -555,7 +673,22 @@ const isAllFilteredSelected = computed(() => {
   return !!filteredPowers.value.length && filteredPowers.value.every(item => selectedBatchIds.value.includes(item.id))
 })
 const elementTotal = computed(() => sumElements(draft.value?.elements))
-const canSave = computed(() => draft.value && elementTotal.value === 5)
+const expectedElementTotal = computed(() => {
+  const catalog = draft.value ? getCatalogByName(draft.value.category) : null
+  return catalog?.elementKey === 'mixed' ? 5 : 4
+})
+const isElementTotalValid = computed(() => {
+  if (!draft.value) return false
+  const catalog = getCatalogByName(draft.value.category)
+  if (catalog?.elementKey === 'mixed') {
+    return elementTotal.value === 5 && elementOptions.every(item => Number(draft.value.elements[item.key] || 0) === 1)
+  }
+  if (catalog?.elementKey) {
+    return elementTotal.value === 4 && Number(draft.value.elements[catalog.elementKey] || 0) === 4
+  }
+  return elementTotal.value === 4 || elementTotal.value === 5
+})
+const canSave = computed(() => draft.value && isElementTotalValid.value)
 const isDirty = computed(() => draft.value && savedDraftSignature.value !== JSON.stringify(draft.value))
 const editorStatusText = computed(() => {
   if (!selectedPower.value) {
@@ -564,7 +697,7 @@ const editorStatusText = computed(() => {
   return isDirty.value ? '有未保存改动，保存后同步到卡片墙' : '已保存到后端内功库'
 })
 const footerStatusText = computed(() => {
-  if (!canSave.value) return '五行数量未满足 5 个'
+  if (!canSave.value) return `五行数量未满足 ${expectedElementTotal.value} 个`
   return selectedPower.value ? '可以保存当前改动' : '保存后新增到内功库'
 })
 const emptySlots = computed(() => {
@@ -596,21 +729,33 @@ const elementSummaryText = computed(() => {
 })
 
 onMounted(async () => {
-  loadPowerCatalog()
+  await loadPowerCatalog()
+  await loadEntryOptions()
   await loadPowers()
 })
 
-function loadPowerCatalog() {
+async function loadPowerCatalog() {
   try {
-    const stored = JSON.parse(localStorage.getItem(catalogStorageKey) || '[]')
-    powerCatalog.value = mergePowerCatalog(Array.isArray(stored) ? stored : [])
+    const response = await listInternalPowerPresets()
+    powerCatalog.value = (response.presets || response.data || []).map(normalizeCatalogItem)
   } catch {
-    powerCatalog.value = createDefaultPowerCatalog()
+    powerCatalog.value = []
+    ElMessage.error('内功预设加载失败，请联系管理员检查系统内功信息管理')
+  }
+}
+
+async function loadEntryOptions() {
+  try {
+    const response = await listInternalPowerEntries()
+    entryOptions.value = (response.entries || response.data || []).map(normalizeEntryOption).filter(item => item.entryName)
+  } catch {
+    entryOptions.value = []
+    ElMessage.error('内功词条加载失败，请联系管理员检查系统内功词条管理')
   }
 }
 
 function persistPowerCatalog() {
-  localStorage.setItem(catalogStorageKey, JSON.stringify(powerCatalog.value))
+  // 内功预设已迁移到后端系统管理，此处保留空函数兼容旧入口。
 }
 
 async function loadPowers() {
@@ -628,7 +773,7 @@ async function loadPowers() {
 
 function isLegacySampleLibrary(items = []) {
   const legacyCategories = new Set(['攻击', '防御', '治疗', '通用'])
-  const hasNewSeasonCategory = items.some(item => powerCatalog.value.some(catalog => catalog.name === item.category))
+  const hasNewSeasonCategory = items.some(item => powerCatalog.value.some(catalog => catalog.value === item.category))
   const hasLegacyCategory = items.some(item => legacyCategories.has(item.category))
   return hasLegacyCategory && !hasNewSeasonCategory
 }
@@ -776,16 +921,21 @@ function createPower() {
     ElMessage.warning('已超过当前内功上限，请删除后再新增或联系管理员调整上限')
     return
   }
+  if (!powerCatalog.value.length) {
+    ElMessage.warning('暂无可用内功预设，请联系管理员在系统管理中维护')
+    return
+  }
   const firstCatalog = powerCatalog.value[0] || null
   selectedId.value = ''
   draft.value = normalizePower({
     id: createId(),
     name: firstCatalog?.name || '新内功',
-    category: firstCatalog?.name || '通用',
+    category: firstCatalog?.value || '通用',
     categoryTrait: firstCatalog?.trait || '等待定位',
     bonusPercent: firstCatalog?.baseBonus || 0,
-    entries: [],
-    elements: createElementsFromPrimary(firstCatalog?.primaryElement),
+    imageUrl: firstCatalog?.imageUrl || '',
+    entries: cloneEntries(firstCatalog?.entries || []),
+    elements: firstCatalog?.elements || createEmptyElements(),
     remark: '',
     updatedAt: new Date().toISOString()
   })
@@ -796,8 +946,8 @@ function createPower() {
 
 async function saveDraft() {
   if (!draft.value) return
-  if (elementTotal.value !== 5) {
-    ElMessage.warning('五行元素总数必须刚好为 5')
+  if (!isElementTotalValid.value) {
+    ElMessage.warning(`五行元素总数必须符合预设：${expectedElementTotal.value} 个`)
     return
   }
   try {
@@ -960,6 +1110,10 @@ function cancelDeleteConfirm() {
 }
 
 async function resetSamples() {
+  if (!powerCatalog.value.length) {
+    ElMessage.warning('暂无可用内功预设，不能重置示例')
+    return
+  }
   try {
     await ElMessageBox.confirm('这会覆盖当前账号后端保存的内功示例，是否继续？', '重置示例', {
       type: 'warning',
@@ -984,11 +1138,37 @@ async function resetSamples() {
 }
 
 function addEntry() {
+  if (!entryOptions.value.length) {
+    ElMessage.warning('暂无启用内功词条，请先在系统管理中维护')
+    return
+  }
   draft.value.entries.push({
     id: createId(),
-    name: '',
-    value: '待随机'
+    name: entryOptions.value[0].entryName,
+    value: ''
   })
+}
+
+function selectCategoryPreset(catalog) {
+  if (!draft.value || !catalog) return
+  draft.value.category = catalog.value
+  handleCategoryChange(catalog.value)
+  categoryPickerVisible.value = false
+  nextTick(() => formRef.value?.clearValidate('category'))
+}
+
+function isElementFolderCollapsed(key) {
+  return collapsedElementFolders.value.has(key)
+}
+
+function toggleElementFolder(key) {
+  const next = new Set(collapsedElementFolders.value)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  collapsedElementFolders.value = next
 }
 
 function handleCategoryChange(value) {
@@ -1000,7 +1180,9 @@ function handleCategoryChange(value) {
   }
   draft.value.categoryTrait = catalog.trait
   draft.value.bonusPercent = catalog.baseBonus
-  draft.value.elements = createElementsFromPrimary(catalog.primaryElement)
+  draft.value.imageUrl = catalog.imageUrl || ''
+  draft.value.entries = cloneEntries(catalog.entries || [])
+  draft.value.elements = { ...catalog.elements }
 }
 
 function openValueEditor() {
@@ -1077,6 +1259,36 @@ function getEntryLabel(entry = {}) {
   return `${name} ${value}`
 }
 
+function formatEntryOptionLabel(entry = {}) {
+  const percent = entry.conversionPercent
+  const suffix = percent === null || percent === undefined || percent === '' ? '待配置' : `${Number(percent || 0).toFixed(4)}%`
+  return `${entry.entryName} · ${suffix}`
+}
+
+function resolvePowerImage(power = {}) {
+  const catalog = getCatalogByName(power.category)
+  return resolveImagePath(power.imageUrl || catalog?.imageUrl || '')
+}
+
+function resolveCatalogImage(catalog = {}) {
+  return resolveImagePath(catalog?.imageUrl || '')
+}
+
+function resolveImagePath(value = '') {
+  value = String(value || '').trim()
+  if (!value) return ''
+  if (/^(https?:)?\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) return value
+  if (value.startsWith('/profile/')) return `${baseApi}${value}`
+  return value
+}
+
+function formatCategoryMeta(catalog = {}) {
+  const elementText = catalog.elementKey === 'mixed'
+    ? '五行各 1'
+    : `${getElementLabel(catalog.elementKey)} × ${Number(catalog.elements?.[catalog.elementKey] || 0)}`
+  return `${elementText} · ${catalog.trait || '待配置'}`
+}
+
 function formatElementSequence(elements = {}) {
   const sequence = elementOptions
     .flatMap(item => Array.from({ length: Number(elements[item.key] || 0) }, () => item.label))
@@ -1094,7 +1306,11 @@ function getPowerScore(power = {}) {
 }
 
 function getCatalogByName(name) {
-  return powerCatalog.value.find(item => item.name === name) || null
+  return powerCatalog.value.find(item => item.value === name || item.name === name || item.displayName === name) || null
+}
+
+function getElementLabel(key) {
+  return elementOptions.find(item => item.key === key)?.label || key || ''
 }
 
 function changeElement(key, delta) {
@@ -1111,13 +1327,8 @@ function normalizePower(value) {
     category: String(value.category || '通用'),
     categoryTrait: String(value.categoryTrait || ''),
     bonusPercent: clampBonus(value.bonusPercent),
-    entries: Array.isArray(value.entries)
-      ? value.entries.map(entry => ({
-          id: String(entry.id || createId()),
-          name: String(entry.name || ''),
-          value: String(entry.value || '')
-        }))
-      : [],
+    imageUrl: String(value.imageUrl || ''),
+    entries: normalizeEntries(value.entries),
     elements: normalizeElements(value.elements),
     remark: String(value.remark || ''),
     updatedAt: value.updatedAt || new Date().toISOString()
@@ -1137,6 +1348,31 @@ function toPowerPayload(power) {
     remark: power.remark || '',
     updatedAt: power.updatedAt
   }
+}
+
+function normalizeEntries(entries = []) {
+  return Array.isArray(entries)
+    ? entries.map(entry => ({
+        id: String(entry.id || createId()),
+        name: String(entry.name || ''),
+        value: String(entry.value || '')
+      }))
+    : []
+}
+
+function normalizeEntryOption(value = {}) {
+  const percent = value.conversionPercent
+  return {
+    entryId: value.entryId,
+    entryName: String(value.entryName || '').trim(),
+    conversionPercent: percent === null || percent === undefined || percent === '' ? null : Number(percent),
+    conversionDesc: String(value.conversionDesc || ''),
+    status: value.status || '0'
+  }
+}
+
+function cloneEntries(entries = []) {
+  return normalizeEntries(entries).map(entry => ({ ...entry }))
 }
 
 function normalizeElements(value = {}) {
@@ -1159,7 +1395,7 @@ function createElementsFromPrimary(primaryElement = 'mixed') {
   if (primaryElement && primaryElement !== 'mixed') {
     return {
       ...createEmptyElements(),
-      [primaryElement]: 5
+      [primaryElement]: 4
     }
   }
   return { metal: 1, wood: 1, water: 1, fire: 1, earth: 1 }
@@ -1180,17 +1416,39 @@ function createId() {
 }
 
 function normalizeCatalogItem(value = {}) {
+  const elementKey = ['metal', 'wood', 'water', 'fire', 'earth', 'mixed'].includes(value.elementKey)
+    ? value.elementKey
+    : (['metal', 'wood', 'water', 'fire', 'earth', 'mixed'].includes(value.primaryElement) ? value.primaryElement : 'mixed')
+  const elements = normalizeElements(Object.keys(value.elements || {}).length ? value.elements : createElementsFromPrimary(elementKey))
+  const displayName = value.displayName || buildPresetDisplayName(value.name, elementKey)
   return {
-    id: String(value.id || createId()),
+    id: String(value.id || value.presetId || createId()),
+    presetId: value.presetId,
     name: String(value.name || '').trim(),
+    displayName,
+    value: displayName,
     season: 'new',
-    rarity: value.rarity === 'rare' ? 'rare' : 'common',
-    primaryElement: ['metal', 'wood', 'water', 'fire', 'earth', 'mixed'].includes(value.primaryElement)
-      ? value.primaryElement
-      : 'mixed',
-    baseBonus: clampBonus(value.baseBonus),
-    trait: String(value.trait || '').trim() || '待配置'
+    rarity: value.rarity === 'rare' || String(value.name || '').startsWith('稀有-') ? 'rare' : 'common',
+    primaryElement: elementKey,
+    elementKey,
+    elements,
+    baseBonus: clampBonus(value.baseBonus ?? value.bonusPercent),
+    imageUrl: String(value.imageUrl || '').trim(),
+    entries: normalizeEntries(value.entries),
+    trait: String(value.trait || value.bonusDesc || value.bonusType || '').trim() || '待配置'
   }
+}
+
+function buildPresetDisplayName(name, elementKey) {
+  const elementMap = {
+    metal: '金',
+    wood: '木',
+    water: '水',
+    fire: '火',
+    earth: '土',
+    mixed: '全元素'
+  }
+  return name ? `${name}（${elementMap[elementKey] || elementKey}）` : ''
 }
 
 function mergePowerCatalog(stored = []) {
@@ -1207,27 +1465,7 @@ function mergePowerCatalog(stored = []) {
 }
 
 function createDefaultPowerCatalog() {
-  return [
-    { id: 'catalog-rare-ry-fire', name: '日月两仪·火', rarity: 'rare', primaryElement: 'fire', baseBonus: 6, trait: '稀有火系基础增伤' },
-    { id: 'catalog-rare-ry-earth', name: '日月两仪·土', rarity: 'rare', primaryElement: 'earth', baseBonus: 6, trait: '稀有土系基础增伤' },
-    { id: 'catalog-rare-jd-metal', name: '绝电惊沙·金', rarity: 'rare', primaryElement: 'metal', baseBonus: 6, trait: '稀有金系基础增伤' },
-    { id: 'catalog-rare-jd-wood', name: '绝电惊沙·木', rarity: 'rare', primaryElement: 'wood', baseBonus: 6, trait: '稀有木系基础增伤' },
-    { id: 'catalog-rare-cy-fire', name: '承影锋烁·火', rarity: 'rare', primaryElement: 'fire', baseBonus: 6, trait: '稀有火系基础增伤' },
-    { id: 'catalog-rare-cy-metal', name: '承影锋烁·金', rarity: 'rare', primaryElement: 'metal', baseBonus: 6, trait: '稀有金系基础增伤' },
-    { id: 'catalog-rare-bd-wood', name: '不动明王·木', rarity: 'rare', primaryElement: 'wood', baseBonus: 6, trait: '稀有木系基础增伤' },
-    { id: 'catalog-rare-bd-water', name: '不动明王·水', rarity: 'rare', primaryElement: 'water', baseBonus: 6, trait: '稀有水系基础增伤' },
-    { id: 'catalog-common-wyy', name: '五韵谣', rarity: 'common', primaryElement: 'mixed', baseBonus: 4, trait: '普通通用基础增伤' },
-    { id: 'catalog-common-wjc', name: '望惊川', rarity: 'common', primaryElement: 'water', baseBonus: 4, trait: '普通水系基础增伤' },
-    { id: 'catalog-common-zm', name: '珠明', rarity: 'common', primaryElement: 'water', baseBonus: 4, trait: '普通水系基础增伤' },
-    { id: 'catalog-common-gx', name: '固玺', rarity: 'common', primaryElement: 'earth', baseBonus: 4, trait: '普通土系基础增伤' },
-    { id: 'catalog-common-yqz', name: '御千嶂', rarity: 'common', primaryElement: 'earth', baseBonus: 4, trait: '普通土系基础增伤' },
-    { id: 'catalog-common-pzy', name: '破重云', rarity: 'common', primaryElement: 'wood', baseBonus: 4, trait: '普通木系基础增伤' },
-    { id: 'catalog-common-lq', name: '凌穹', rarity: 'common', primaryElement: 'wood', baseBonus: 4, trait: '普通木系基础增伤' },
-    { id: 'catalog-common-pf', name: '破釜', rarity: 'common', primaryElement: 'fire', baseBonus: 4, trait: '普通火系基础增伤' },
-    { id: 'catalog-common-gsy', name: '贯山月', rarity: 'common', primaryElement: 'metal', baseBonus: 4, trait: '普通金系基础增伤' },
-    { id: 'catalog-common-zmiao', name: '众妙', rarity: 'common', primaryElement: 'fire', baseBonus: 4, trait: '普通火系基础增伤' },
-    { id: 'catalog-common-cy', name: '炽原', rarity: 'common', primaryElement: 'fire', baseBonus: 4, trait: '普通火系基础增伤' }
-  ].map(normalizeCatalogItem)
+  return []
 }
 
 function createSamplePowers() {
@@ -1235,14 +1473,11 @@ function createSamplePowers() {
   return samples.map((item, index) => normalizePower({
     id: `sample-${item.id}`,
     name: item.name,
-    category: item.name,
+    category: item.value,
     categoryTrait: item.trait,
     bonusPercent: item.baseBonus,
-    entries: [
-      { id: `sample-${item.id}-entry-1`, name: '固定基础', value: formatBonus(item.baseBonus) },
-      { id: `sample-${item.id}-entry-2`, name: '随机词条', value: '待随机' }
-    ],
-    elements: createElementsFromPrimary(item.primaryElement),
+    entries: [],
+    elements: item.elements,
     remark: item.rarity === 'rare' ? '新赛年稀有内功，基础数值可在权限面板调整。' : '新赛年普通内功，基础数值可在权限面板调整。',
     updatedAt: new Date(Date.UTC(2026, 5, 20, 8, 0, 0) - index * 60000).toISOString()
   }))
@@ -1513,12 +1748,41 @@ function getSamplePowersForQuota() {
 
 .card-center {
   min-height: 286px;
-  padding: 72px 8px 20px;
+  padding: 52px 8px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
+}
+
+.power-card-media {
+  width: min(118px, 58%);
+  aspect-ratio: 1;
+  margin-bottom: 16px;
+  border: 1px solid #d7e4f2;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(245, 248, 252, 0.96), rgba(255, 255, 255, 0.9)),
+    repeating-linear-gradient(45deg, rgba(148, 163, 184, 0.1) 0 8px, transparent 8px 16px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.82), 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.power-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.power-card-media.empty span {
+  color: #8a9aae;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 
 .card-center h2 {
@@ -1795,6 +2059,230 @@ function getSamplePowersForQuota() {
   border-radius: 14px;
 }
 
+.category-picker-trigger {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #dcdfe6;
+  border-radius: 14px;
+  padding: 5px 10px 5px 6px;
+  background: #ffffff;
+  color: #172033;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.category-picker-trigger:hover {
+  border-color: #b9852c;
+  background: #fffdfa;
+}
+
+.category-picker-trigger:focus-visible {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16);
+}
+
+.category-picker-thumb,
+.category-file-thumb {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(248, 250, 252, 0.96), rgba(255, 247, 237, 0.9)),
+    repeating-linear-gradient(45deg, rgba(148, 163, 184, 0.14) 0 6px, transparent 6px 12px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.category-picker-thumb {
+  width: 36px;
+  height: 36px;
+}
+
+.category-file-thumb {
+  width: 34px;
+  height: 34px;
+}
+
+.category-picker-thumb img,
+.category-file-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.category-picker-thumb.empty span,
+.category-file-thumb.empty span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.category-picker-main,
+.category-file-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.category-picker-main strong,
+.category-file-main strong {
+  overflow: hidden;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-picker-main small,
+.category-file-main small {
+  overflow: hidden;
+  color: #7b6b57;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-picker-caret {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+:global(.power-category-popper) {
+  padding: 8px;
+  border-radius: 14px;
+}
+
+.power-category-tree {
+  max-height: min(430px, 58vh);
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.element-folder {
+  position: relative;
+}
+
+.element-folder-header,
+.category-file-row {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.74);
+  color: #172033;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.element-folder-header {
+  min-height: 36px;
+  padding: 0 8px 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.element-folder-header:hover,
+.category-file-row:hover {
+  border-color: rgba(185, 133, 44, 0.28);
+  background: rgba(255, 252, 246, 0.98);
+  box-shadow: 0 10px 20px rgba(51, 65, 85, 0.08);
+  transform: translateY(-1px);
+}
+
+.element-folder-left {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.element-folder-left strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.element-folder-caret {
+  color: #94a3b8;
+  font-size: 11px;
+  transform: rotate(90deg);
+  transition: transform 0.18s ease;
+}
+
+.element-folder.collapsed .element-folder-caret {
+  transform: rotate(0deg);
+}
+
+.element-folder-icon {
+  font-size: 17px;
+  filter: drop-shadow(0 5px 8px rgba(15, 23, 42, 0.12));
+}
+
+.element-folder-count,
+.category-file-bonus {
+  flex: 0 0 auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 900;
+}
+
+.element-folder-count {
+  min-width: 24px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: rgba(15, 23, 42, 0.06);
+  color: #64748b;
+  font-size: 11px;
+  text-align: center;
+}
+
+.element-folder-body {
+  display: grid;
+  gap: 5px;
+  padding: 5px 0 2px 22px;
+}
+
+.category-file-row {
+  min-height: 46px;
+  padding: 5px 8px 5px 6px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-file-row.root-file {
+  border-color: rgba(185, 133, 44, 0.2);
+  background: rgba(255, 247, 237, 0.86);
+}
+
+.category-file-row.active {
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.18);
+}
+
+.category-file-bonus {
+  color: #7c3aed;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .bonus-editor {
   width: 100%;
   display: grid;
@@ -1867,6 +2355,10 @@ function getSamplePowersForQuota() {
   margin-bottom: 8px;
 }
 
+.entry-row :deep(.el-select) {
+  width: 100%;
+}
+
 .placeholder-note {
   margin: 8px 0 0;
   color: #8a7862;
@@ -1886,6 +2378,35 @@ function getSamplePowersForQuota() {
   background:
     linear-gradient(145deg, rgba(25, 34, 48, 0.98), rgba(48, 62, 58, 0.96));
   color: #fff8e8;
+}
+
+.preview-image {
+  width: min(140px, 54%);
+  aspect-ratio: 1;
+  margin: 0 0 18px;
+  border: 1px solid rgba(255, 248, 232, 0.18);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(255, 248, 232, 0.08), rgba(185, 133, 44, 0.12)),
+    repeating-linear-gradient(45deg, rgba(255, 248, 232, 0.09) 0 8px, transparent 8px 16px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 248, 232, 0.06), 0 18px 32px rgba(0, 0, 0, 0.18);
+}
+
+.preview-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.preview-image.empty span {
+  color: rgba(255, 248, 232, 0.58);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
 }
 
 .seal {

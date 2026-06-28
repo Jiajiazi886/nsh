@@ -177,6 +177,7 @@ class UploadSettings:
         'jpg',
         'jpeg',
         'png',
+        'webp',
         # word excel powerpoint
         'doc',
         'docx',

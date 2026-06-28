@@ -8,6 +8,22 @@ export function listInternalPowers() {
   })
 }
 
+// 查询启用内功预设
+export function listInternalPowerPresets() {
+  return request({
+    url: '/personal/internal-power/presets',
+    method: 'get'
+  })
+}
+
+// 查询启用内功词条
+export function listInternalPowerEntries() {
+  return request({
+    url: '/personal/internal-power/entries',
+    method: 'get'
+  })
+}
+
 // 新增内功
 export function addInternalPower(data) {
   return request({

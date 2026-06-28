@@ -17,6 +17,7 @@ from module_admin.entity.vo.internal_power_vo import (
     InternalPowerRecognizeResultModel,
 )
 from module_admin.entity.vo.user_vo import CurrentUserModel
+from module_admin.service.internal_power_entry_service import InternalPowerEntryService
 from module_admin.service.user_service import UserService
 
 
@@ -39,6 +40,7 @@ class InternalPowerService:
         cls, query_db: AsyncSession, current_user: CurrentUserModel, power: InternalPowerModel
     ) -> InternalPowerModel:
         await cls.__assert_can_add(query_db, current_user)
+        await cls.__assert_valid_entries(query_db, power.entries)
         now = datetime.now()
         db_power = PersonalInternalPower(
             user_id=current_user.user.user_id,
@@ -64,6 +66,7 @@ class InternalPowerService:
         existing = await InternalPowerDao.get_by_id(query_db, power_id, current_user.user.user_id)
         if existing is None:
             raise ServiceException(message='内功不存在')
+        await cls.__assert_valid_entries(query_db, power.entries)
         values = {
             'name': power.name,
             'category': power.category or '',
@@ -94,6 +97,8 @@ class InternalPowerService:
     async def import_local_services(
         cls, query_db: AsyncSession, current_user: CurrentUserModel, import_data: InternalPowerImportModel
     ) -> InternalPowerListModel:
+        for power in import_data.powers:
+            await cls.__assert_valid_entries(query_db, power.entries)
         now = datetime.now()
         for power in import_data.powers:
             db_power = PersonalInternalPower(
@@ -148,6 +153,20 @@ class InternalPowerService:
             return
         if quota.max_count is not None and quota.count >= quota.max_count:
             raise ServiceException(message='已超过当前内功上限，请删除后再新增或联系管理员调整上限')
+
+    @classmethod
+    async def __assert_valid_entries(cls, query_db: AsyncSession, entries: list[Any]) -> None:
+        if not entries:
+            return
+        enabled_names = await InternalPowerEntryService.get_enabled_entry_names_service(query_db)
+        invalid_names = []
+        for entry in entries:
+            entry_data = cls.__model_dump(entry)
+            entry_name = str((entry_data or {}).get('name') or '').strip()
+            if entry_name and entry_name not in enabled_names:
+                invalid_names.append(entry_name)
+        if invalid_names:
+            raise ServiceException(message=f'内功词条只能选择系统内置启用词条：{", ".join(sorted(set(invalid_names)))}')
 
     @classmethod
     async def __build_quota(

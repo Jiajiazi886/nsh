@@ -15,7 +15,11 @@ from module_admin.entity.vo.internal_power_vo import (
     InternalPowerModel,
     InternalPowerRecognizeResultModel,
 )
+from module_admin.entity.vo.internal_power_entry_vo import InternalPowerEntryListModel
+from module_admin.entity.vo.internal_power_preset_vo import InternalPowerPresetListModel
 from module_admin.entity.vo.user_vo import CurrentUserModel
+from module_admin.service.internal_power_entry_service import InternalPowerEntryService
+from module_admin.service.internal_power_preset_service import InternalPowerPresetService
 from module_admin.service.internal_power_service import InternalPowerService
 from utils.log_util import logger
 from utils.response_util import ResponseUtil
@@ -41,6 +45,42 @@ async def get_personal_internal_power_list(
 ) -> Response:
     result = await InternalPowerService.get_list_services(query_db, current_user)
     logger.info('获取内功列表成功')
+
+    return ResponseUtil.success(model_content=result)
+
+
+@internal_power_controller.get(
+    '/presets',
+    summary='获取启用内功预设列表接口',
+    description='用于个人内功管理读取可用内功预设',
+    response_model=DynamicResponseModel[InternalPowerPresetListModel],
+)
+async def get_personal_internal_power_presets(
+    request: Request,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+) -> Response:
+    result = InternalPowerPresetListModel(
+        presets=await InternalPowerPresetService.get_personal_enabled_presets_service(query_db)
+    )
+    logger.info('获取启用内功预设成功')
+
+    return ResponseUtil.success(model_content=result)
+
+
+@internal_power_controller.get(
+    '/entries',
+    summary='获取启用内功词条列表接口',
+    description='用于个人内功管理读取可用内功词条',
+    response_model=DynamicResponseModel[InternalPowerEntryListModel],
+)
+async def get_personal_internal_power_entries(
+    request: Request,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+) -> Response:
+    result = InternalPowerEntryListModel(
+        entries=await InternalPowerEntryService.get_personal_enabled_entries_service(query_db)
+    )
+    logger.info('获取启用内功词条成功')
 
     return ResponseUtil.success(model_content=result)
 

@@ -759,6 +759,12 @@ function handleQuery() {
   queryParams.value.pageNum = 1;
   getList();
 }
+watch(
+  () => queryParams.value.roleId,
+  () => {
+    handleQuery();
+  }
+);
 function resetQuery() {
   dateRange.value = [];
   proxy.resetForm("queryRef");
