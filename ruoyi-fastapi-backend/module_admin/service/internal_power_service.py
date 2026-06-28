@@ -1,4 +1,5 @@
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -6,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel
 from exceptions.exception import ServiceException
+from module_admin.constants.internal_power_entry_limits import INTERNAL_POWER_ENTRY_LIMIT_MAP
 from module_admin.dao.internal_power_dao import InternalPowerDao
+from module_admin.dao.internal_power_entry_conversion_dao import InternalPowerEntryConversionDao
 from module_admin.dao.user_dao import UserDao
 from module_admin.entity.do.internal_power_do import PersonalInternalPower
 from module_admin.entity.vo.internal_power_vo import (
@@ -17,8 +20,13 @@ from module_admin.entity.vo.internal_power_vo import (
     InternalPowerRecognizeResultModel,
 )
 from module_admin.entity.vo.user_vo import CurrentUserModel
-from module_admin.service.internal_power_entry_service import InternalPowerEntryService
 from module_admin.service.user_service import UserService
+
+
+@dataclass
+class InternalPowerEntryStats:
+    entry_attack_power: float = 0
+    entry_attack_percent: float = 0
 
 
 class InternalPowerService:
@@ -30,8 +38,12 @@ class InternalPowerService:
     async def get_list_services(cls, query_db: AsyncSession, current_user: CurrentUserModel) -> InternalPowerListModel:
         user_id = current_user.user.user_id
         rows = await InternalPowerDao.list_by_user_id(query_db, user_id)
+        conversion_values, unit_percent = await cls.__get_conversion_context(query_db, user_id)
         return InternalPowerListModel(
-            powers=[cls.__to_model(row) for row in rows],
+            powers=[
+                cls.__to_model(row, conversion_values=conversion_values, unit_percent=unit_percent)
+                for row in rows
+            ],
             quota=await cls.__build_quota(query_db, current_user, len(rows)),
         )
 
@@ -55,7 +67,8 @@ class InternalPowerService:
             update_time=now,
         )
         await InternalPowerDao.add(query_db, db_power)
-        result = cls.__to_model(db_power)
+        conversion_values, unit_percent = await cls.__get_conversion_context(query_db, current_user.user.user_id)
+        result = cls.__to_model(db_power, conversion_values=conversion_values, unit_percent=unit_percent)
         await query_db.commit()
         return result
 
@@ -80,7 +93,8 @@ class InternalPowerService:
         await InternalPowerDao.update(query_db, power_id, current_user.user.user_id, values)
         await query_db.commit()
         updated = await InternalPowerDao.get_by_id(query_db, power_id, current_user.user.user_id)
-        return cls.__to_model(updated)
+        conversion_values, unit_percent = await cls.__get_conversion_context(query_db, current_user.user.user_id)
+        return cls.__to_model(updated, conversion_values=conversion_values, unit_percent=unit_percent)
 
     @classmethod
     async def delete_power_services(
@@ -158,15 +172,24 @@ class InternalPowerService:
     async def __assert_valid_entries(cls, query_db: AsyncSession, entries: list[Any]) -> None:
         if not entries:
             return
-        enabled_names = await InternalPowerEntryService.get_enabled_entry_names_service(query_db)
         invalid_names = []
+        invalid_values = []
         for entry in entries:
             entry_data = cls.__model_dump(entry)
             entry_name = str((entry_data or {}).get('name') or '').strip()
-            if entry_name and entry_name not in enabled_names:
+            if not entry_name:
+                continue
+            limit = INTERNAL_POWER_ENTRY_LIMIT_MAP.get(entry_name)
+            if limit is None:
                 invalid_names.append(entry_name)
+                continue
+            entry_value = cls.__parse_entry_value((entry_data or {}).get('value'))
+            if entry_value is None or entry_value < 0 or entry_value > float(limit['limit_value']):
+                invalid_values.append(f'{entry_name}不能超过{limit["limit_text"]}')
         if invalid_names:
             raise ServiceException(message=f'内功词条只能选择系统内置启用词条：{", ".join(sorted(set(invalid_names)))}')
+        if invalid_values:
+            raise ServiceException(message='；'.join(invalid_values))
 
     @classmethod
     async def __build_quota(
@@ -187,9 +210,17 @@ class InternalPowerService:
         )
 
     @classmethod
-    def __to_model(cls, power: PersonalInternalPower | None) -> InternalPowerModel:
+    def __to_model(
+        cls,
+        power: PersonalInternalPower | None,
+        conversion_values: dict[str, float] | None = None,
+        unit_percent: float = 0,
+    ) -> InternalPowerModel:
         if power is None:
             raise ServiceException(message='内功不存在')
+        entries = cls.__json_loads(power.entries_json, [])
+        entry_stats = cls.calculate_entry_stats(entries, conversion_values or {}, unit_percent)
+        bonus_percent = float(power.bonus_percent or 0)
         return InternalPowerModel(
             id=str(power.power_id),
             powerId=power.power_id,
@@ -197,12 +228,68 @@ class InternalPowerService:
             name=power.name,
             category=power.category or '',
             categoryTrait=power.category_trait or '',
-            bonusPercent=power.bonus_percent or 0,
-            entries=cls.__json_loads(power.entries_json, []),
+            bonusPercent=bonus_percent,
+            entryAttackPower=entry_stats.entry_attack_power,
+            entryAttackPercent=entry_stats.entry_attack_percent,
+            totalBonusPercent=round(bonus_percent + entry_stats.entry_attack_percent, 5),
+            entries=entries,
             elements=cls.__json_loads(power.elements_json, {}),
             remark=power.remark or '',
             updatedAt=power.update_time,
         )
+
+    @classmethod
+    async def __get_conversion_context(cls, query_db: AsyncSession, user_id: int) -> tuple[dict[str, float], float]:
+        setting = await InternalPowerEntryConversionDao.get_setting(query_db, user_id)
+        values = await InternalPowerEntryConversionDao.list_values(query_db, user_id)
+        conversion_values = {
+            value.entry_name: float(value.attack_power or 0)
+            for value in values
+            if value.entry_name in INTERNAL_POWER_ENTRY_LIMIT_MAP
+        }
+        return conversion_values, float(setting.unit_percent if setting else 0)
+
+    @classmethod
+    def calculate_entry_stats(
+        cls,
+        entries: list[Any],
+        conversion_values: dict[str, float],
+        unit_percent: float,
+    ) -> InternalPowerEntryStats:
+        total_attack_power = 0.0
+        total_attack_percent = 0.0
+        for entry in entries or []:
+            entry_data = cls.__model_dump(entry)
+            entry_name = str((entry_data or {}).get('name') or '').strip()
+            limit = INTERNAL_POWER_ENTRY_LIMIT_MAP.get(entry_name)
+            if limit is None:
+                continue
+            entry_value = cls.__parse_entry_value((entry_data or {}).get('value'))
+            if entry_value is None or entry_value < 0:
+                continue
+            limit_value = float(limit['limit_value'] or 0)
+            if limit_value <= 0 or entry_value > limit_value:
+                continue
+            configured_attack_power = float(conversion_values.get(entry_name, 0) or 0)
+            entry_attack_power = round(entry_value / limit_value * configured_attack_power, 5)
+            total_attack_power += entry_attack_power
+            total_attack_percent += round(entry_attack_power * float(unit_percent or 0), 5)
+        return InternalPowerEntryStats(
+            entry_attack_power=round(total_attack_power, 5),
+            entry_attack_percent=round(total_attack_percent, 5),
+        )
+
+    @staticmethod
+    def __parse_entry_value(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            text = str(value).strip().replace('%', '')
+            if not text:
+                return None
+            return float(text)
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def __model_dump(value: Any) -> Any:

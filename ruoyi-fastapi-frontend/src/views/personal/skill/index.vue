@@ -110,8 +110,8 @@
           <button class="delete-card" type="button" @click.stop="deletePower(item)">×</button>
           <div class="score-badge">
             <strong>{{ formatBonus(getPowerScore(item)) }}</strong>
-            <span>特性：{{ formatBonus(getPowerScore(item) * 0.62) }}</span>
-            <span>词条：{{ formatBonus(getPowerScore(item) * 0.38) }}</span>
+            <span>基础：{{ formatBonus(getBaseBonus(item)) }}</span>
+            <span>词条：{{ formatBonus(getEntryAttackPercent(item)) }}</span>
           </div>
 
           <div class="card-center">
@@ -417,12 +417,23 @@
                       :value="item.entryName"
                     />
                   </el-select>
-                  <el-input v-model.trim="entry.value" placeholder="数值占位，例如：随机" />
+                  <div class="entry-value-control">
+                    <el-input-number
+                      v-model="entry.value"
+                      :min="0"
+                      :max="getEntryLimitValue(entry.name)"
+                      :precision="getEntryPrecision(entry.name)"
+                      controls-position="right"
+                      placeholder="词条数值"
+                    />
+                    <span v-if="isPercentEntry(entry.name)" class="entry-value-suffix">%</span>
+                    <small>上限 {{ getEntryLimitText(entry.name) }}</small>
+                  </div>
                   <el-button text type="danger" @click="removeEntry(index)">删除</el-button>
                 </div>
                 <el-button plain :disabled="!entryOptions.length" @click="addEntry">添加词条占位</el-button>
                 <p v-if="!draft.entries.length" class="placeholder-note">暂无词条，等待后期随机开发。</p>
-                <p v-if="!entryOptions.length" class="placeholder-note">暂无启用词条，请先在系统管理中维护内功词条。</p>
+                <p v-if="!entryOptions.length" class="placeholder-note">暂无启用词条，请联系管理员检查内置词条配置。</p>
               </div>
             </section>
 
@@ -449,7 +460,7 @@
               <div class="seal">内</div>
               <h2>{{ draft.name || '未命名' }}</h2>
               <p>{{ draft.category }} · {{ draft.categoryTrait || '未设特性' }}</p>
-              <strong>{{ formatBonus(draft.bonusPercent) }}</strong>
+              <strong>{{ formatBonus(getPowerScore(draft)) }}</strong>
               <div class="full-elements preview-elements">
                 <span
                   v-for="item in elementOptions"
@@ -562,6 +573,7 @@ import {
   recognizeInternalPowerImages,
   updateInternalPower
 } from '@/api/personal/internalPower'
+import { getInternalPowerEntryConversion } from '@/api/personal/internalPowerEntry'
 
 const userStore = useUserStore()
 const formRef = ref(null)
@@ -579,6 +591,7 @@ const categoryPickerVisible = ref(false)
 const collapsedElementFolders = ref(new Set())
 const powerCatalog = ref([])
 const entryOptions = ref([])
+const entryConversion = ref({ unitPercent: 0, entries: [] })
 const catalogDraft = ref([])
 const baseApi = import.meta.env.VITE_APP_BASE_API
 const deleteConfirmVisible = ref(false)
@@ -714,6 +727,20 @@ const averageBonus = computed(() => {
 
 const totalEntries = computed(() => powers.value.reduce((sum, item) => sum + (item.entries?.length || 0), 0))
 
+const entryOptionMap = computed(() => {
+  return entryOptions.value.reduce((map, item) => {
+    map[item.entryName] = item
+    return map
+  }, {})
+})
+
+const entryConversionMap = computed(() => {
+  return (entryConversion.value.entries || []).reduce((map, item) => {
+    map[item.entryName] = item
+    return map
+  }, {})
+})
+
 const elementTotals = computed(() => {
   const totals = createEmptyElements()
   powers.value.forEach(item => {
@@ -731,6 +758,7 @@ const elementSummaryText = computed(() => {
 onMounted(async () => {
   await loadPowerCatalog()
   await loadEntryOptions()
+  await loadEntryConversion()
   await loadPowers()
 })
 
@@ -747,10 +775,23 @@ async function loadPowerCatalog() {
 async function loadEntryOptions() {
   try {
     const response = await listInternalPowerEntries()
-    entryOptions.value = (response.entries || response.data || []).map(normalizeEntryOption).filter(item => item.entryName)
+    entryOptions.value = (response.entries || response.data || []).map(normalizeEntryOption).filter(item => item.entryName && item.entryName !== '灵韵')
   } catch {
     entryOptions.value = []
-    ElMessage.error('内功词条加载失败，请联系管理员检查系统内功词条管理')
+    ElMessage.error('内功词条加载失败，请联系管理员检查内置词条配置')
+  }
+}
+
+async function loadEntryConversion() {
+  try {
+    const response = await getInternalPowerEntryConversion()
+    entryConversion.value = {
+      unitPercent: Number(response.unitPercent || 0),
+      entries: (response.entries || []).map(normalizeEntryConversion)
+    }
+  } catch {
+    entryConversion.value = { unitPercent: 0, entries: [] }
+    ElMessage.error('内功词条换算配置加载失败')
   }
 }
 
@@ -955,6 +996,7 @@ async function saveDraft() {
   } catch {
     return
   }
+  if (!validateEntryValues(draft.value.entries)) return
   const nextPower = normalizePower({
     ...draft.value,
     updatedAt: new Date().toISOString()
@@ -1139,13 +1181,13 @@ async function resetSamples() {
 
 function addEntry() {
   if (!entryOptions.value.length) {
-    ElMessage.warning('暂无启用内功词条，请先在系统管理中维护')
+    ElMessage.warning('暂无启用内功词条，请联系管理员检查内置词条配置')
     return
   }
   draft.value.entries.push({
     id: createId(),
     name: entryOptions.value[0].entryName,
-    value: ''
+    value: 0
   })
 }
 
@@ -1250,19 +1292,117 @@ function removeEntry(index) {
 }
 
 function formatBonus(value) {
-  return `+${Number(value || 0).toFixed(1)}%`
+  return `+${Number(value || 0).toFixed(5)}%`
 }
 
 function getEntryLabel(entry = {}) {
   const name = String(entry.name || '').trim() || '随机词条'
-  const value = String(entry.value || '').trim() || '待随机'
-  return `${name} ${value}`
+  const option = getEntryOption(name)
+  const value = parseEntryValue(entry.value)
+  if (!option || value === null) return `${name} 待填写`
+  const displayValue = formatEntryValue(value, option)
+  const percent = calculateEntryAttackPercent(entry)
+  return `${name} ${displayValue}/${option.limitText || option.limitValue} -> ${formatBonus(percent)}`
 }
 
 function formatEntryOptionLabel(entry = {}) {
-  const percent = entry.conversionPercent
-  const suffix = percent === null || percent === undefined || percent === '' ? '待配置' : `${Number(percent || 0).toFixed(4)}%`
+  const conversion = getEntryConversion(entry.entryName)
+  const suffix = conversion ? `满额${Number(conversion.attackPower || 0).toFixed(0)}进攻` : `上限${entry.limitText || '-'}`
   return `${entry.entryName} · ${suffix}`
+}
+
+function getBaseBonus(power = {}) {
+  const catalog = getCatalogByName(power.category)
+  return Number(power.bonusPercent ?? catalog?.baseBonus ?? 0)
+}
+
+function getEntryAttackPercent(power = {}) {
+  if (power.entryAttackPercent !== undefined && power.entryAttackPercent !== null) {
+    return Number(power.entryAttackPercent || 0)
+  }
+  return calculatePowerEntryStats(power).entryAttackPercent
+}
+
+function calculatePowerEntryStats(power = {}) {
+  return (power.entries || []).reduce((total, entry) => {
+    const attackPower = calculateEntryAttackPower(entry)
+    const attackPercent = roundTo(attackPower * Number(entryConversion.value.unitPercent || 0), 5)
+    return {
+      entryAttackPower: roundTo(total.entryAttackPower + attackPower, 5),
+      entryAttackPercent: roundTo(total.entryAttackPercent + attackPercent, 5)
+    }
+  }, { entryAttackPower: 0, entryAttackPercent: 0 })
+}
+
+function calculateEntryAttackPower(entry = {}) {
+  const option = getEntryOption(entry.name)
+  const conversion = getEntryConversion(entry.name)
+  const value = parseEntryValue(entry.value)
+  const limitValue = Number(option?.limitValue || 0)
+  if (!option || !conversion || value === null || limitValue <= 0 || value < 0 || value > limitValue) return 0
+  return roundTo(value / limitValue * Number(conversion.attackPower || 0), 5)
+}
+
+function calculateEntryAttackPercent(entry = {}) {
+  return roundTo(calculateEntryAttackPower(entry) * Number(entryConversion.value.unitPercent || 0), 5)
+}
+
+function getEntryOption(name) {
+  return entryOptionMap.value[String(name || '').trim()] || null
+}
+
+function getEntryConversion(name) {
+  return entryConversionMap.value[String(name || '').trim()] || null
+}
+
+function getEntryLimitValue(name) {
+  return Number(getEntryOption(name)?.limitValue || 0)
+}
+
+function getEntryLimitText(name) {
+  const option = getEntryOption(name)
+  return option?.limitText || '-'
+}
+
+function getEntryPrecision(name) {
+  return isPercentEntry(name) ? 5 : 0
+}
+
+function isPercentEntry(name) {
+  return getEntryOption(name)?.valueType === 'percent'
+}
+
+function formatEntryValue(value, option = {}) {
+  const numberValue = Number(value || 0)
+  return option.valueType === 'percent' ? `${numberValue.toFixed(5)}%` : `${numberValue}`
+}
+
+function parseEntryValue(value) {
+  const text = String(value ?? '').trim().replace('%', '')
+  if (!text) return null
+  const numberValue = Number(text)
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+function validateEntryValues(entries = []) {
+  for (const entry of entries || []) {
+    const name = String(entry.name || '').trim()
+    const option = getEntryOption(name)
+    if (!option) {
+      ElMessage.warning(`词条「${name || '未选择'}」不在当前可用词条中`)
+      return false
+    }
+    const value = parseEntryValue(entry.value)
+    if (value === null || value < 0) {
+      ElMessage.warning(`请填写「${name}」的词条数值`)
+      return false
+    }
+    if (value > Number(option.limitValue || 0)) {
+      ElMessage.warning(`「${name}」不能超过上限 ${option.limitText}`)
+      return false
+    }
+  }
+  return true
 }
 
 function resolvePowerImage(power = {}) {
@@ -1301,8 +1441,10 @@ function formatElementCounts(elements = {}) {
 }
 
 function getPowerScore(power = {}) {
-  const catalog = getCatalogByName(power.category)
-  return Number(catalog?.baseBonus ?? power.bonusPercent ?? 0)
+  if (power.totalBonusPercent !== undefined && power.totalBonusPercent !== null) {
+    return Number(power.totalBonusPercent || 0)
+  }
+  return roundTo(getBaseBonus(power) + getEntryAttackPercent(power), 5)
 }
 
 function getCatalogByName(name) {
@@ -1327,6 +1469,11 @@ function normalizePower(value) {
     category: String(value.category || '通用'),
     categoryTrait: String(value.categoryTrait || ''),
     bonusPercent: clampBonus(value.bonusPercent),
+    entryAttackPower: Number(value.entryAttackPower || 0),
+    entryAttackPercent: Number(value.entryAttackPercent || 0),
+    totalBonusPercent: value.totalBonusPercent === undefined || value.totalBonusPercent === null
+      ? undefined
+      : Number(value.totalBonusPercent || 0),
     imageUrl: String(value.imageUrl || ''),
     entries: normalizeEntries(value.entries),
     elements: normalizeElements(value.elements),
@@ -1367,8 +1514,27 @@ function normalizeEntryOption(value = {}) {
     entryName: String(value.entryName || '').trim(),
     conversionPercent: percent === null || percent === undefined || percent === '' ? null : Number(percent),
     conversionDesc: String(value.conversionDesc || ''),
+    limitText: String(value.limitText || ''),
+    limitValue: Number(value.limitValue || 0),
+    valueType: value.valueType === 'percent' ? 'percent' : 'number',
     status: value.status || '0'
   }
+}
+
+function normalizeEntryConversion(value = {}) {
+  return {
+    entryName: String(value.entryName || '').trim(),
+    limitText: String(value.limitText || ''),
+    limitValue: Number(value.limitValue || 0),
+    valueType: value.valueType === 'percent' ? 'percent' : 'number',
+    attackPower: Number(value.attackPower || 0),
+    attackPercent: Number(value.attackPercent || 0)
+  }
+}
+
+function roundTo(value, precision = 5) {
+  const ratio = 10 ** precision
+  return Math.round(Number(value || 0) * ratio) / ratio
 }
 
 function cloneEntries(entries = []) {
@@ -2350,13 +2516,37 @@ function getSamplePowersForQuota() {
 
 .entry-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(100px, 140px) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 220px) auto;
   gap: 8px;
   margin-bottom: 8px;
 }
 
 .entry-row :deep(.el-select) {
   width: 100%;
+}
+
+.entry-value-control {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto;
+  gap: 4px 6px;
+  align-items: center;
+}
+
+.entry-value-control :deep(.el-input-number) {
+  width: 100%;
+}
+
+.entry-value-control small {
+  grid-column: 1 / -1;
+  color: #8a7862;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.entry-value-suffix {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .placeholder-note {

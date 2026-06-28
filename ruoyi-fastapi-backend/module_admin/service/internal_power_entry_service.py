@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel, PageModel
 from exceptions.exception import ServiceException
+from module_admin.constants.internal_power_entry_limits import INTERNAL_POWER_ENTRY_LIMIT_MAP
 from module_admin.dao.internal_power_entry_dao import InternalPowerEntryDao
 from module_admin.entity.do.internal_power_entry_do import SystemInternalPowerEntry
 from module_admin.entity.vo.internal_power_entry_vo import (
@@ -37,12 +38,12 @@ class InternalPowerEntryService:
     @classmethod
     async def get_personal_enabled_entries_service(cls, query_db: AsyncSession) -> list[InternalPowerEntryConfigModel]:
         rows = await InternalPowerEntryDao.list_enabled(query_db)
-        return [cls.__to_model(row) for row in rows]
+        return [cls.__to_model(row) for row in rows if row.entry_name in INTERNAL_POWER_ENTRY_LIMIT_MAP]
 
     @classmethod
     async def get_enabled_entry_names_service(cls, query_db: AsyncSession) -> set[str]:
         rows = await InternalPowerEntryDao.list_enabled(query_db)
-        return {row.entry_name for row in rows}
+        return {row.entry_name for row in rows if row.entry_name in INTERNAL_POWER_ENTRY_LIMIT_MAP}
 
     @classmethod
     async def entry_detail_services(cls, query_db: AsyncSession, entry_id: int) -> InternalPowerEntryConfigModel:
@@ -115,11 +116,15 @@ class InternalPowerEntryService:
 
     @staticmethod
     def __to_model(entry: SystemInternalPowerEntry) -> InternalPowerEntryConfigModel:
+        limit = INTERNAL_POWER_ENTRY_LIMIT_MAP.get(entry.entry_name, {})
         return InternalPowerEntryConfigModel(
             entryId=entry.entry_id,
             entryName=entry.entry_name,
             conversionPercent=entry.conversion_percent,
             conversionDesc=entry.conversion_desc or '',
+            limitText=limit.get('limit_text', ''),
+            limitValue=limit.get('limit_value'),
+            valueType=limit.get('value_type', 'number'),
             status=entry.status or '0',
             remark=entry.remark or '',
             createTime=entry.create_time,
@@ -128,11 +133,16 @@ class InternalPowerEntryService:
 
     @staticmethod
     def __dict_to_model(row: dict[str, Any]) -> InternalPowerEntryConfigModel:
+        entry_name = row.get('entryName') or ''
+        limit = INTERNAL_POWER_ENTRY_LIMIT_MAP.get(entry_name, {})
         return InternalPowerEntryConfigModel(
             entryId=row.get('entryId'),
-            entryName=row.get('entryName') or '',
+            entryName=entry_name,
             conversionPercent=row.get('conversionPercent'),
             conversionDesc=row.get('conversionDesc') or '',
+            limitText=limit.get('limit_text', ''),
+            limitValue=limit.get('limit_value'),
+            valueType=limit.get('value_type', 'number'),
             status=row.get('status') or '0',
             remark=row.get('remark') or '',
             createTime=row.get('createTime'),

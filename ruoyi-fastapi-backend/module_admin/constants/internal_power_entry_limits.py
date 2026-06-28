@@ -1,0 +1,25 @@
+INTERNAL_POWER_ENTRY_LIMITS = [
+    {'entry_name': '攻击', 'limit_text': '33', 'limit_value': 33, 'value_type': 'number'},
+    {'entry_name': '力量/气海', 'limit_text': '10', 'limit_value': 10, 'value_type': 'number'},
+    {'entry_name': '赛年伤害/治疗提高', 'limit_text': '1.7%', 'limit_value': 1.7, 'value_type': 'percent'},
+    {'entry_name': '最小攻击', 'limit_text': '36', 'limit_value': 36, 'value_type': 'number'},
+    {'entry_name': '最大攻击', 'limit_text': '36', 'limit_value': 36, 'value_type': 'number'},
+    {'entry_name': '流派克制', 'limit_text': '1.2%', 'limit_value': 1.2, 'value_type': 'percent'},
+    {'entry_name': '破防', 'limit_text': '33', 'limit_value': 33, 'value_type': 'number'},
+    {'entry_name': '会心', 'limit_text': '66', 'limit_value': 66, 'value_type': 'number'},
+    {'entry_name': '耐力', 'limit_text': '10', 'limit_value': 10, 'value_type': 'number'},
+    {'entry_name': '根骨', 'limit_text': '10', 'limit_value': 10, 'value_type': 'number'},
+    {'entry_name': '身法', 'limit_text': '10', 'limit_value': 10, 'value_type': 'number'},
+    {'entry_name': '内功防御', 'limit_text': '36', 'limit_value': 36, 'value_type': 'number'},
+    {'entry_name': '首领抵御', 'limit_text': '1.2%', 'limit_value': 1.2, 'value_type': 'percent'},
+    {'entry_name': '流派抵御', 'limit_text': '1.2%', 'limit_value': 1.2, 'value_type': 'percent'},
+    {'entry_name': '抗会心', 'limit_text': '66', 'limit_value': 66, 'value_type': 'number'},
+    {'entry_name': '防御', 'limit_text': '33', 'limit_value': 33, 'value_type': 'number'},
+    {'entry_name': '气血上限', 'limit_text': '991', 'limit_value': 991, 'value_type': 'number'},
+    {'entry_name': '首领克制', 'limit_text': '1.2%', 'limit_value': 1.2, 'value_type': 'percent'},
+    {'entry_name': '抗内功会心', 'limit_text': '72', 'limit_value': 72, 'value_type': 'number'},
+    {'entry_name': '抗外功会心', 'limit_text': '72', 'limit_value': 72, 'value_type': 'number'},
+    {'entry_name': '外功防御', 'limit_text': '36', 'limit_value': 36, 'value_type': 'number'},
+]
+
+INTERNAL_POWER_ENTRY_LIMIT_MAP = {item['entry_name']: item for item in INTERNAL_POWER_ENTRY_LIMITS}
