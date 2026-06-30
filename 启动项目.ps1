@@ -120,7 +120,7 @@ if (Test-Port -Port 80) {
   Write-Host 'Starting frontend on 80...'
   Start-Process `
     -FilePath 'npm.cmd' `
-    -ArgumentList 'run dev -- --host 0.0.0.0 --port 80 --open false' `
+    -ArgumentList 'run dev -- --host 0.0.0.0 --port 80' `
     -WorkingDirectory $FrontendDir `
     -RedirectStandardOutput $FrontendOut `
     -RedirectStandardError $FrontendErr `

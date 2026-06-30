@@ -9,6 +9,9 @@
       <div class="hero-actions">
         <el-tag effect="plain" type="info">AI识图 {{ aiRecognitionQuotaLabel }}</el-tag>
         <el-tag v-if="backgroundRecognitionRunning" effect="plain" type="warning">后台识别中</el-tag>
+        <el-badge :value="recognitionRecordBadge" :hidden="!recognitionItems.length" class="recognition-record-badge">
+          <el-button plain @click="openRecognitionHistory">识别记录</el-button>
+        </el-badge>
         <el-button plain @click="openRecognitionDialog">图片识别</el-button>
         <el-button v-if="canEditPowerValues" plain @click="openValueEditor">内功数值编辑</el-button>
         <el-button plain @click="resetSamples">重置示例</el-button>
@@ -225,9 +228,13 @@
             v-for="item in recognitionItems"
             :key="item.clientId"
             class="recognition-card"
-            :class="{ failed: !item.success }"
+            :class="{ failed: getRecognitionDisplayStatus(item) === 'failed', pending: isRecognitionPending(item) }"
           >
             <header>
+              <div class="recognition-card-thumb" :class="{ empty: !item.imageUrl }">
+                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="`${item.fileName}截图`" />
+                <span v-else>无图</span>
+              </div>
               <div>
                 <strong>{{ item.fileName }}</strong>
                 <span>{{ item.parsed?.内功名 || '未识别内功名' }}</span>
@@ -236,13 +243,23 @@
                 {{ getRecognitionStatusText(item) }}
               </el-tag>
             </header>
+            <el-progress
+              v-if="isRecognitionPending(item)"
+              :percentage="getRecognitionProgressPercent(item)"
+              :stroke-width="8"
+              :show-text="false"
+              striped
+              striped-flow
+            />
             <el-alert
               v-if="item.error"
-              :title="item.error"
+              title="识别失败"
+              :description="item.error"
               type="error"
               show-icon
               :closable="false"
             />
+            <pre v-if="item.error" class="recognition-error-detail">{{ item.error }}</pre>
             <div v-if="item.success" class="recognition-candidate">
               <span>匹配预设</span>
               <el-select v-model="item.selectedPresetId" placeholder="请选择具体内功预设">
@@ -313,6 +330,91 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-drawer
+      v-model="recognitionHistoryVisible"
+      title="识别记录"
+      size="min(720px, 96vw)"
+      append-to-body
+      class="recognition-history-drawer"
+    >
+      <div class="recognition-history">
+        <div class="recognition-history-summary">
+          <div>
+            <span>总数</span>
+            <strong>{{ recognitionRecordStats.total }}</strong>
+          </div>
+          <div>
+            <span>进行中</span>
+            <strong>{{ recognitionRecordStats.running }}</strong>
+          </div>
+          <div>
+            <span>成功</span>
+            <strong>{{ recognitionRecordStats.success }}</strong>
+          </div>
+          <div>
+            <span>失败</span>
+            <strong>{{ recognitionRecordStats.failed }}</strong>
+          </div>
+        </div>
+        <div class="recognition-history-actions">
+          <el-button plain icon="Refresh" @click="openRecognitionDialog">继续识别</el-button>
+          <el-button plain type="danger" :disabled="!recognitionItems.length" @click="clearRecognitionHistory">清空记录</el-button>
+        </div>
+        <el-empty v-if="!recognitionItems.length" description="暂无识别记录" />
+        <div v-else class="recognition-history-list">
+          <article
+            v-for="item in recognitionItems"
+            :key="`history-${item.clientId}`"
+            class="recognition-history-card"
+            :class="{ failed: getRecognitionDisplayStatus(item) === 'failed', pending: isRecognitionPending(item) }"
+          >
+            <div class="recognition-history-thumb" :class="{ empty: !item.imageUrl }">
+              <img v-if="item.imageUrl" :src="item.imageUrl" :alt="`${item.fileName}截图`" />
+              <span v-else>无图</span>
+            </div>
+            <div class="recognition-history-main">
+              <header>
+                <div>
+                  <strong>{{ item.parsed?.内功名 || item.fileName }}</strong>
+                  <span>{{ item.fileName }}</span>
+                </div>
+                <el-tag :type="getRecognitionStatusType(item)" effect="plain">
+                  {{ getRecognitionStatusText(item) }}
+                </el-tag>
+              </header>
+              <el-progress
+                :percentage="getRecognitionProgressPercent(item)"
+                :status="getRecognitionProgressStatus(item)"
+                :stroke-width="8"
+              />
+              <div v-if="item.entries.length" class="recognition-history-entries">
+                <span
+                  v-for="entry in item.entries"
+                  :key="`${item.clientId}-${entry.id}`"
+                  :class="{ muted: entry.name === '灵韵' || !getEntryOption(entry.name) }"
+                >
+                  {{ entry.name || '未知词条' }} {{ formatRecognitionEntryValue(entry) }}
+                </span>
+              </div>
+              <el-alert
+                v-if="item.error"
+                title="完整错误"
+                :description="item.error"
+                type="error"
+                show-icon
+                :closable="false"
+              />
+              <pre v-if="item.error" class="recognition-error-detail">{{ item.error }}</pre>
+              <details v-if="item.rawText" class="recognition-raw">
+                <summary>查看原始返回</summary>
+                <pre>{{ item.rawText }}</pre>
+              </details>
+            </div>
+          </article>
+        </div>
+      </div>
+    </el-drawer>
 
     <el-drawer
       v-model="editingVisible"
@@ -668,7 +770,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { ArrowDown, ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
@@ -712,6 +814,7 @@ const deleteConfirmMessage = ref('')
 const deleteConfirmSkipForSession = ref(false)
 const deleteConfirmResolve = ref(null)
 const recognitionDialogVisible = ref(false)
+const recognitionHistoryVisible = ref(false)
 const recognitionFileList = ref([])
 const recognitionSubmitting = ref(false)
 const recognitionItems = ref([])
@@ -719,6 +822,7 @@ const recognitionBackgroundMode = ref(true)
 const backgroundRecognitionRunning = ref(false)
 const backgroundRecognitionFileUids = ref(new Set())
 const recognitionPasteTarget = ref(null)
+const recognitionObjectUrls = new Set()
 
 const filters = reactive({
   keyword: '',
@@ -763,12 +867,25 @@ const recognitionSelectionCostText = computed(() => {
   if (aiRecognitionUnlimited.value) return `已选择 ${recognitionFileList.value.length} 张，管理员识别不扣次数`
   return `已选择 ${recognitionFileList.value.length} 张，成功识别将消耗对应次数`
 })
+const recognitionRecordStats = computed(() => {
+  const items = recognitionItems.value
+  return {
+    total: items.length,
+    running: items.filter(isRecognitionPending).length,
+    success: items.filter(item => ['saved', 'recognized'].includes(getRecognitionDisplayStatus(item))).length,
+    failed: items.filter(item => getRecognitionDisplayStatus(item) === 'failed').length
+  }
+})
+const recognitionRecordBadge = computed(() => {
+  if (recognitionRecordStats.value.running) return recognitionRecordStats.value.running
+  return recognitionRecordStats.value.total
+})
 const backgroundRecognitionProgressText = computed(() => {
   const items = recognitionItems.value.filter(item => item.background)
   if (!items.length) return '后台模式已开启：拖入或选择图片后会自动识别。'
-  const running = items.filter(item => ['queued', 'recognizing', 'saving'].includes(item.status)).length
-  const saved = items.filter(item => item.status === 'saved').length
-  const failed = items.filter(item => item.status === 'failed').length
+  const running = items.filter(isRecognitionPending).length
+  const saved = items.filter(item => getRecognitionDisplayStatus(item) === 'saved').length
+  const failed = items.filter(item => getRecognitionDisplayStatus(item) === 'failed').length
   return `后台进度：共 ${items.length} 张，进行中 ${running} 张，已新增 ${saved} 个，失败 ${failed} 张。`
 })
 const canCreateMore = computed(() => quota.value.unlimited || powers.value.length < Number(quota.value.maxCount || 20))
@@ -894,6 +1011,10 @@ onMounted(async () => {
   await loadEntryOptions()
   await loadEntryConversion()
   await loadPowers()
+})
+
+onBeforeUnmount(() => {
+  revokeRecognitionObjectUrls()
 })
 
 watch(recognitionBackgroundMode, enabled => {
@@ -1022,6 +1143,10 @@ function openRecognitionDialog() {
   focusRecognitionPasteTarget()
 }
 
+function openRecognitionHistory() {
+  recognitionHistoryVisible.value = true
+}
+
 function handleRecognitionFileChange(file, fileList) {
   syncRecognitionUploadItems(fileList, {
     emptyMessage: '只能选择图片文件'
@@ -1061,7 +1186,9 @@ function handleRecognitionDialogPaste(event) {
 
 function syncRecognitionUploadItems(uploadItems = [], options = {}) {
   const sourceItems = Array.isArray(uploadItems) ? uploadItems : []
-  const imageItems = sourceItems.filter(item => item?.raw?.type?.startsWith('image/'))
+  const imageItems = sourceItems
+    .filter(item => item?.raw?.type?.startsWith('image/'))
+    .map(ensureRecognitionUploadPreviewUrl)
   if (!options.silentEmpty && imageItems.length !== sourceItems.length) {
     ElMessage.warning(options.emptyMessage || '只能粘贴图片文件')
   }
@@ -1078,17 +1205,12 @@ function syncRecognitionUploadItems(uploadItems = [], options = {}) {
     enqueueBackgroundRecognitionFromUploadItems(options.backgroundItems || imageItems)
     return
   }
-  if (!recognitionBackgroundMode.value) {
-    recognitionItems.value = []
-  }
 }
 
 function resetRecognitionDialog() {
   recognitionFileList.value = []
   recognitionSubmitting.value = false
-  recognitionItems.value = []
   recognitionBackgroundMode.value = true
-  backgroundRecognitionFileUids.value = new Set()
 }
 
 function getClipboardImageFiles(event) {
@@ -1124,12 +1246,42 @@ function getImageExtension(mimeType = '') {
 
 function createRecognitionUploadItemFromFile(file) {
   const uid = createId()
-  return {
+  return ensureRecognitionUploadPreviewUrl({
     name: file.name || `${uid}.png`,
     uid,
     raw: file,
     status: 'ready'
+  })
+}
+
+function ensureRecognitionUploadPreviewUrl(uploadItem = {}) {
+  if (!uploadItem || uploadItem.previewUrl) return uploadItem
+  const raw = uploadItem.raw
+  if (!raw?.type?.startsWith('image/')) return uploadItem
+  const previewUrl = URL.createObjectURL(raw)
+  recognitionObjectUrls.add(previewUrl)
+  uploadItem.previewUrl = previewUrl
+  uploadItem.url = uploadItem.url || previewUrl
+  return uploadItem
+}
+
+function getRecognitionUploadPreviewUrl(uploadItem = {}) {
+  return uploadItem.previewUrl || uploadItem.url || ''
+}
+
+function revokeRecognitionObjectUrls() {
+  recognitionObjectUrls.forEach(url => URL.revokeObjectURL(url))
+  recognitionObjectUrls.clear()
+}
+
+function clearRecognitionHistory() {
+  if (backgroundRecognitionRunning.value) {
+    ElMessage.warning('后台识别仍在进行，完成后再清空记录')
+    return
   }
+  recognitionItems.value = []
+  backgroundRecognitionFileUids.value = new Set()
+  revokeRecognitionObjectUrls()
 }
 
 function shouldWarnEmptyClipboardPaste(target) {
@@ -1145,33 +1297,54 @@ function isEditablePasteTarget(target) {
 }
 
 async function submitRecognition() {
-  const files = recognitionFileList.value.map(item => item.raw).filter(Boolean)
-  if (!files.length) {
+  const uploadItems = recognitionFileList.value.filter(item => item?.raw)
+  if (!uploadItems.length) {
     ElMessage.warning('请先选择图片')
     return
   }
-  if (!aiRecognitionUnlimited.value && files.length > aiRecognitionCount.value) {
+  if (!aiRecognitionUnlimited.value && uploadItems.length > aiRecognitionCount.value) {
     ElMessage.warning(`AI识图次数不足，当前剩余 ${aiRecognitionCount.value} 次`)
     return
   }
-  const initialRecognitionCount = aiRecognitionCount.value
   if (recognitionBackgroundMode.value) {
     enqueueBackgroundRecognitionFromUploadItems(recognitionFileList.value)
     return
   }
   recognitionSubmitting.value = true
   try {
-    const result = await recognizeFiles(files)
-    applyRecognitionConsumption(initialRecognitionCount, result.consumedCount, result)
-    recognitionItems.value = result.items
+    const result = await recognizeUploadItemsWithProgress(uploadItems, { background: false, autoSave: false })
     recognitionFileList.value = []
-    if (recognitionItems.value.some(item => item.success)) {
+    if (result.successCount) {
       ElMessage.success('识别完成')
     } else {
       ElMessage.warning('识别完成，但没有可导入的结果')
     }
   } finally {
     recognitionSubmitting.value = false
+  }
+}
+
+async function recognizeUploadItemsWithProgress(uploadItems = [], options = {}) {
+  const progressItems = uploadItems.map(item => createRecognitionProgressItem(item, options))
+  recognitionItems.value = [...progressItems, ...recognitionItems.value]
+  const results = await Promise.allSettled(
+    progressItems.map((progressItem, index) => processRecognitionUploadItem(uploadItems[index], progressItem, options))
+  )
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      Object.assign(progressItems[index], createRecognitionFailureItem(uploadItems[index]?.raw, result.reason), {
+        clientId: progressItems[index].clientId,
+        imageUrl: progressItems[index].imageUrl,
+        status: 'failed',
+        background: !!options.background,
+        updatedAt: new Date().toISOString()
+      })
+    }
+  })
+  return {
+    successCount: progressItems.filter(item => item.success).length,
+    savedCount: progressItems.filter(item => item.status === 'saved').length,
+    failedCount: progressItems.filter(item => item.status === 'failed').length
   }
 }
 
@@ -1199,7 +1372,7 @@ async function recognizeFiles(files = []) {
       }
       return
     }
-    mergedItems.push(createRecognitionFailureItem(file, result.reason?.message || '图片识别请求失败'))
+    mergedItems.push(createRecognitionFailureItem(file, result.reason || '图片识别请求失败'))
   })
   return {
     items: normalizeRecognitionItems(mergedItems),
@@ -1225,7 +1398,7 @@ function createRecognitionFailureItem(file, error) {
     success: false,
     parsed: {},
     rawText: '',
-    error: error || '图片识别请求失败',
+    error: formatRecognitionError(error, '图片识别请求失败'),
     presetCandidates: []
   }
 }
@@ -1237,6 +1410,8 @@ function normalizeRecognitionItems(items = [], options = {}) {
     return {
       clientId: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
       fileName: item.fileName || `图片${index + 1}`,
+      imageUrl: item.imageUrl || options.imageUrl || '',
+      fileSize: item.fileSize || options.fileSize || 0,
       success,
       status: item.status || (success ? 'recognized' : 'failed'),
       background: !!options.background || !!item.background,
@@ -1256,6 +1431,7 @@ function enqueueBackgroundRecognitionFromUploadItems(uploadItems = []) {
   if (!recognitionBackgroundMode.value) return
   const pendingUploadItems = (uploadItems || [])
     .filter(item => item?.raw?.type?.startsWith('image/'))
+    .map(ensureRecognitionUploadPreviewUrl)
     .filter(item => !backgroundRecognitionFileUids.value.has(item.uid))
   if (!pendingUploadItems.length) return
   let allowedItems = pendingUploadItems
@@ -1267,7 +1443,7 @@ function enqueueBackgroundRecognitionFromUploadItems(uploadItems = []) {
   const nextUids = new Set(backgroundRecognitionFileUids.value)
   const progressItems = allowedItems.map(item => {
     nextUids.add(item.uid)
-    return createRecognitionProgressItem(item)
+    return createRecognitionProgressItem(item, { background: true })
   })
   backgroundRecognitionFileUids.value = nextUids
   recognitionItems.value = [...progressItems, ...recognitionItems.value]
@@ -1277,13 +1453,17 @@ function enqueueBackgroundRecognitionFromUploadItems(uploadItems = []) {
   })
 }
 
-function createRecognitionProgressItem(uploadItem = {}) {
+function createRecognitionProgressItem(uploadItem = {}, options = {}) {
+  const imageUrl = getRecognitionUploadPreviewUrl(uploadItem)
+  const prefix = options.background ? 'background' : 'manual'
   return {
-    clientId: `background-${uploadItem.uid || createId()}`,
+    clientId: `${prefix}-${uploadItem.uid || createId()}`,
     fileName: uploadItem.name || uploadItem.raw?.name || 'image',
+    imageUrl,
+    fileSize: uploadItem.raw?.size || uploadItem.size || 0,
     success: false,
     status: 'queued',
-    background: true,
+    background: !!options.background,
     parsed: {},
     entries: [],
     rawText: '',
@@ -1291,57 +1471,81 @@ function createRecognitionProgressItem(uploadItem = {}) {
     presetCandidates: [],
     selectedPresetId: '',
     saving: false,
-    saved: false
+    saved: false,
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   }
 }
 
 async function recognizeAndSaveBackgroundUploadItem(uploadItem, progressItem) {
+  return processRecognitionUploadItem(uploadItem, progressItem, { background: true, autoSave: true })
+}
+
+async function processRecognitionUploadItem(uploadItem, progressItem, options = {}) {
   const file = uploadItem?.raw
   if (!file) {
     Object.assign(progressItem, createRecognitionFailureItem(uploadItem, '图片文件不存在'), {
       status: 'failed',
-      background: true
+      background: !!options.background,
+      updatedAt: new Date().toISOString()
     })
     updateBackgroundRecognitionRunning()
     return
   }
   progressItem.status = 'recognizing'
+  progressItem.updatedAt = new Date().toISOString()
   try {
     const response = await recognizeInternalPowerImage(file, internalPowerRecognitionPrompt)
     applyRecognitionConsumption(aiRecognitionCount.value, Number(response?.consumedCount || 0), response)
     const responseItems = Array.isArray(response?.result?.items) ? response.result.items : []
+    const previewUrl = progressItem.imageUrl
     const normalizedItem = normalizeRecognitionItems(
       responseItems.length ? responseItems : [createRecognitionFailureItem(file, '识别接口未返回图片结果')],
-      { background: true }
+      {
+        background: !!options.background,
+        imageUrl: previewUrl,
+        fileSize: progressItem.fileSize
+      }
     )[0]
     Object.assign(progressItem, normalizedItem, {
       clientId: progressItem.clientId,
-      background: true,
-      status: normalizedItem.success ? 'saving' : 'failed'
+      imageUrl: normalizedItem.imageUrl || previewUrl,
+      background: !!options.background,
+      status: normalizedItem.success ? (options.autoSave ? 'saving' : 'recognized') : 'failed',
+      updatedAt: new Date().toISOString()
     })
     if (!progressItem.success) {
       return
     }
     selectDefaultRecognitionCandidate(progressItem)
+    if (!options.autoSave) {
+      return
+    }
     try {
       const savedPower = await saveRecognizedPowerDirectly(progressItem, { silent: true, clampEntries: true })
       if (savedPower) {
         progressItem.status = 'saved'
         progressItem.saved = true
         progressItem.error = ''
+        progressItem.updatedAt = new Date().toISOString()
       } else {
         progressItem.status = 'failed'
         progressItem.error = progressItem.error || '识别成功，但自动新增失败，请检查词条上限、内功上限或预设匹配'
+        progressItem.updatedAt = new Date().toISOString()
       }
     } catch (error) {
       progressItem.status = 'failed'
-      progressItem.error = error?.message || '识别成功，但自动新增失败'
+      progressItem.error = formatRecognitionError(error, '识别成功，但自动新增失败')
+      progressItem.updatedAt = new Date().toISOString()
     }
   } catch (error) {
-    Object.assign(progressItem, createRecognitionFailureItem(file, error?.message || '图片识别请求失败'), {
+    const previewUrl = progressItem.imageUrl
+    Object.assign(progressItem, createRecognitionFailureItem(file, error), {
       clientId: progressItem.clientId,
+      imageUrl: previewUrl,
       status: 'failed',
-      background: true
+      background: !!options.background,
+      updatedAt: new Date().toISOString()
     })
   } finally {
     updateBackgroundRecognitionRunning()
@@ -1349,13 +1553,14 @@ async function recognizeAndSaveBackgroundUploadItem(uploadItem, progressItem) {
 }
 
 function updateBackgroundRecognitionRunning() {
+  const wasRunning = backgroundRecognitionRunning.value
   backgroundRecognitionRunning.value = recognitionItems.value.some(
-    item => item.background && ['queued', 'recognizing', 'saving'].includes(item.status)
+    item => item.background && isRecognitionPending(item)
   )
-  if (!backgroundRecognitionRunning.value) {
+  if (wasRunning && !backgroundRecognitionRunning.value) {
     const backgroundItems = recognitionItems.value.filter(item => item.background)
-    const savedCount = backgroundItems.filter(item => item.status === 'saved').length
-    const failedCount = backgroundItems.filter(item => item.status === 'failed').length
+    const savedCount = backgroundItems.filter(item => getRecognitionDisplayStatus(item) === 'saved').length
+    const failedCount = backgroundItems.filter(item => getRecognitionDisplayStatus(item) === 'failed').length
     if (savedCount || failedCount) {
       ElNotification({
         title: '后台识别进度',
@@ -1367,6 +1572,7 @@ function updateBackgroundRecognitionRunning() {
 }
 
 function getRecognitionStatusText(item = {}) {
+  const status = getRecognitionDisplayStatus(item)
   const statusTextMap = {
     queued: '等待识别',
     recognizing: '识别中',
@@ -1375,14 +1581,89 @@ function getRecognitionStatusText(item = {}) {
     failed: '失败',
     recognized: '识别成功'
   }
-  return statusTextMap[item.status] || (item.success ? '识别成功' : '识别失败')
+  return statusTextMap[status] || (item.success ? '识别成功' : '识别失败')
+}
+
+function getRecognitionDisplayStatus(item = {}) {
+  const status = String(item.status || '').trim()
+  if (item.error || status === 'failed') return 'failed'
+  if (item.saved || status === 'saved') return 'saved'
+  if (status === 'recognized' || (item.success && !item.saving)) return 'recognized'
+  if (item.saving || status === 'saving') return 'saving'
+  if (status === 'recognizing') return 'recognizing'
+  if (status === 'queued') return 'queued'
+  return item.success ? 'recognized' : (status || 'queued')
+}
+
+function isRecognitionPending(item = {}) {
+  return ['queued', 'recognizing', 'saving'].includes(getRecognitionDisplayStatus(item))
+}
+
+function getRecognitionProgressPercent(item = {}) {
+  const status = getRecognitionDisplayStatus(item)
+  const percentMap = {
+    queued: 8,
+    recognizing: 45,
+    saving: 82,
+    recognized: 100,
+    saved: 100,
+    failed: 100
+  }
+  return percentMap[status] ?? (item.success ? 100 : 0)
+}
+
+function getRecognitionProgressStatus(item = {}) {
+  const status = getRecognitionDisplayStatus(item)
+  if (status === 'failed') return 'exception'
+  if (status === 'saved' || status === 'recognized') return 'success'
+  return undefined
 }
 
 function getRecognitionStatusType(item = {}) {
-  if (item.status === 'saved' || item.status === 'recognized') return 'success'
-  if (item.status === 'queued' || item.status === 'recognizing') return 'info'
-  if (item.status === 'saving') return 'warning'
+  const status = getRecognitionDisplayStatus(item)
+  if (status === 'saved' || status === 'recognized') return 'success'
+  if (status === 'queued' || status === 'recognizing') return 'info'
+  if (status === 'saving') return 'warning'
   return item.success ? 'success' : 'danger'
+}
+
+function formatRecognitionEntryValue(entry = {}) {
+  const suffix = isPercentEntry(entry.name) ? '%' : ''
+  return `${entry.value ?? 0}${suffix}`
+}
+
+function formatRecognitionError(error, fallback = '图片识别请求失败') {
+  if (!error) return fallback
+  if (typeof error === 'string') return error
+  const parts = []
+  if (error.message) parts.push(`message: ${error.message}`)
+  if (error.msg) parts.push(`msg: ${error.msg}`)
+  if (error.name) parts.push(`name: ${error.name}`)
+  const response = error.response
+  if (response) {
+    parts.push(`status: ${response.status || ''} ${response.statusText || ''}`.trim())
+    if (response.config?.url) parts.push(`url: ${response.config.url}`)
+    if (response.data !== undefined) {
+      parts.push(`response: ${stringifyRecognitionErrorData(response.data)}`)
+    }
+  }
+  if (error.code) parts.push(`code: ${error.code}`)
+  if (error.data !== undefined) parts.push(`data: ${stringifyRecognitionErrorData(error.data)}`)
+  if (error.config?.url && !response?.config?.url) parts.push(`url: ${error.config.url}`)
+  if (error.stack) parts.push(`stack: ${error.stack}`)
+  if (!parts.length) {
+    parts.push(stringifyRecognitionErrorData(error))
+  }
+  return Array.from(new Set(parts.filter(Boolean))).join('\n') || fallback
+}
+
+function stringifyRecognitionErrorData(value) {
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
 }
 
 function selectDefaultRecognitionCandidate(item) {
@@ -2366,6 +2647,10 @@ function getSamplePowersForQuota() {
   gap: 10px;
   position: relative;
   z-index: 1;
+}
+
+.recognition-record-badge {
+  display: inline-flex;
 }
 
 .summary-grid {
@@ -3577,6 +3862,11 @@ function getSamplePowersForQuota() {
   background: rgba(240, 253, 244, 0.62);
 }
 
+.recognition-card.pending {
+  border-color: rgba(59, 130, 246, 0.18);
+  background: rgba(239, 246, 255, 0.72);
+}
+
 .recognition-card.failed {
   border-color: rgba(239, 68, 68, 0.18);
   background: rgba(254, 242, 242, 0.68);
@@ -3585,7 +3875,6 @@ function getSamplePowersForQuota() {
 .recognition-card header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
 }
 
@@ -3608,6 +3897,35 @@ function getSamplePowersForQuota() {
   color: #64748b;
   font-size: 13px;
   font-weight: 800;
+}
+
+.recognition-card header > .el-tag {
+  margin-left: auto;
+}
+
+.recognition-card-thumb {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  display: grid;
+  place-items: center;
+}
+
+.recognition-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.recognition-card-thumb.empty span,
+.recognition-history-thumb.empty span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .recognition-candidate {
@@ -3692,11 +4010,166 @@ function getSamplePowersForQuota() {
   white-space: pre-wrap;
 }
 
+.recognition-error-detail {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #2b1217;
+  color: #fecdd3;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .recognition-card-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.recognition-history {
+  display: grid;
+  gap: 16px;
+}
+
+.recognition-history-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.recognition-history-summary > div {
+  min-width: 0;
+  border-radius: 14px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.88);
+  display: grid;
+  gap: 4px;
+}
+
+.recognition-history-summary span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.recognition-history-summary strong {
+  color: #172033;
+  font-size: 24px;
+  font-weight: 950;
+}
+
+.recognition-history-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.recognition-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recognition-history-card {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(34, 197, 94, 0.16);
+  background: rgba(240, 253, 244, 0.62);
+}
+
+.recognition-history-card.pending {
+  border-color: rgba(59, 130, 246, 0.16);
+  background: rgba(239, 246, 255, 0.72);
+}
+
+.recognition-history-card.failed {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: rgba(254, 242, 242, 0.72);
+}
+
+.recognition-history-thumb {
+  width: 132px;
+  height: 132px;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.84);
+  display: grid;
+  place-items: center;
+}
+
+.recognition-history-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.recognition-history-main {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.recognition-history-main header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recognition-history-main header div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.recognition-history-main header strong,
+.recognition-history-main header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recognition-history-main header strong {
+  color: #172033;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.recognition-history-main header span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.recognition-history-entries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recognition-history-entries span {
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #172033;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.recognition-history-entries span.muted {
+  color: #9a6b28;
+  background: rgba(255, 247, 237, 0.94);
 }
 
 @media (max-width: 1180px) {
@@ -3881,6 +4354,20 @@ function getSamplePowersForQuota() {
   .recognition-entry-list,
   .recognition-entry-edit {
     grid-template-columns: 1fr;
+  }
+
+  .recognition-history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recognition-history-card {
+    grid-template-columns: 1fr;
+  }
+
+  .recognition-history-thumb {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
   }
 }
 </style>
