@@ -61,19 +61,27 @@ export function importLocalInternalPowers(powers) {
   })
 }
 
-// 内功图片识别占位
-export function recognizeInternalPowerImages(files) {
+// 内功图片AI识别
+export function recognizeInternalPowerImages(files, prompt = '') {
   const formData = new FormData()
   files.forEach(file => {
     formData.append('files', file)
   })
+  formData.append('prompt', prompt)
   return request({
     url: '/personal/internal-power/recognize-images',
     method: 'post',
     data: formData,
     headers: {
       'Content-Type': 'multipart/form-data',
-      encrypt: false
-    }
+      encrypt: false,
+      repeatSubmit: false
+    },
+    timeout: 120000
   })
+}
+
+// 单张内功图片AI识别
+export function recognizeInternalPowerImage(file, prompt = '') {
+  return recognizeInternalPowerImages([file], prompt)
 }

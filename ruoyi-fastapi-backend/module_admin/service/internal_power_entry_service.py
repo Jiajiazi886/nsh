@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel, PageModel
 from exceptions.exception import ServiceException
-from module_admin.constants.internal_power_entry_limits import INTERNAL_POWER_ENTRY_LIMIT_MAP
 from module_admin.dao.internal_power_entry_dao import InternalPowerEntryDao
 from module_admin.entity.do.internal_power_entry_do import SystemInternalPowerEntry
 from module_admin.entity.vo.internal_power_entry_vo import (
@@ -38,12 +37,12 @@ class InternalPowerEntryService:
     @classmethod
     async def get_personal_enabled_entries_service(cls, query_db: AsyncSession) -> list[InternalPowerEntryConfigModel]:
         rows = await InternalPowerEntryDao.list_enabled(query_db)
-        return [cls.__to_model(row) for row in rows if row.entry_name in INTERNAL_POWER_ENTRY_LIMIT_MAP]
+        return [cls.__to_model(row) for row in rows if cls.__has_entry_limit(row)]
 
     @classmethod
     async def get_enabled_entry_names_service(cls, query_db: AsyncSession) -> set[str]:
         rows = await InternalPowerEntryDao.list_enabled(query_db)
-        return {row.entry_name for row in rows if row.entry_name in INTERNAL_POWER_ENTRY_LIMIT_MAP}
+        return {row.entry_name for row in rows if cls.__has_entry_limit(row)}
 
     @classmethod
     async def entry_detail_services(cls, query_db: AsyncSession, entry_id: int) -> InternalPowerEntryConfigModel:
@@ -62,6 +61,9 @@ class InternalPowerEntryService:
             entry_name=entry.entry_name,
             conversion_percent=entry.conversion_percent,
             conversion_desc=entry.conversion_desc or '',
+            limit_text=cls.__normalize_limit_text(entry),
+            limit_value=entry.limit_value,
+            value_type=entry.value_type or 'number',
             status=entry.status or '0',
             remark=entry.remark or '',
             create_time=now,
@@ -88,6 +90,9 @@ class InternalPowerEntryService:
                 'entry_name': entry.entry_name,
                 'conversion_percent': entry.conversion_percent,
                 'conversion_desc': entry.conversion_desc or '',
+                'limit_text': cls.__normalize_limit_text(entry),
+                'limit_value': entry.limit_value,
+                'value_type': entry.value_type or 'number',
                 'status': entry.status or '0',
                 'remark': entry.remark or '',
                 'update_time': datetime.now(),
@@ -116,15 +121,14 @@ class InternalPowerEntryService:
 
     @staticmethod
     def __to_model(entry: SystemInternalPowerEntry) -> InternalPowerEntryConfigModel:
-        limit = INTERNAL_POWER_ENTRY_LIMIT_MAP.get(entry.entry_name, {})
         return InternalPowerEntryConfigModel(
             entryId=entry.entry_id,
             entryName=entry.entry_name,
             conversionPercent=entry.conversion_percent,
             conversionDesc=entry.conversion_desc or '',
-            limitText=limit.get('limit_text', ''),
-            limitValue=limit.get('limit_value'),
-            valueType=limit.get('value_type', 'number'),
+            limitText=entry.limit_text or '',
+            limitValue=entry.limit_value,
+            valueType=entry.value_type or 'number',
             status=entry.status or '0',
             remark=entry.remark or '',
             createTime=entry.create_time,
@@ -133,18 +137,29 @@ class InternalPowerEntryService:
 
     @staticmethod
     def __dict_to_model(row: dict[str, Any]) -> InternalPowerEntryConfigModel:
-        entry_name = row.get('entryName') or ''
-        limit = INTERNAL_POWER_ENTRY_LIMIT_MAP.get(entry_name, {})
         return InternalPowerEntryConfigModel(
             entryId=row.get('entryId'),
-            entryName=entry_name,
+            entryName=row.get('entryName') or '',
             conversionPercent=row.get('conversionPercent'),
             conversionDesc=row.get('conversionDesc') or '',
-            limitText=limit.get('limit_text', ''),
-            limitValue=limit.get('limit_value'),
-            valueType=limit.get('value_type', 'number'),
+            limitText=row.get('limitText') or '',
+            limitValue=row.get('limitValue'),
+            valueType=row.get('valueType') or 'number',
             status=row.get('status') or '0',
             remark=row.get('remark') or '',
             createTime=row.get('createTime'),
             updateTime=row.get('updateTime'),
         )
+
+    @staticmethod
+    def __has_entry_limit(entry: SystemInternalPowerEntry) -> bool:
+        return entry.limit_value is not None and (entry.limit_text or '').strip() != ''
+
+    @staticmethod
+    def __normalize_limit_text(entry: InternalPowerEntryConfigModel) -> str:
+        if entry.limit_text:
+            return entry.limit_text.strip()
+        if entry.limit_value is None:
+            return ''
+        suffix = '%' if entry.value_type == 'percent' else ''
+        return f'{entry.limit_value:g}{suffix}'

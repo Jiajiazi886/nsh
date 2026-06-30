@@ -21,6 +21,7 @@ class SystemInternalPowerPreset(Base):
     element_key = Column(String(16), nullable=False, comment='元素标识')
     elements_json = Column(Text, nullable=False, comment='五行JSON')
     bonus_percent = Column(Float, nullable=False, server_default='0', comment='基础百分比增益')
+    lingyun_bonus_percent = Column(Float, nullable=False, server_default='0', comment='灵韵百分比提升')
     bonus_type = Column(String(32), nullable=True, server_default="''", comment='增益类型')
     bonus_desc = Column(String(255), nullable=True, server_default="''", comment='增益描述')
     image_url = Column(String(255), nullable=True, server_default="''", comment='内功图片地址')

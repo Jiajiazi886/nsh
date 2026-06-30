@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS personal_internal_power (
     category varchar(64) DEFAULT '' COMMENT '内功种类',
     category_trait varchar(128) DEFAULT '' COMMENT '种类特性',
     bonus_percent double NOT NULL DEFAULT 0 COMMENT '基础百分比加成',
+    lingyun_enabled char(1) NOT NULL DEFAULT '0' COMMENT '是否启用灵韵（0否 1是）',
+    lingyun_bonus_percent double NOT NULL DEFAULT 0 COMMENT '灵韵百分比提升',
     entries_json longtext NULL COMMENT '词条JSON',
     elements_json longtext NULL COMMENT '五行JSON',
     remark varchar(500) DEFAULT '' COMMENT '备注',

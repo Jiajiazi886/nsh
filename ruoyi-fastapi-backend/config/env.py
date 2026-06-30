@@ -144,6 +144,18 @@ class TransportCryptoSettings(BaseSettings):
     )
 
 
+class MimoSettings(BaseSettings):
+    """
+    Mimo多模态识别配置
+    """
+
+    mimo_api_key: str = ''
+    mimo_base_url: str = 'https://api.xiaomimimo.com/v1'
+    mimo_model: str = 'mimo-v2.5'
+    mimo_timeout_seconds: int = 60
+    mimo_max_completion_tokens: int = 2048
+
+
 class GenSettings:
     """
     代码生成配置
@@ -266,6 +278,12 @@ class GetConfig:
         """
         return TransportCryptoSettings()
 
+    def get_mimo_config(self) -> MimoSettings:
+        """
+        获取Mimo多模态识别配置
+        """
+        return MimoSettings()
+
     def get_gen_config(self) -> GenSettings:
         """
         获取代码生成配置
@@ -329,6 +347,8 @@ RedisConfig = get_config.get_redis_config()
 LogConfig = get_config.get_log_config()
 # 传输层加解密配置
 TransportCryptoConfig = get_config.get_transport_crypto_config()
+# Mimo多模态识别配置
+MimoConfig = get_config.get_mimo_config()
 # 代码生成配置
 GenConfig = get_config.get_gen_config()
 # 上传配置

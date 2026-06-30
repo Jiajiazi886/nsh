@@ -33,6 +33,8 @@ class InternalPowerModel(BaseModel):
     category: str | None = Field(default='', description='内功种类')
     category_trait: str | None = Field(default='', description='种类特性')
     bonus_percent: float = Field(default=0, ge=0, le=100, description='基础百分比增伤')
+    lingyun_enabled: bool = Field(default=False, description='是否启用灵韵')
+    lingyun_bonus_percent: float = Field(default=0, ge=0, le=100, description='灵韵百分比提升')
     entry_attack_power: float = Field(default=0, ge=0, description='词条折算总进攻能力')
     entry_attack_percent: float = Field(default=0, ge=0, description='词条折算总百分比')
     total_bonus_percent: float = Field(default=0, ge=0, description='基础加成与词条加成总百分比')

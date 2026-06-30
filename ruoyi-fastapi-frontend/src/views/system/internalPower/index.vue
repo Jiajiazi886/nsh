@@ -4,11 +4,6 @@
       <el-form-item label="内功名称" prop="name">
         <el-input v-model.trim="queryParams.name" clearable placeholder="请输入内功名称" style="width: 220px" @keyup.enter="handleQuery" />
       </el-form-item>
-      <el-form-item label="元素" prop="elementKey">
-        <el-select v-model="queryParams.elementKey" clearable placeholder="全部元素" style="width: 180px">
-          <el-option v-for="item in elementOptions" :key="item.key" :label="item.label" :value="item.key" />
-        </el-select>
-      </el-form-item>
       <el-form-item label="状态" prop="status">
         <el-select v-model="queryParams.status" clearable placeholder="全部状态" style="width: 160px">
           <el-option label="正常" value="0" />
@@ -39,28 +34,14 @@
       <el-table-column label="预设ID" prop="presetId" align="center" width="90" />
       <el-table-column label="图片" align="center" width="92">
         <template #default="{ row }">
-          <div class="preset-thumb" :class="{ empty: !row.imageUrl }">
-            <img v-if="row.imageUrl" :src="resolveImageUrl(row.imageUrl)" :alt="`${row.displayName || row.name}图片`" />
+          <div class="preset-thumb" :class="{ empty: !resolveImageUrl(row.imageUrl) }">
+            <img v-if="resolveImageUrl(row.imageUrl)" :src="resolveImageUrl(row.imageUrl)" :alt="`${row.displayName || row.name}图片`" />
             <span v-else>未上传</span>
           </div>
         </template>
       </el-table-column>
       <el-table-column label="内功名称" prop="name" min-width="160" :show-overflow-tooltip="true" />
       <el-table-column label="展示名称" prop="displayName" min-width="180" :show-overflow-tooltip="true" />
-      <el-table-column label="元素" min-width="240">
-        <template #default="{ row }">
-          <div class="element-badges">
-            <span
-              v-for="item in elementOptions.slice(0, 5)"
-              :key="item.key"
-              :class="{ active: Number(row.elements?.[item.key] || 0) > 0 }"
-              :style="{ '--element-color': item.color }"
-            >
-              {{ item.label }} {{ Number(row.elements?.[item.key] || 0) }}
-            </span>
-          </div>
-        </template>
-      </el-table-column>
       <el-table-column label="增益" min-width="220">
         <template #default="{ row }">
           <div class="bonus-cell">
@@ -68,6 +49,11 @@
             <span>{{ row.bonusType || '未设置类型' }}</span>
             <small>{{ row.bonusDesc || '词条和具体数值后续设计' }}</small>
           </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="灵韵增益" align="center" width="120">
+        <template #default="{ row }">
+          <strong class="lingyun-value">{{ formatBonus(row.lingyunBonusPercent) }}</strong>
         </template>
       </el-table-column>
       <el-table-column label="状态" align="center" width="90">
@@ -101,31 +87,10 @@
         <el-form-item label="内功名称" prop="name">
           <el-input v-model.trim="form.name" maxlength="64" show-word-limit placeholder="例如：破釜" />
         </el-form-item>
-        <el-form-item label="预设元素" prop="elementKey">
-          <el-select v-model="form.elementKey" style="width: 100%" @change="applyElementTemplate">
-            <el-option v-for="item in elementOptions" :key="item.key" :label="item.label" :value="item.key" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="五行数量">
-          <div class="element-editor">
-            <div
-              v-for="item in elementOptions.slice(0, 5)"
-              :key="item.key"
-              class="element-editor-item"
-              :style="{ '--element-color': item.color }"
-            >
-              <span>{{ item.label }}</span>
-              <el-input-number v-model="form.elements[item.key]" :min="0" :max="5" controls-position="right" />
-            </div>
-          </div>
-          <p class="element-hint" :class="{ invalid: !isElementTotalValid }">
-            当前 {{ elementTotal }} 个；普通内功必须 4 个同元素，五韵谣为 5 个元素各 1 个。
-          </p>
-        </el-form-item>
         <el-form-item label="内功图片">
           <div class="image-editor">
-            <div class="image-preview" :class="{ empty: !form.imageUrl }">
-              <img v-if="form.imageUrl" :src="resolveImageUrl(form.imageUrl)" :alt="`${form.name || '内功'}图片预览`" />
+            <div class="image-preview" :class="{ empty: !resolveImageUrl(form.imageUrl) }">
+              <img v-if="resolveImageUrl(form.imageUrl)" :src="resolveImageUrl(form.imageUrl)" :alt="`${form.name || '内功'}图片预览`" />
               <span v-else>暂无图片</span>
             </div>
             <div class="image-actions">
@@ -148,6 +113,9 @@
         <el-form-item label="基础百分比增益" prop="bonusPercent">
           <el-input-number v-model="form.bonusPercent" :min="0" :max="100" :precision="1" controls-position="right" style="width: 220px" />
         </el-form-item>
+        <el-form-item label="灵韵百分比提升" prop="lingyunBonusPercent">
+          <el-input-number v-model="form.lingyunBonusPercent" :min="0" :max="100" :precision="1" controls-position="right" style="width: 220px" />
+        </el-form-item>
         <el-form-item label="增益类型">
           <el-input v-model.trim="form.bonusType" maxlength="32" placeholder="例如：攻击提升 / 防御提升" />
         </el-form-item>
@@ -169,7 +137,7 @@
           <span>{{ form.entries?.length || 0 }} 个词条占位，默认保留空数据。</span>
           <div>
             <el-button @click="cancel">取消</el-button>
-            <el-button type="primary" :disabled="!isElementTotalValid" @click="submitForm">确定</el-button>
+            <el-button type="primary" @click="submitForm">确定</el-button>
           </div>
         </div>
       </template>
@@ -186,6 +154,7 @@ import {
   listInternalPowerPreset,
   updateInternalPowerPreset
 } from '@/api/system/internalPowerPreset'
+import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
 
 const { proxy } = getCurrentInstance()
 const baseApi = import.meta.env.VITE_APP_BASE_API
@@ -202,6 +171,7 @@ const elementOptions = [
 ]
 
 const presetList = ref([])
+const imageDisplayEnabled = ref(true)
 const loading = ref(true)
 const showSearch = ref(true)
 const open = ref(false)
@@ -217,13 +187,12 @@ const data = reactive({
     pageNum: 1,
     pageSize: 10,
     name: undefined,
-    elementKey: undefined,
     status: undefined
   },
   rules: {
     name: [{ required: true, message: '内功名称不能为空', trigger: 'blur' }],
-    elementKey: [{ required: true, message: '预设元素不能为空', trigger: 'change' }],
-    bonusPercent: [{ required: true, message: '基础百分比增益不能为空', trigger: 'blur' }]
+    bonusPercent: [{ required: true, message: '基础百分比增益不能为空', trigger: 'blur' }],
+    lingyunBonusPercent: [{ required: true, message: '灵韵百分比提升不能为空', trigger: 'blur' }]
   }
 })
 
@@ -266,6 +235,7 @@ function reset() {
     elementKey: 'metal',
     elements: createElementsByKey('metal'),
     bonusPercent: 0,
+    lingyunBonusPercent: 0,
     bonusType: '',
     bonusDesc: '',
     entries: [],
@@ -294,7 +264,7 @@ function handleUpdate(row) {
 
 function submitForm() {
   proxy.$refs.presetRef.validate(valid => {
-    if (!valid || !isElementTotalValid.value) return
+    if (!valid) return
     const payload = toPayload(form.value)
     const request = payload.presetId ? updateInternalPowerPreset(payload) : addInternalPowerPreset(payload)
     request.then(() => {
@@ -352,6 +322,7 @@ function normalizePreset(value = {}) {
       earth: Number(value.elements?.earth || 0)
     },
     bonusPercent: Number(value.bonusPercent || 0),
+    lingyunBonusPercent: Number(value.lingyunBonusPercent ?? value.lingyun_bonus_percent ?? 0),
     bonusType: value.bonusType || '',
     bonusDesc: value.bonusDesc || '',
     imageUrl: value.imageUrl || '',
@@ -370,7 +341,17 @@ function toPayload(value) {
   return payload
 }
 
+async function loadImageDisplayStatus() {
+  try {
+    const response = await getInternalPowerImageDisplayStatus()
+    imageDisplayEnabled.value = response.data?.enabled !== false
+  } catch {
+    imageDisplayEnabled.value = true
+  }
+}
+
 function resolveImageUrl(url = '') {
+  if (!imageDisplayEnabled.value) return ''
   const value = String(url || '').trim()
   if (!value) return ''
   if (/^(https?:)?\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) return value
@@ -418,7 +399,7 @@ function formatBonus(value) {
   return `${Number(value || 0).toFixed(1)}%`
 }
 
-getList()
+loadImageDisplayStatus().finally(getList)
 </script>
 
 <style scoped>
@@ -481,6 +462,10 @@ getList()
 
 .bonus-cell strong {
   color: #2563eb;
+}
+
+.lingyun-value {
+  color: #7c3aed;
 }
 
 .bonus-cell span,

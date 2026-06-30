@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS system_internal_power_preset (
     element_key varchar(16) NOT NULL COMMENT '元素标识',
     elements_json longtext NOT NULL COMMENT '五行JSON',
     bonus_percent double NOT NULL DEFAULT 0 COMMENT '基础百分比增益',
+    lingyun_bonus_percent double NOT NULL DEFAULT 0 COMMENT '灵韵百分比提升',
     bonus_type varchar(32) DEFAULT '' COMMENT '增益类型',
     bonus_desc varchar(255) DEFAULT '' COMMENT '增益描述',
     entries_json longtext NULL COMMENT '词条JSON',

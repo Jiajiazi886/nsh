@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
+MAX_ENTRY_NAME_LENGTH = 64
+
 
 class InternalPowerEntryConfigModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
@@ -28,12 +30,14 @@ class InternalPowerEntryConfigModel(BaseModel):
         value = (value or '').strip()
         if not value:
             raise ValueError('词条名称不能为空')
-        if len(value) > 64:
+        if len(value) > MAX_ENTRY_NAME_LENGTH:
             raise ValueError('词条名称不能超过64个字符')
         return value
 
     def validate_fields(self) -> None:
         self.validate_entry_name(self.entry_name)
+        if self.limit_value is None:
+            raise ValueError('最大数值不能为空')
 
 
 class InternalPowerEntryQueryModel(BaseModel):

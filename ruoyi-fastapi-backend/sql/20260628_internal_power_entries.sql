@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS system_internal_power_entry (
     entry_name varchar(64) NOT NULL COMMENT '词条名称',
     conversion_percent double DEFAULT NULL COMMENT '数值转换百分比',
     conversion_desc varchar(255) DEFAULT '' COMMENT '转换说明',
+    limit_text varchar(32) DEFAULT '' COMMENT '固定上限展示值',
+    limit_value double DEFAULT NULL COMMENT '固定上限数值',
+    value_type varchar(16) NOT NULL DEFAULT 'number' COMMENT '数值类型（number数值 percent百分比）',
     status char(1) NOT NULL DEFAULT '0' COMMENT '状态（0正常 1停用）',
     remark varchar(500) DEFAULT '' COMMENT '备注',
     create_time datetime DEFAULT NULL COMMENT '创建时间',
@@ -15,30 +18,30 @@ CREATE TABLE IF NOT EXISTS system_internal_power_entry (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统内功词条表';
 
 INSERT INTO system_internal_power_entry (
-  entry_name, conversion_percent, conversion_desc, status, remark, create_time, update_time
+  entry_name, conversion_percent, conversion_desc, limit_text, limit_value, value_type, status, remark, create_time, update_time
 ) VALUES
-  ('攻击', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('力量/气海', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('赛年伤害/治疗提高', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('最小攻击', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('最大攻击', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('流派克制', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('破防', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('会心', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('耐力', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('根骨', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('身法', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('内功防御', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('首领抵御', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('流派抵御', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('抗会心', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('防御', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('气血上限', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('首领克制', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('抗内功会心', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('抗外功会心', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('外功防御', NULL, '', '0', '内置内功词条', NOW(), NOW()),
-  ('灵韵', NULL, '', '0', '内置内功词条', NOW(), NOW())
+  ('攻击', NULL, '', '33', 33, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('力量/气海', NULL, '', '10', 10, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('赛年伤害/治疗提高', NULL, '', '1.7%', 1.7, 'percent', '0', '内置内功词条', NOW(), NOW()),
+  ('最小攻击', NULL, '', '36', 36, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('最大攻击', NULL, '', '36', 36, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('流派克制', NULL, '', '1.2%', 1.2, 'percent', '0', '内置内功词条', NOW(), NOW()),
+  ('破防', NULL, '', '33', 33, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('会心', NULL, '', '66', 66, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('耐力', NULL, '', '10', 10, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('根骨', NULL, '', '10', 10, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('身法', NULL, '', '10', 10, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('内功防御', NULL, '', '36', 36, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('首领抵御', NULL, '', '1.2%', 1.2, 'percent', '0', '内置内功词条', NOW(), NOW()),
+  ('流派抵御', NULL, '', '1.2%', 1.2, 'percent', '0', '内置内功词条', NOW(), NOW()),
+  ('抗会心', NULL, '', '66', 66, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('防御', NULL, '', '33', 33, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('气血上限', NULL, '', '991', 991, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('首领克制', NULL, '', '1.2%', 1.2, 'percent', '0', '内置内功词条', NOW(), NOW()),
+  ('抗内功会心', NULL, '', '72', 72, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('抗外功会心', NULL, '', '72', 72, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('外功防御', NULL, '', '36', 36, 'number', '0', '内置内功词条', NOW(), NOW()),
+  ('灵韵', NULL, '', '', NULL, 'number', '0', '内置内功词条', NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   update_time = NOW();
 

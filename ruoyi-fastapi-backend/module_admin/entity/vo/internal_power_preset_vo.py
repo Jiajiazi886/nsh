@@ -15,6 +15,7 @@ class InternalPowerPresetModel(BaseModel):
     element_key: Literal['metal', 'wood', 'water', 'fire', 'earth', 'mixed'] = Field(description='元素标识')
     elements: InternalPowerElementsModel | dict[str, int] = Field(description='五行')
     bonus_percent: float = Field(default=0, ge=0, le=100, description='基础百分比增益')
+    lingyun_bonus_percent: float = Field(default=0, ge=0, le=100, description='灵韵百分比提升')
     bonus_type: str | None = Field(default='', description='增益类型')
     bonus_desc: str | None = Field(default='', description='增益描述')
     image_url: str | None = Field(default='', description='内功图片地址')

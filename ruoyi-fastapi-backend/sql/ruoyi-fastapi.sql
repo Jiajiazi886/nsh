@@ -84,6 +84,8 @@ create table personal_internal_power (
   category          varchar(64)     default ''                 comment '内功种类',
   category_trait    varchar(128)    default ''                 comment '种类特性',
   bonus_percent     double          default 0                  comment '基础百分比加成',
+  lingyun_enabled   char(1)         default '0'                comment '是否启用灵韵（0否 1是）',
+  lingyun_bonus_percent double      default 0                  comment '灵韵百分比提升',
   entries_json      longtext                                   comment '词条JSON',
   elements_json     longtext                                   comment '五行JSON',
   remark            varchar(500)    default ''                 comment '备注',

@@ -25,11 +25,11 @@ CREATE TABLE IF NOT EXISTS personal_internal_power_entry_value (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='个人内功词条数值表';
 
 UPDATE sys_menu
-SET visible = '1',
-    status = '1',
+SET visible = '0',
+    status = '0',
     update_by = 'admin',
     update_time = NOW(),
-    remark = '已迁移到个人管理，保留旧接口避免兼容问题'
+    remark = '系统内功词条管理菜单；词条上限由管理员维护'
 WHERE menu_id IN (3110, 3111, 3112, 3113, 3114)
    OR perms LIKE 'system:internal-power-entry:%';
 

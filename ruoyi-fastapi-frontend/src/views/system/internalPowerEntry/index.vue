@@ -17,32 +17,32 @@
     </el-form>
 
     <el-row :gutter="10" class="mb8">
-      <el-col :span="1.5">
+      <el-col v-if="canManageEntryLimits" :span="1.5">
         <el-button type="primary" plain icon="Plus" @click="handleAdd" v-hasPermi="['system:internal-power-entry:add']">新增</el-button>
       </el-col>
-      <el-col :span="1.5">
+      <el-col v-if="canManageEntryLimits" :span="1.5">
         <el-button type="success" plain icon="Edit" :disabled="single" @click="handleUpdate" v-hasPermi="['system:internal-power-entry:edit']">修改</el-button>
       </el-col>
-      <el-col :span="1.5">
+      <el-col v-if="canManageEntryLimits" :span="1.5">
         <el-button type="danger" plain icon="Delete" :disabled="multiple" @click="handleDelete" v-hasPermi="['system:internal-power-entry:remove']">删除</el-button>
       </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList" />
     </el-row>
 
     <el-table v-loading="loading" :data="entryList" border stripe @selection-change="handleSelectionChange">
-      <el-table-column type="selection" width="55" align="center" />
+      <el-table-column v-if="canManageEntryLimits" type="selection" width="55" align="center" />
       <el-table-column label="词条ID" prop="entryId" align="center" width="90" />
       <el-table-column label="词条名称" prop="entryName" min-width="180" :show-overflow-tooltip="true" />
-      <el-table-column label="转换百分比" align="center" width="140">
+      <el-table-column label="最大数值" align="center" width="140">
         <template #default="{ row }">
-          <span class="percent-cell" :class="{ empty: row.conversionPercent === null || row.conversionPercent === undefined }">
-            {{ formatPercent(row.conversionPercent) }}
-          </span>
+          <el-tag effect="plain" :type="row.limitValue === null || row.limitValue === undefined ? 'info' : 'success'">
+            {{ displayLimit(row) }}
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="转换说明" prop="conversionDesc" min-width="240" :show-overflow-tooltip="true">
+      <el-table-column label="上限类型" align="center" width="110">
         <template #default="{ row }">
-          <span>{{ row.conversionDesc || '待配置转换公式' }}</span>
+          <span>{{ row.valueType === 'percent' ? '百分比' : '数值' }}</span>
         </template>
       </el-table-column>
       <el-table-column label="状态" align="center" width="90">
@@ -55,7 +55,7 @@
           <span>{{ parseTime(row.updateTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" width="160" fixed="right">
+      <el-table-column v-if="canManageEntryLimits" label="操作" align="center" width="160" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" icon="Edit" @click="handleUpdate(row)" v-hasPermi="['system:internal-power-entry:edit']">修改</el-button>
           <el-button link type="primary" icon="Delete" @click="handleDelete(row)" v-hasPermi="['system:internal-power-entry:remove']">删除</el-button>
@@ -76,20 +76,23 @@
         <el-form-item label="词条名称" prop="entryName">
           <el-input v-model.trim="form.entryName" maxlength="64" show-word-limit placeholder="例如：攻击" />
         </el-form-item>
-        <el-form-item label="数值转换百分比">
-          <el-input-number
-            v-model="form.conversionPercent"
-            :min="0"
-            :max="100"
-            :precision="4"
-            controls-position="right"
-            placeholder="暂未配置"
-            style="width: 220px"
-          />
-          <p class="field-hint">可以留空；后续做词条数值公式时再填写。</p>
-        </el-form-item>
-        <el-form-item label="转换说明">
-          <el-input v-model.trim="form.conversionDesc" type="textarea" :rows="3" maxlength="255" show-word-limit placeholder="记录这个词条如何换算为百分比，当前可留空。" />
+        <el-form-item label="最大数值" prop="limitValue" required>
+          <div class="limit-form-row">
+            <el-input-number
+              v-model="form.limitValue"
+              :min="0"
+              :step="form.valueType === 'percent' ? 0.1 : 1"
+              controls-position="right"
+              placeholder="例如：33"
+              style="width: 220px"
+              @change="syncLimitText"
+            />
+            <el-select v-model="form.valueType" style="width: 120px" @change="syncLimitText">
+              <el-option label="数值" value="number" />
+              <el-option label="百分比" value="percent" />
+            </el-select>
+          </div>
+          <p class="field-hint">这个值会作为个人“内功词条管理”里的固定内功最大数值。</p>
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
@@ -106,7 +109,7 @@
           <span>个人内功页只能选择状态为“正常”的词条。</span>
           <div>
             <el-button @click="cancel">取消</el-button>
-            <el-button type="primary" @click="submitForm">确定</el-button>
+            <el-button type="primary" :disabled="!canManageEntryLimits" @click="submitForm">确定</el-button>
           </div>
         </div>
       </template>
@@ -115,6 +118,7 @@
 </template>
 
 <script setup name="SystemInternalPowerEntry">
+import useUserStore from '@/store/modules/user'
 import {
   addInternalPowerEntry,
   delInternalPowerEntry,
@@ -124,6 +128,7 @@ import {
 } from '@/api/system/internalPowerEntry'
 
 const { proxy } = getCurrentInstance()
+const userStore = useUserStore()
 
 const entryList = ref([])
 const loading = ref(true)
@@ -144,11 +149,14 @@ const data = reactive({
     status: undefined
   },
   rules: {
-    entryName: [{ required: true, message: '词条名称不能为空', trigger: 'blur' }]
+    entryName: [{ required: true, message: '词条名称不能为空', trigger: 'blur' }],
+    limitValue: [{ required: true, message: '最大数值不能为空', trigger: 'blur' }]
   }
 })
 
 const { queryParams, form, rules } = toRefs(data)
+
+const canManageEntryLimits = computed(() => (userStore.roles || []).includes('admin'))
 
 function getList() {
   loading.value = true
@@ -175,8 +183,9 @@ function reset() {
   form.value = normalizeEntry({
     entryId: undefined,
     entryName: '',
-    conversionPercent: null,
-    conversionDesc: '',
+    limitText: '',
+    limitValue: 0,
+    valueType: 'number',
     status: '0',
     remark: ''
   })
@@ -234,12 +243,13 @@ function cancel() {
 }
 
 function normalizeEntry(value = {}) {
-  const percent = value.conversionPercent
+  const limitValue = value.limitValue
   return {
     entryId: value.entryId,
     entryName: value.entryName || '',
-    conversionPercent: percent === null || percent === undefined || percent === '' ? null : Number(percent),
-    conversionDesc: value.conversionDesc || '',
+    limitText: value.limitText || formatLimitText(limitValue, value.valueType),
+    limitValue: limitValue === null || limitValue === undefined || limitValue === '' ? null : Number(limitValue),
+    valueType: value.valueType === 'percent' ? 'percent' : 'number',
     status: value.status || '0',
     remark: value.remark || '',
     createTime: value.createTime,
@@ -248,12 +258,24 @@ function normalizeEntry(value = {}) {
 }
 
 function toPayload(value) {
-  return normalizeEntry(value)
+  const payload = normalizeEntry(value)
+  payload.limitText = payload.limitText || formatLimitText(payload.limitValue, payload.valueType)
+  return payload
 }
 
-function formatPercent(value) {
-  if (value === null || value === undefined || value === '') return '未配置'
-  return `${Number(value || 0).toFixed(4)}%`
+function formatLimitText(value, valueType = 'number') {
+  if (value === null || value === undefined || value === '') return ''
+  const numberValue = Number(value || 0)
+  if (Number.isNaN(numberValue)) return ''
+  return `${numberValue.toString()}${valueType === 'percent' ? '%' : ''}`
+}
+
+function displayLimit(row) {
+  return formatLimitText(row.limitValue, row.valueType) || '未配置'
+}
+
+function syncLimitText() {
+  form.value.limitText = formatLimitText(form.value.limitValue, form.value.valueType)
 }
 
 getList()
@@ -262,15 +284,6 @@ getList()
 <style scoped>
 .internal-power-entry-admin {
   --line: rgba(32, 38, 52, 0.12);
-}
-
-.percent-cell {
-  color: #2563eb;
-  font-weight: 900;
-}
-
-.percent-cell.empty {
-  color: #94a3b8;
 }
 
 .entry-form {
@@ -283,6 +296,13 @@ getList()
   color: #64748b;
   font-size: 12px;
   font-weight: 800;
+}
+
+.limit-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
 }
 
 .drawer-footer {

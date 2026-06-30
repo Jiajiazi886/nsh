@@ -7,7 +7,8 @@
         <p>先把内功、词条和五行配比管理起来；随机数值与后端同步留给下一轮。</p>
       </div>
       <div class="hero-actions">
-        <el-tag effect="plain" type="info">AI识图剩余 {{ aiRecognitionCount }} 次</el-tag>
+        <el-tag effect="plain" type="info">AI识图 {{ aiRecognitionQuotaLabel }}</el-tag>
+        <el-tag v-if="backgroundRecognitionRunning" effect="plain" type="warning">后台识别中</el-tag>
         <el-button plain @click="openRecognitionDialog">图片识别</el-button>
         <el-button v-if="canEditPowerValues" plain @click="openValueEditor">内功数值编辑</el-button>
         <el-button plain @click="resetSamples">重置示例</el-button>
@@ -33,8 +34,8 @@
       </article>
       <article class="summary-card">
         <span>AI识图次数</span>
-        <strong>{{ aiRecognitionCount }}</strong>
-        <small>每张图片消耗 1 次</small>
+        <strong>{{ aiRecognitionQuotaValue }}</strong>
+        <small>{{ aiRecognitionUnlimited ? '管理员不限次数' : '每张成功图片消耗 1 次' }}</small>
       </article>
       <article class="summary-card element-summary">
         <span>五行分布</span>
@@ -112,6 +113,7 @@
             <strong>{{ formatBonus(getPowerScore(item)) }}</strong>
             <span>基础：{{ formatBonus(getBaseBonus(item)) }}</span>
             <span>词条：{{ formatBonus(getEntryAttackPercent(item)) }}</span>
+            <span>灵韵：{{ formatBonus(getLingyunBonus(item)) }}</span>
           </div>
 
           <div class="card-center">
@@ -171,19 +173,37 @@
       append-to-body
       destroy-on-close
       class="recognition-dialog"
+      @opened="focusRecognitionPasteTarget"
       @closed="resetRecognitionDialog"
     >
-      <div class="recognition-panel">
+      <div class="recognition-panel" @paste="handleRecognitionDialogPaste">
         <el-alert
-          title="当前是占位功能：会正常扣除次数，但后端暂时返回空识别结果。"
+          title="识别结果只会生成草稿；确认导入并保存后，才会写入内功库。"
           type="info"
           show-icon
           :closable="false"
         />
         <div class="recognition-quota">
           <span>剩余次数</span>
-          <strong>{{ aiRecognitionCount }}</strong>
-          <small>已选择 {{ recognitionFileList.length }} 张，将消耗 {{ recognitionFileList.length }} 次</small>
+          <strong>{{ aiRecognitionQuotaValue }}</strong>
+          <small>{{ recognitionSelectionCostText }}</small>
+        </div>
+        <div class="recognition-background-toggle">
+          <el-checkbox v-model="recognitionBackgroundMode">
+            后台模式
+          </el-checkbox>
+          <span>{{ recognitionBackgroundMode ? backgroundRecognitionProgressText : '勾选后，拖入或选择图片会自动后台识别并新增内功。' }}</span>
+        </div>
+        <div
+          ref="recognitionPasteTarget"
+          class="recognition-paste-zone"
+          tabindex="0"
+          role="textbox"
+          aria-label="粘贴内功截图"
+          @click="focusRecognitionPasteTarget"
+        >
+          <strong>截图后直接 Ctrl+V</strong>
+          <span>这里只接收剪贴板图片；后台模式开启时会自动识别并新增内功。</span>
         </div>
         <el-upload
           drag
@@ -200,10 +220,85 @@
             <div class="el-upload__tip">支持多张图片；每张图片消耗 1 次 AI 识图次数。</div>
           </template>
         </el-upload>
-        <div v-if="recognitionResult" class="recognition-result">
-          <strong>识别结果</strong>
-          <p>AI识图结果待接入，当前返回空对象。</p>
-          <code>{{ recognitionResult }}</code>
+        <div v-if="recognitionItems.length" class="recognition-result-list">
+          <article
+            v-for="item in recognitionItems"
+            :key="item.clientId"
+            class="recognition-card"
+            :class="{ failed: !item.success }"
+          >
+            <header>
+              <div>
+                <strong>{{ item.fileName }}</strong>
+                <span>{{ item.parsed?.内功名 || '未识别内功名' }}</span>
+              </div>
+              <el-tag :type="getRecognitionStatusType(item)" effect="plain">
+                {{ getRecognitionStatusText(item) }}
+              </el-tag>
+            </header>
+            <el-alert
+              v-if="item.error"
+              :title="item.error"
+              type="error"
+              show-icon
+              :closable="false"
+            />
+            <div v-if="item.success" class="recognition-candidate">
+              <span>匹配预设</span>
+              <el-select v-model="item.selectedPresetId" placeholder="请选择具体内功预设">
+                <el-option
+                  v-for="candidate in item.presetCandidates"
+                  :key="candidate.presetId"
+                  :label="candidate.displayName"
+                  :value="candidate.presetId"
+                />
+              </el-select>
+            </div>
+            <div v-if="item.entries.length" class="recognition-entry-list">
+              <div
+                v-for="(entry, index) in item.entries"
+                :key="`${item.clientId}-${index}`"
+                class="recognition-entry-edit"
+                :class="{ muted: entry.name === '灵韵' || !getEntryOption(entry.name) }"
+              >
+                <span class="recognition-entry-name">{{ entry.name || '未知词条' }}</span>
+                <el-input-number
+                  v-model="entry.value"
+                  :min="0"
+                  :max="getRecognitionEntryMax(entry)"
+                  :precision="getRecognitionEntryPrecision(entry)"
+                  controls-position="right"
+                  :disabled="entry.name === '灵韵' || !getEntryOption(entry.name)"
+                  size="small"
+                />
+                <span v-if="isPercentEntry(entry.name)" class="recognition-entry-suffix">%</span>
+                <small>{{ getRecognitionEntryHint(entry) }}</small>
+              </div>
+            </div>
+            <details v-if="item.rawText" class="recognition-raw">
+              <summary>查看原始返回</summary>
+              <pre>{{ item.rawText }}</pre>
+            </details>
+            <div v-if="item.success && !item.background" class="recognition-card-actions">
+              <el-button
+                type="success"
+                plain
+                :loading="item.saving"
+                :disabled="!item.selectedPresetId || item.saving || item.saved"
+                @click="saveRecognizedPowerDirectly(item)"
+              >
+                {{ item.saved ? '已新增' : '直接新增内功' }}
+              </el-button>
+              <el-button
+                type="primary"
+                plain
+                :disabled="!item.selectedPresetId || item.saving"
+                @click="importRecognizedPower(item)"
+              >
+                导入为内功草稿
+              </el-button>
+            </div>
+          </article>
         </div>
       </div>
       <template #footer>
@@ -211,10 +306,10 @@
         <el-button
           type="primary"
           :loading="recognitionSubmitting"
-          :disabled="!recognitionFileList.length || recognitionFileList.length > aiRecognitionCount"
+          :disabled="recognitionBackgroundMode || !recognitionFileList.length || (!aiRecognitionUnlimited && recognitionFileList.length > aiRecognitionCount)"
           @click="submitRecognition"
         >
-          开始识别
+          {{ recognitionBackgroundMode ? '上传后自动识别' : '开始识别' }}
         </el-button>
       </template>
     </el-dialog>
@@ -367,6 +462,12 @@
                     <el-input-number v-model="draft.bonusPercent" :min="0" :max="100" :precision="1" controls-position="right" />
                   </div>
                 </el-form-item>
+                <el-form-item label="灵韵">
+                  <div class="lingyun-editor">
+                    <el-checkbox v-model="draft.lingyunEnabled">启用灵韵</el-checkbox>
+                    <span>灵韵增益 {{ formatBonus(draft.lingyunBonusPercent) }}</span>
+                  </div>
+                </el-form-item>
               </div>
             </section>
 
@@ -427,7 +528,7 @@
                       placeholder="词条数值"
                     />
                     <span v-if="isPercentEntry(entry.name)" class="entry-value-suffix">%</span>
-                    <small>上限 {{ getEntryLimitText(entry.name) }}</small>
+                    <small v-if="entry.name">最大数值 {{ getEntryMaxValueText(entry.name) }}</small>
                   </div>
                   <el-button text type="danger" @click="removeEntry(index)">删除</el-button>
                 </div>
@@ -461,6 +562,11 @@
               <h2>{{ draft.name || '未命名' }}</h2>
               <p>{{ draft.category }} · {{ draft.categoryTrait || '未设特性' }}</p>
               <strong>{{ formatBonus(getPowerScore(draft)) }}</strong>
+              <div class="preview-bonus-breakdown">
+                <span>基础 {{ formatBonus(getBaseBonus(draft)) }}</span>
+                <span>词条 {{ formatBonus(getEntryAttackPercent(draft)) }}</span>
+                <span>灵韵 {{ formatBonus(getLingyunBonus(draft)) }}</span>
+              </div>
               <div class="full-elements preview-elements">
                 <span
                   v-for="item in elementOptions"
@@ -472,10 +578,13 @@
                 </span>
               </div>
               <div class="full-entries preview-entries">
+                <span v-if="draft.lingyunEnabled" class="lingyun-entry">
+                  灵韵 {{ formatBonus(getLingyunBonus(draft)) }}
+                </span>
                 <span v-for="entry in draft.entries" :key="entry.id">
                   {{ getEntryLabel(entry) }}
                 </span>
-                <span v-if="!draft.entries.length" class="muted">词条等待后期随机开发</span>
+                <span v-if="!draft.entries.length && !draft.lingyunEnabled" class="muted">词条等待后期随机开发</span>
               </div>
             </div>
             <div class="editor-note-card">
@@ -559,10 +668,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { ArrowDown, ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
+import internalPowerRecognitionPrompt from '@/assets/prompts/internal-power-recognition.md?raw'
 import {
   addInternalPower,
   deleteInternalPower,
@@ -570,10 +680,11 @@ import {
   listInternalPowerEntries,
   listInternalPowers,
   listInternalPowerPresets,
-  recognizeInternalPowerImages,
+  recognizeInternalPowerImage,
   updateInternalPower
 } from '@/api/personal/internalPower'
 import { getInternalPowerEntryConversion } from '@/api/personal/internalPowerEntry'
+import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
 
 const userStore = useUserStore()
 const formRef = ref(null)
@@ -590,6 +701,7 @@ const valueEditorVisible = ref(false)
 const categoryPickerVisible = ref(false)
 const collapsedElementFolders = ref(new Set())
 const powerCatalog = ref([])
+const internalPowerImageVisible = ref(true)
 const entryOptions = ref([])
 const entryConversion = ref({ unitPercent: 0, entries: [] })
 const catalogDraft = ref([])
@@ -602,7 +714,11 @@ const deleteConfirmResolve = ref(null)
 const recognitionDialogVisible = ref(false)
 const recognitionFileList = ref([])
 const recognitionSubmitting = ref(false)
-const recognitionResult = ref(null)
+const recognitionItems = ref([])
+const recognitionBackgroundMode = ref(true)
+const backgroundRecognitionRunning = ref(false)
+const backgroundRecognitionFileUids = ref(new Set())
+const recognitionPasteTarget = ref(null)
 
 const filters = reactive({
   keyword: '',
@@ -638,6 +754,23 @@ const deleteConfirmSkipKey = computed(() => {
 })
 const canEditPowerValues = computed(() => false)
 const aiRecognitionCount = computed(() => Number(userStore.aiImageRecognitionCount || 0))
+const aiRecognitionUnlimited = computed(() => {
+  return (userStore.roles || []).includes('admin') || (userStore.permissions || []).includes('*:*:*')
+})
+const aiRecognitionQuotaValue = computed(() => aiRecognitionUnlimited.value ? '不限' : aiRecognitionCount.value)
+const aiRecognitionQuotaLabel = computed(() => aiRecognitionUnlimited.value ? '管理员不限' : `剩余 ${aiRecognitionCount.value} 次`)
+const recognitionSelectionCostText = computed(() => {
+  if (aiRecognitionUnlimited.value) return `已选择 ${recognitionFileList.value.length} 张，管理员识别不扣次数`
+  return `已选择 ${recognitionFileList.value.length} 张，成功识别将消耗对应次数`
+})
+const backgroundRecognitionProgressText = computed(() => {
+  const items = recognitionItems.value.filter(item => item.background)
+  if (!items.length) return '后台模式已开启：拖入或选择图片后会自动识别。'
+  const running = items.filter(item => ['queued', 'recognizing', 'saving'].includes(item.status)).length
+  const saved = items.filter(item => item.status === 'saved').length
+  const failed = items.filter(item => item.status === 'failed').length
+  return `后台进度：共 ${items.length} 张，进行中 ${running} 张，已新增 ${saved} 个，失败 ${failed} 张。`
+})
 const canCreateMore = computed(() => quota.value.unlimited || powers.value.length < Number(quota.value.maxCount || 20))
 const limitText = computed(() => quota.value.unlimited ? `${powers.value.length} 个已保存 · 不限上限` : `${powers.value.length}/${quota.value.maxCount || 20} 个已保存`)
 const quotaSummaryText = computed(() => {
@@ -756,11 +889,27 @@ const elementSummaryText = computed(() => {
 })
 
 onMounted(async () => {
+  await loadImageDisplayStatus()
   await loadPowerCatalog()
   await loadEntryOptions()
   await loadEntryConversion()
   await loadPowers()
 })
+
+watch(recognitionBackgroundMode, enabled => {
+  if (enabled) {
+    enqueueBackgroundRecognitionFromUploadItems(recognitionFileList.value)
+  }
+})
+
+async function loadImageDisplayStatus() {
+  try {
+    const response = await getInternalPowerImageDisplayStatus()
+    internalPowerImageVisible.value = response.data?.enabled !== false
+  } catch {
+    internalPowerImageVisible.value = true
+  }
+}
 
 async function loadPowerCatalog() {
   try {
@@ -869,25 +1018,130 @@ function updateQuotaCount() {
 
 function openRecognitionDialog() {
   recognitionDialogVisible.value = true
+  recognitionBackgroundMode.value = true
+  focusRecognitionPasteTarget()
 }
 
 function handleRecognitionFileChange(file, fileList) {
-  recognitionResult.value = null
-  recognitionFileList.value = fileList.filter(item => item.raw?.type?.startsWith('image/'))
-  if (recognitionFileList.value.length !== fileList.length) {
-    ElMessage.warning('只能选择图片文件')
-  }
+  syncRecognitionUploadItems(fileList, {
+    emptyMessage: '只能选择图片文件'
+  })
 }
 
 function handleRecognitionFileRemove(file, fileList) {
-  recognitionResult.value = null
-  recognitionFileList.value = fileList
+  syncRecognitionUploadItems(fileList, {
+    processBackground: false,
+    silentEmpty: true
+  })
+}
+
+function focusRecognitionPasteTarget() {
+  nextTick(() => {
+    recognitionPasteTarget.value?.focus?.()
+  })
+}
+
+function handleRecognitionDialogPaste(event) {
+  const files = getClipboardImageFiles(event)
+  if (!files.length) {
+    if (shouldWarnEmptyClipboardPaste(event?.target)) {
+      ElMessage.warning('剪贴板中没有可粘贴的图片')
+    }
+    return
+  }
+  event.preventDefault()
+  const uploadItems = files.map(createRecognitionUploadItemFromFile)
+  syncRecognitionUploadItems(uploadItems, {
+    append: true,
+    backgroundItems: uploadItems,
+    silentEmpty: true
+  })
+  ElMessage.success(`已加入 ${files.length} 张截图${recognitionBackgroundMode.value ? '，后台识别已开始' : ''}`)
+}
+
+function syncRecognitionUploadItems(uploadItems = [], options = {}) {
+  const sourceItems = Array.isArray(uploadItems) ? uploadItems : []
+  const imageItems = sourceItems.filter(item => item?.raw?.type?.startsWith('image/'))
+  if (!options.silentEmpty && imageItems.length !== sourceItems.length) {
+    ElMessage.warning(options.emptyMessage || '只能粘贴图片文件')
+  }
+  if (options.append) {
+    const existingUids = new Set(recognitionFileList.value.map(item => item.uid))
+    recognitionFileList.value = [
+      ...recognitionFileList.value,
+      ...imageItems.filter(item => !existingUids.has(item.uid))
+    ]
+  } else {
+    recognitionFileList.value = imageItems
+  }
+  if (recognitionBackgroundMode.value && options.processBackground !== false) {
+    enqueueBackgroundRecognitionFromUploadItems(options.backgroundItems || imageItems)
+    return
+  }
+  if (!recognitionBackgroundMode.value) {
+    recognitionItems.value = []
+  }
 }
 
 function resetRecognitionDialog() {
   recognitionFileList.value = []
   recognitionSubmitting.value = false
-  recognitionResult.value = null
+  recognitionItems.value = []
+  recognitionBackgroundMode.value = true
+  backgroundRecognitionFileUids.value = new Set()
+}
+
+function getClipboardImageFiles(event) {
+  const clipboardData = event?.clipboardData
+  if (!clipboardData) return []
+  const filesFromItems = Array.from(clipboardData.items || [])
+    .filter(item => item.kind === 'file' && item.type?.startsWith('image/'))
+    .map(item => item.getAsFile())
+    .filter(Boolean)
+  const files = filesFromItems.length ? filesFromItems : Array.from(clipboardData.files || [])
+    .filter(file => file.type?.startsWith('image/'))
+  const timestamp = Date.now()
+  return files.map((file, index) => renameClipboardImageFile(file, timestamp, index))
+}
+
+function renameClipboardImageFile(file, timestamp, index) {
+  const extension = getImageExtension(file.type)
+  const filename = `clipboard-image-${timestamp}${index ? `-${index + 1}` : ''}.${extension}`
+  return new File([file], filename, {
+    type: file.type || 'image/png',
+    lastModified: timestamp
+  })
+}
+
+function getImageExtension(mimeType = '') {
+  const normalizedType = String(mimeType).toLowerCase()
+  if (normalizedType.includes('jpeg') || normalizedType.includes('jpg')) return 'jpg'
+  if (normalizedType.includes('webp')) return 'webp'
+  if (normalizedType.includes('gif')) return 'gif'
+  if (normalizedType.includes('bmp')) return 'bmp'
+  return 'png'
+}
+
+function createRecognitionUploadItemFromFile(file) {
+  const uid = createId()
+  return {
+    name: file.name || `${uid}.png`,
+    uid,
+    raw: file,
+    status: 'ready'
+  }
+}
+
+function shouldWarnEmptyClipboardPaste(target) {
+  return isRecognitionPasteZoneTarget(target) || !isEditablePasteTarget(target)
+}
+
+function isRecognitionPasteZoneTarget(target) {
+  return !!target?.closest?.('.recognition-paste-zone')
+}
+
+function isEditablePasteTarget(target) {
+  return !!target?.closest?.('input, textarea, [contenteditable="true"]')
 }
 
 async function submitRecognition() {
@@ -896,21 +1150,367 @@ async function submitRecognition() {
     ElMessage.warning('请先选择图片')
     return
   }
-  if (files.length > aiRecognitionCount.value) {
+  if (!aiRecognitionUnlimited.value && files.length > aiRecognitionCount.value) {
     ElMessage.warning(`AI识图次数不足，当前剩余 ${aiRecognitionCount.value} 次`)
+    return
+  }
+  const initialRecognitionCount = aiRecognitionCount.value
+  if (recognitionBackgroundMode.value) {
+    enqueueBackgroundRecognitionFromUploadItems(recognitionFileList.value)
     return
   }
   recognitionSubmitting.value = true
   try {
-    const response = await recognizeInternalPowerImages(files)
-    const remaining = Number(response.remainingAiImageRecognitionCount ?? aiRecognitionCount.value - files.length)
-    userStore.aiImageRecognitionCount = Math.max(0, remaining)
-    recognitionResult.value = JSON.stringify(response.result || {}, null, 2)
+    const result = await recognizeFiles(files)
+    applyRecognitionConsumption(initialRecognitionCount, result.consumedCount, result)
+    recognitionItems.value = result.items
     recognitionFileList.value = []
-    ElMessage.success(response.msg || '识别完成，AI结果待接入')
+    if (recognitionItems.value.some(item => item.success)) {
+      ElMessage.success('识别完成')
+    } else {
+      ElMessage.warning('识别完成，但没有可导入的结果')
+    }
   } finally {
     recognitionSubmitting.value = false
   }
+}
+
+async function recognizeFiles(files = []) {
+  const results = await Promise.allSettled(
+    files.map(file => recognizeInternalPowerImage(file, internalPowerRecognitionPrompt))
+  )
+  const mergedItems = []
+  let consumedCount = 0
+  let remainingCount = null
+  results.forEach((result, index) => {
+    const file = files[index]
+    if (result.status === 'fulfilled') {
+      const response = result.value || {}
+      consumedCount += Number(response.consumedCount || 0)
+      const responseRemaining = Number(response.remainingAiImageRecognitionCount)
+      if (Number.isFinite(responseRemaining)) {
+        remainingCount = responseRemaining
+      }
+      const responseItems = Array.isArray(response.result?.items) ? response.result.items : []
+      if (responseItems.length) {
+        mergedItems.push(...responseItems)
+      } else {
+        mergedItems.push(createRecognitionFailureItem(file, '识别接口未返回图片结果'))
+      }
+      return
+    }
+    mergedItems.push(createRecognitionFailureItem(file, result.reason?.message || '图片识别请求失败'))
+  })
+  return {
+    items: normalizeRecognitionItems(mergedItems),
+    consumedCount,
+    remainingCount
+  }
+}
+
+function applyRecognitionConsumption(initialRecognitionCount, consumedCount, response = {}) {
+  if (!aiRecognitionUnlimited.value) {
+    const remainingCount = Number(response.remainingCount ?? response.remainingAiImageRecognitionCount)
+    if (Number.isFinite(remainingCount)) {
+      userStore.aiImageRecognitionCount = Math.max(0, remainingCount)
+      return
+    }
+    userStore.aiImageRecognitionCount = Math.max(0, Number(initialRecognitionCount || 0) - Number(consumedCount || 0))
+  }
+}
+
+function createRecognitionFailureItem(file, error) {
+  return {
+    fileName: file?.name || 'image',
+    success: false,
+    parsed: {},
+    rawText: '',
+    error: error || '图片识别请求失败',
+    presetCandidates: []
+  }
+}
+
+function normalizeRecognitionItems(items = [], options = {}) {
+  return (Array.isArray(items) ? items : []).map((item, index) => {
+    const candidates = Array.isArray(item.presetCandidates) ? item.presetCandidates.map(normalizeCatalogItem) : []
+    const success = !!item.success
+    return {
+      clientId: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
+      fileName: item.fileName || `图片${index + 1}`,
+      success,
+      status: item.status || (success ? 'recognized' : 'failed'),
+      background: !!options.background || !!item.background,
+      parsed: item.parsed || {},
+      entries: normalizeRecognitionEntriesForEdit(item.parsed?.属性加成),
+      rawText: item.rawText || '',
+      error: item.error || '',
+      presetCandidates: candidates,
+      selectedPresetId: candidates.length === 1 ? candidates[0].presetId : '',
+      saving: false,
+      saved: false
+    }
+  })
+}
+
+function enqueueBackgroundRecognitionFromUploadItems(uploadItems = []) {
+  if (!recognitionBackgroundMode.value) return
+  const pendingUploadItems = (uploadItems || [])
+    .filter(item => item?.raw?.type?.startsWith('image/'))
+    .filter(item => !backgroundRecognitionFileUids.value.has(item.uid))
+  if (!pendingUploadItems.length) return
+  let allowedItems = pendingUploadItems
+  if (!aiRecognitionUnlimited.value && pendingUploadItems.length > aiRecognitionCount.value) {
+    allowedItems = pendingUploadItems.slice(0, Math.max(0, aiRecognitionCount.value))
+    ElMessage.warning(`AI识图次数不足，本次只会后台识别 ${allowedItems.length} 张`)
+  }
+  if (!allowedItems.length) return
+  const nextUids = new Set(backgroundRecognitionFileUids.value)
+  const progressItems = allowedItems.map(item => {
+    nextUids.add(item.uid)
+    return createRecognitionProgressItem(item)
+  })
+  backgroundRecognitionFileUids.value = nextUids
+  recognitionItems.value = [...progressItems, ...recognitionItems.value]
+  backgroundRecognitionRunning.value = true
+  progressItems.forEach((progressItem, index) => {
+    void recognizeAndSaveBackgroundUploadItem(allowedItems[index], progressItem)
+  })
+}
+
+function createRecognitionProgressItem(uploadItem = {}) {
+  return {
+    clientId: `background-${uploadItem.uid || createId()}`,
+    fileName: uploadItem.name || uploadItem.raw?.name || 'image',
+    success: false,
+    status: 'queued',
+    background: true,
+    parsed: {},
+    entries: [],
+    rawText: '',
+    error: '',
+    presetCandidates: [],
+    selectedPresetId: '',
+    saving: false,
+    saved: false
+  }
+}
+
+async function recognizeAndSaveBackgroundUploadItem(uploadItem, progressItem) {
+  const file = uploadItem?.raw
+  if (!file) {
+    Object.assign(progressItem, createRecognitionFailureItem(uploadItem, '图片文件不存在'), {
+      status: 'failed',
+      background: true
+    })
+    updateBackgroundRecognitionRunning()
+    return
+  }
+  progressItem.status = 'recognizing'
+  try {
+    const response = await recognizeInternalPowerImage(file, internalPowerRecognitionPrompt)
+    applyRecognitionConsumption(aiRecognitionCount.value, Number(response?.consumedCount || 0), response)
+    const responseItems = Array.isArray(response?.result?.items) ? response.result.items : []
+    const normalizedItem = normalizeRecognitionItems(
+      responseItems.length ? responseItems : [createRecognitionFailureItem(file, '识别接口未返回图片结果')],
+      { background: true }
+    )[0]
+    Object.assign(progressItem, normalizedItem, {
+      clientId: progressItem.clientId,
+      background: true,
+      status: normalizedItem.success ? 'saving' : 'failed'
+    })
+    if (!progressItem.success) {
+      return
+    }
+    selectDefaultRecognitionCandidate(progressItem)
+    try {
+      const savedPower = await saveRecognizedPowerDirectly(progressItem, { silent: true, clampEntries: true })
+      if (savedPower) {
+        progressItem.status = 'saved'
+        progressItem.saved = true
+        progressItem.error = ''
+      } else {
+        progressItem.status = 'failed'
+        progressItem.error = progressItem.error || '识别成功，但自动新增失败，请检查词条上限、内功上限或预设匹配'
+      }
+    } catch (error) {
+      progressItem.status = 'failed'
+      progressItem.error = error?.message || '识别成功，但自动新增失败'
+    }
+  } catch (error) {
+    Object.assign(progressItem, createRecognitionFailureItem(file, error?.message || '图片识别请求失败'), {
+      clientId: progressItem.clientId,
+      status: 'failed',
+      background: true
+    })
+  } finally {
+    updateBackgroundRecognitionRunning()
+  }
+}
+
+function updateBackgroundRecognitionRunning() {
+  backgroundRecognitionRunning.value = recognitionItems.value.some(
+    item => item.background && ['queued', 'recognizing', 'saving'].includes(item.status)
+  )
+  if (!backgroundRecognitionRunning.value) {
+    const backgroundItems = recognitionItems.value.filter(item => item.background)
+    const savedCount = backgroundItems.filter(item => item.status === 'saved').length
+    const failedCount = backgroundItems.filter(item => item.status === 'failed').length
+    if (savedCount || failedCount) {
+      ElNotification({
+        title: '后台识别进度',
+        message: `当前已新增 ${savedCount} 个内功，失败 ${failedCount} 张`,
+        type: failedCount ? 'warning' : 'success'
+      })
+    }
+  }
+}
+
+function getRecognitionStatusText(item = {}) {
+  const statusTextMap = {
+    queued: '等待识别',
+    recognizing: '识别中',
+    saving: '保存中',
+    saved: '已新增',
+    failed: '失败',
+    recognized: '识别成功'
+  }
+  return statusTextMap[item.status] || (item.success ? '识别成功' : '识别失败')
+}
+
+function getRecognitionStatusType(item = {}) {
+  if (item.status === 'saved' || item.status === 'recognized') return 'success'
+  if (item.status === 'queued' || item.status === 'recognizing') return 'info'
+  if (item.status === 'saving') return 'warning'
+  return item.success ? 'success' : 'danger'
+}
+
+function selectDefaultRecognitionCandidate(item) {
+  if (!item?.selectedPresetId && item?.presetCandidates?.length) {
+    item.selectedPresetId = item.presetCandidates[0].presetId
+  }
+}
+
+function importRecognizedPower(item) {
+  const nextPower = buildRecognizedPowerDraft(item)
+  if (!nextPower) return
+  selectedId.value = ''
+  draft.value = nextPower
+  savedDraftSignature.value = JSON.stringify(draft.value)
+  recognitionDialogVisible.value = false
+  editingVisible.value = true
+  nextTick(() => formRef.value?.clearValidate())
+  const importedLingyun = nextPower.lingyunEnabled
+  ElMessage.success(importedLingyun ? '已导入为内功草稿，已勾选灵韵' : '已导入为内功草稿')
+}
+
+async function saveRecognizedPowerDirectly(item, options = {}) {
+  const nextPower = buildRecognizedPowerDraft(item, options)
+  if (!nextPower) return null
+  item.saving = true
+  try {
+    const savedPower = normalizePower(await addInternalPower(toPowerPayload(nextPower)))
+    powers.value.unshift(savedPower)
+    updateQuotaCount()
+    item.saved = true
+    if (!options.silent) {
+      ElMessage.success(`已新增内功「${savedPower.name || '未命名'}」`)
+    }
+    return savedPower
+  } finally {
+    item.saving = false
+  }
+}
+
+function buildRecognizedPowerDraft(item, options = {}) {
+  const candidate = item.presetCandidates.find(candidate => candidate.presetId === item.selectedPresetId)
+  if (!candidate) {
+    warnRecognitionBuild('请先选择具体内功预设', options)
+    return null
+  }
+  if (!canCreateMore.value) {
+    warnRecognitionBuild('已超过当前内功上限，请删除后再新增或联系管理员调整上限', options)
+    return null
+  }
+  const entries = normalizeRecognizedEntries(item.entries, options)
+  if (!validateEntryValues(entries, options)) return null
+  const lingyunDetected = item.entries.some(entry => String(entry?.name || entry?.词条 || '').trim() === '灵韵')
+  return normalizePower({
+    id: createId(),
+    name: item.parsed?.内功名 || candidate.name,
+    category: candidate.value,
+    categoryTrait: candidate.trait,
+    bonusPercent: candidate.baseBonus,
+    lingyunEnabled: lingyunDetected,
+    lingyunBonusPercent: candidate.lingyunBonusPercent,
+    imageUrl: candidate.imageUrl,
+    entries,
+    elements: candidate.elements,
+    remark: 'AI识图导入',
+    updatedAt: new Date().toISOString()
+  })
+}
+
+function warnRecognitionBuild(message, options = {}) {
+  if (!options.silent) {
+    ElMessage.warning(message)
+  }
+}
+
+function normalizeRecognitionEntriesForEdit(entries = []) {
+  return (Array.isArray(entries) ? entries : []).map(entry => {
+    const name = String(entry?.词条 || entry?.name || '').trim()
+    return {
+      id: createId(),
+      name,
+      value: parseRecognitionEntryNumber(entry?.数值 ?? entry?.value),
+      rawValue: entry?.数值 ?? entry?.value ?? ''
+    }
+  })
+}
+
+function normalizeRecognizedEntries(entries = [], options = {}) {
+  return (Array.isArray(entries) ? entries : [])
+    .map(entry => {
+      const name = String(entry?.name || entry?.词条 || '').trim()
+      return {
+        id: String(entry?.id || createId()),
+        name,
+        value: normalizeRecognizedEntryValue(entry?.value ?? entry?.数值, name, options)
+      }
+    })
+    .filter(entry => entry.name && entry.name !== '灵韵' && getEntryOption(entry.name))
+}
+
+function normalizeRecognizedEntryValue(value, entryName = '', options = {}) {
+  const normalizedValue = String(value ?? '').trim().replace(/^\+/, '').replace('%', '')
+  if (!options.clampEntries) return normalizedValue
+  const option = getEntryOption(entryName)
+  const parsedValue = parseEntryValue(normalizedValue)
+  if (!option || parsedValue === null) return normalizedValue
+  const limitValue = Number(option.limitValue || 0)
+  return String(Math.max(0, Math.min(limitValue, parsedValue)))
+}
+
+function parseRecognitionEntryNumber(value) {
+  const parsed = parseEntryValue(String(value ?? '').replace(/^\+/, ''))
+  return parsed === null ? 0 : parsed
+}
+
+function getRecognitionEntryMax(entry = {}) {
+  const limit = getEntryLimitValue(entry.name)
+  return limit > 0 ? limit : undefined
+}
+
+function getRecognitionEntryPrecision(entry = {}) {
+  return getEntryPrecision(entry.name)
+}
+
+function getRecognitionEntryHint(entry = {}) {
+  if (entry.name === '灵韵') return '灵韵暂不导入'
+  const option = getEntryOption(entry.name)
+  if (!option) return '暂不支持该词条'
+  return `最大数值 ${formatEntryLimitValue(option)}`
 }
 
 function selectPower(id) {
@@ -974,6 +1574,8 @@ function createPower() {
     category: firstCatalog?.value || '通用',
     categoryTrait: firstCatalog?.trait || '等待定位',
     bonusPercent: firstCatalog?.baseBonus || 0,
+    lingyunEnabled: false,
+    lingyunBonusPercent: firstCatalog?.lingyunBonusPercent || 0,
     imageUrl: firstCatalog?.imageUrl || '',
     entries: cloneEntries(firstCatalog?.entries || []),
     elements: firstCatalog?.elements || createEmptyElements(),
@@ -1222,6 +1824,7 @@ function handleCategoryChange(value) {
   }
   draft.value.categoryTrait = catalog.trait
   draft.value.bonusPercent = catalog.baseBonus
+  draft.value.lingyunBonusPercent = catalog.lingyunBonusPercent || 0
   draft.value.imageUrl = catalog.imageUrl || ''
   draft.value.entries = cloneEntries(catalog.entries || [])
   draft.value.elements = { ...catalog.elements }
@@ -1279,7 +1882,8 @@ function saveCatalogDraft() {
       ...power,
       name: power.name || catalog.name,
       categoryTrait: catalog.trait,
-      bonusPercent: catalog.baseBonus
+      bonusPercent: catalog.baseBonus,
+      lingyunBonusPercent: catalog.lingyunBonusPercent
     })
   })
   persistPowerCatalog()
@@ -1297,18 +1901,11 @@ function formatBonus(value) {
 
 function getEntryLabel(entry = {}) {
   const name = String(entry.name || '').trim() || '随机词条'
-  const option = getEntryOption(name)
-  const value = parseEntryValue(entry.value)
-  if (!option || value === null) return `${name} 待填写`
-  const displayValue = formatEntryValue(value, option)
-  const percent = calculateEntryAttackPercent(entry)
-  return `${name} ${displayValue}/${option.limitText || option.limitValue} -> ${formatBonus(percent)}`
+  return name
 }
 
 function formatEntryOptionLabel(entry = {}) {
-  const conversion = getEntryConversion(entry.entryName)
-  const suffix = conversion ? `满额${Number(conversion.attackPower || 0).toFixed(0)}进攻` : `上限${entry.limitText || '-'}`
-  return `${entry.entryName} · ${suffix}`
+  return entry.entryName
 }
 
 function getBaseBonus(power = {}) {
@@ -1317,10 +1914,16 @@ function getBaseBonus(power = {}) {
 }
 
 function getEntryAttackPercent(power = {}) {
-  if (power.entryAttackPercent !== undefined && power.entryAttackPercent !== null) {
+  if (!(draft.value && power === draft.value) && power.entryAttackPercent !== undefined && power.entryAttackPercent !== null) {
     return Number(power.entryAttackPercent || 0)
   }
   return calculatePowerEntryStats(power).entryAttackPercent
+}
+
+function getLingyunBonus(power = {}) {
+  if (!power.lingyunEnabled) return 0
+  const catalog = getCatalogByName(power.category)
+  return Number(power.lingyunBonusPercent ?? catalog?.lingyunBonusPercent ?? 0)
 }
 
 function calculatePowerEntryStats(power = {}) {
@@ -1361,7 +1964,12 @@ function getEntryLimitValue(name) {
 
 function getEntryLimitText(name) {
   const option = getEntryOption(name)
-  return option?.limitText || '-'
+  return option ? formatEntryLimitValue(option) : '-'
+}
+
+function getEntryMaxValueText(name) {
+  const option = getEntryOption(name)
+  return option ? formatEntryLimitValue(option) : '-'
 }
 
 function getEntryPrecision(name) {
@@ -1377,6 +1985,12 @@ function formatEntryValue(value, option = {}) {
   return option.valueType === 'percent' ? `${numberValue.toFixed(5)}%` : `${numberValue}`
 }
 
+function formatEntryLimitValue(option = {}) {
+  const limitValue = Number(option.limitValue)
+  if (!Number.isFinite(limitValue)) return option.limitText || '-'
+  return `${limitValue.toString()}${option.valueType === 'percent' ? '%' : ''}`
+}
+
 function parseEntryValue(value) {
   const text = String(value ?? '').trim().replace('%', '')
   if (!text) return null
@@ -1384,21 +1998,26 @@ function parseEntryValue(value) {
   return Number.isFinite(numberValue) ? numberValue : null
 }
 
-function validateEntryValues(entries = []) {
+function validateEntryValues(entries = [], options = {}) {
+  const warn = message => {
+    if (!options.silent) {
+      ElMessage.warning(message)
+    }
+  }
   for (const entry of entries || []) {
     const name = String(entry.name || '').trim()
     const option = getEntryOption(name)
     if (!option) {
-      ElMessage.warning(`词条「${name || '未选择'}」不在当前可用词条中`)
+      warn(`词条「${name || '未选择'}」不在当前可用词条中`)
       return false
     }
     const value = parseEntryValue(entry.value)
     if (value === null || value < 0) {
-      ElMessage.warning(`请填写「${name}」的词条数值`)
+      warn(`请填写「${name}」的词条数值`)
       return false
     }
     if (value > Number(option.limitValue || 0)) {
-      ElMessage.warning(`「${name}」不能超过上限 ${option.limitText}`)
+      warn(`「${name}」不能超过最大数值 ${formatEntryLimitValue(option)}`)
       return false
     }
   }
@@ -1406,11 +2025,13 @@ function validateEntryValues(entries = []) {
 }
 
 function resolvePowerImage(power = {}) {
+  if (!internalPowerImageVisible.value) return ''
   const catalog = getCatalogByName(power.category)
   return resolveImagePath(power.imageUrl || catalog?.imageUrl || '')
 }
 
 function resolveCatalogImage(catalog = {}) {
+  if (!internalPowerImageVisible.value) return ''
   return resolveImagePath(catalog?.imageUrl || '')
 }
 
@@ -1441,10 +2062,13 @@ function formatElementCounts(elements = {}) {
 }
 
 function getPowerScore(power = {}) {
+  if (draft.value && power === draft.value) {
+    return roundTo(getBaseBonus(power) + getEntryAttackPercent(power) + getLingyunBonus(power), 5)
+  }
   if (power.totalBonusPercent !== undefined && power.totalBonusPercent !== null) {
     return Number(power.totalBonusPercent || 0)
   }
-  return roundTo(getBaseBonus(power) + getEntryAttackPercent(power), 5)
+  return roundTo(getBaseBonus(power) + getEntryAttackPercent(power) + getLingyunBonus(power), 5)
 }
 
 function getCatalogByName(name) {
@@ -1461,7 +2085,12 @@ function changeElement(key, delta) {
   draft.value.elements[key] = nextValue
 }
 
+function isTruthyFlag(value) {
+  return value === true || value === 1 || value === '1'
+}
+
 function normalizePower(value) {
+  const catalog = getCatalogByName(value.category)
   return {
     id: String(value.id || value.powerId || createId()),
     powerId: value.powerId || value.power_id || undefined,
@@ -1469,6 +2098,8 @@ function normalizePower(value) {
     category: String(value.category || '通用'),
     categoryTrait: String(value.categoryTrait || ''),
     bonusPercent: clampBonus(value.bonusPercent),
+    lingyunEnabled: isTruthyFlag(value.lingyunEnabled ?? value.lingyun_enabled),
+    lingyunBonusPercent: clampBonus(value.lingyunBonusPercent ?? value.lingyun_bonus_percent ?? catalog?.lingyunBonusPercent ?? 0),
     entryAttackPower: Number(value.entryAttackPower || 0),
     entryAttackPercent: Number(value.entryAttackPercent || 0),
     totalBonusPercent: value.totalBonusPercent === undefined || value.totalBonusPercent === null
@@ -1490,6 +2121,8 @@ function toPowerPayload(power) {
     category: power.category,
     categoryTrait: power.categoryTrait,
     bonusPercent: power.bonusPercent,
+    lingyunEnabled: Boolean(power.lingyunEnabled),
+    lingyunBonusPercent: power.lingyunBonusPercent,
     entries: power.entries || [],
     elements: power.elements || createEmptyElements(),
     remark: power.remark || '',
@@ -1599,6 +2232,7 @@ function normalizeCatalogItem(value = {}) {
     elementKey,
     elements,
     baseBonus: clampBonus(value.baseBonus ?? value.bonusPercent),
+    lingyunBonusPercent: clampBonus(value.lingyunBonusPercent ?? value.lingyun_bonus_percent),
     imageUrl: String(value.imageUrl || '').trim(),
     entries: normalizeEntries(value.entries),
     trait: String(value.trait || value.bonusDesc || value.bonusType || '').trim() || '待配置'
@@ -1642,6 +2276,8 @@ function createSamplePowers() {
     category: item.value,
     categoryTrait: item.trait,
     bonusPercent: item.baseBonus,
+    lingyunEnabled: false,
+    lingyunBonusPercent: item.lingyunBonusPercent,
     entries: [],
     elements: item.elements,
     remark: item.rarity === 'rare' ? '新赛年稀有内功，基础数值可在权限面板调整。' : '新赛年普通内功，基础数值可在权限面板调整。',
@@ -2457,6 +3093,25 @@ function getSamplePowersForQuota() {
   align-items: center;
 }
 
+.lingyun-editor {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: rgba(124, 58, 237, 0.06);
+}
+
+.lingyun-editor span {
+  color: #6d28d9;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .elements-editor,
 .entries-editor {
   width: 100%;
@@ -2631,6 +3286,23 @@ function getSamplePowersForQuota() {
   line-height: 1;
 }
 
+.preview-bonus-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: -6px 0 14px;
+}
+
+.preview-bonus-breakdown span {
+  border: 1px solid rgba(255, 248, 232, 0.16);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(255, 248, 232, 0.08);
+  color: rgba(255, 248, 232, 0.78);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .preview-elements {
   margin-top: 0;
 }
@@ -2643,6 +3315,12 @@ function getSamplePowersForQuota() {
   background: rgba(255, 248, 232, 0.1);
   border-color: rgba(255, 248, 232, 0.18);
   color: #fff8e8;
+}
+
+.preview-entries > span.lingyun-entry {
+  background: rgba(124, 58, 237, 0.28);
+  border-color: rgba(196, 181, 253, 0.4);
+  color: #ede9fe;
 }
 
 .preview-entries .muted {
@@ -2829,24 +3507,196 @@ function getSamplePowersForQuota() {
   font-weight: 950;
 }
 
-.recognition-result {
+.recognition-background-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 14px;
+  background: rgba(245, 243, 255, 0.72);
+}
+
+.recognition-background-toggle :deep(.el-checkbox) {
+  height: auto;
+  margin-right: 0;
+  font-weight: 900;
+}
+
+.recognition-background-toggle span {
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.recognition-paste-zone {
   display: grid;
-  gap: 8px;
-  padding: 14px;
+  gap: 6px;
+  min-height: 86px;
+  padding: 16px 18px;
+  border: 1px dashed rgba(37, 99, 235, 0.34);
   border-radius: 16px;
-  background: #0f172a;
-  color: #dbeafe;
+  background: rgba(248, 250, 252, 0.86);
+  color: #172033;
+  cursor: text;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
 }
 
-.recognition-result p {
-  margin: 0;
-  color: #93a4bd;
+.recognition-paste-zone:focus {
+  border-color: rgba(37, 99, 235, 0.72);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.recognition-paste-zone strong {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.recognition-paste-zone span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.recognition-result-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recognition-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  border-radius: 16px;
+  background: rgba(240, 253, 244, 0.62);
+}
+
+.recognition-card.failed {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: rgba(254, 242, 242, 0.68);
+}
+
+.recognition-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recognition-card header div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.recognition-card header strong {
+  overflow: hidden;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recognition-card header span {
+  color: #64748b;
   font-size: 13px;
+  font-weight: 800;
 }
 
-.recognition-result code {
-  white-space: pre-wrap;
+.recognition-candidate {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.recognition-candidate > span {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.recognition-entry-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.recognition-entry-edit {
+  min-width: 0;
+  border-radius: 12px;
+  padding: 8px;
+  background: #ffffff;
+  color: #172033;
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) minmax(98px, 128px) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.recognition-entry-edit.muted {
+  background: rgba(255, 247, 237, 0.9);
+  color: #9a6b28;
+}
+
+.recognition-entry-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #172033;
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recognition-entry-edit :deep(.el-input-number) {
+  width: 100%;
+}
+
+.recognition-entry-suffix {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.recognition-entry-edit small {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.recognition-raw summary {
+  color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.recognition-raw pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 8px 0 0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #0f172a;
   color: #bfdbfe;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.recognition-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 @media (max-width: 1180px) {
@@ -3025,6 +3875,11 @@ function getSamplePowersForQuota() {
   }
 
   .catalog-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recognition-entry-list,
+  .recognition-entry-edit {
     grid-template-columns: 1fr;
   }
 }

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
-from common.aspect.interface_auth import UserInterfaceAuthDependency
+from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
 from common.enums import BusinessType
 from common.router import APIRouterPro
@@ -53,7 +53,10 @@ async def get_system_internal_power_entry_list(
     summary='新增内功词条接口',
     description='用于新增内功词条',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:internal-power-entry:add')],
+    dependencies=[
+        UserInterfaceAuthDependency('system:internal-power-entry:add'),
+        RoleInterfaceAuthDependency('admin'),
+    ],
 )
 @ValidateFields(validate_model='add_entry')
 @Log(title='内功词条管理', business_type=BusinessType.INSERT)
@@ -76,7 +79,10 @@ async def add_system_internal_power_entry(
     summary='编辑内功词条接口',
     description='用于编辑内功词条',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:internal-power-entry:edit')],
+    dependencies=[
+        UserInterfaceAuthDependency('system:internal-power-entry:edit'),
+        RoleInterfaceAuthDependency('admin'),
+    ],
 )
 @ValidateFields(validate_model='edit_entry')
 @Log(title='内功词条管理', business_type=BusinessType.UPDATE)
@@ -98,7 +104,10 @@ async def edit_system_internal_power_entry(
     summary='删除内功词条接口',
     description='用于删除内功词条',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:internal-power-entry:remove')],
+    dependencies=[
+        UserInterfaceAuthDependency('system:internal-power-entry:remove'),
+        RoleInterfaceAuthDependency('admin'),
+    ],
 )
 @Log(title='内功词条管理', business_type=BusinessType.DELETE)
 async def delete_system_internal_power_entry(

@@ -75,6 +75,7 @@ DEFAULT_INTERNAL_POWER_PRESETS = [
         'element_key': build_element_key(element_text),
         'elements': build_elements(element_text),
         'bonus_percent': 0,
+        'lingyun_bonus_percent': 0,
         'bonus_type': '',
         'bonus_desc': '',
         'image_url': build_image_url(index, name, element_text),

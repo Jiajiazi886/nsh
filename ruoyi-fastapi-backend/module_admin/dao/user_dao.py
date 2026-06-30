@@ -345,6 +345,30 @@ class UserDao:
         await db.execute(update(SysUser), [cls._only_sys_user_columns(user)])
 
     @classmethod
+    async def decrement_ai_image_recognition_count(
+        cls, db: AsyncSession, user_id: int, count: int, update_by: str
+    ) -> bool:
+        """
+        原子扣减用户AI识图次数。
+        """
+        if count <= 0:
+            return True
+        result = await db.execute(
+            update(SysUser)
+            .where(
+                SysUser.user_id == user_id,
+                SysUser.del_flag == '0',
+                SysUser.ai_image_recognition_count >= count,
+            )
+            .values(
+                ai_image_recognition_count=SysUser.ai_image_recognition_count - count,
+                update_by=update_by,
+                update_time=datetime.now(),
+            )
+        )
+        return bool(result.rowcount or 0)
+
+    @classmethod
     async def delete_user_dao(cls, db: AsyncSession, user: UserModel) -> None:
         """
         删除用户数据库操作

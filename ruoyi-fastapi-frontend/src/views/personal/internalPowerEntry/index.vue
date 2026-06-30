@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Personal Codex · 词条换算</p>
         <h1>内功词条管理</h1>
-        <p>维护当前账号自己的进攻能力；固定上限由系统预设。</p>
+        <p>维护当前账号自己的进攻能力；固定最大数值由系统预设。</p>
       </div>
       <div class="hero-actions">
         <el-tag effect="plain" type="info">单位百分比 {{ formatPercent(unitPercent, 5) }}</el-tag>
@@ -53,9 +53,9 @@
 
       <el-table v-loading="loading" :data="form.entries" border stripe>
         <el-table-column label="词条名称" prop="entryName" min-width="170" fixed />
-        <el-table-column label="固定内功上限" align="center" width="140">
+        <el-table-column label="固定最大数值" align="center" width="140">
           <template #default="{ row }">
-            <el-tag effect="plain">{{ row.limitText }}</el-tag>
+            <el-tag effect="plain">{{ displayLimit(row) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="进攻能力" min-width="180">
@@ -174,6 +174,17 @@ function calcAttackPercent(attackPower) {
 
 function formatPercent(value, precision = 5) {
   return `${Number(value || 0).toFixed(precision)}%`
+}
+
+function formatLimitText(value, valueType = 'number') {
+  if (value === null || value === undefined || value === '') return ''
+  const numberValue = Number(value || 0)
+  if (Number.isNaN(numberValue)) return ''
+  return `${numberValue.toString()}${valueType === 'percent' ? '%' : ''}`
+}
+
+function displayLimit(row) {
+  return formatLimitText(row.limitValue, row.valueType) || row.limitText || '未配置'
 }
 
 function roundTo(value, precision = 5) {

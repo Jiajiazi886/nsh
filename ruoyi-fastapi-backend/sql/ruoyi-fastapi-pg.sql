@@ -125,6 +125,8 @@ create table personal_internal_power (
     category varchar(64) default '',
     category_trait varchar(128) default '',
     bonus_percent float8 default 0 not null,
+    lingyun_enabled char(1) default '0' not null,
+    lingyun_bonus_percent float8 default 0 not null,
     entries_json text,
     elements_json text,
     remark varchar(500) default '',
@@ -139,6 +141,8 @@ comment on column personal_internal_power.name is '内功名称';
 comment on column personal_internal_power.category is '内功种类';
 comment on column personal_internal_power.category_trait is '种类特性';
 comment on column personal_internal_power.bonus_percent is '基础百分比加成';
+comment on column personal_internal_power.lingyun_enabled is '是否启用灵韵（0否 1是）';
+comment on column personal_internal_power.lingyun_bonus_percent is '灵韵百分比提升';
 comment on column personal_internal_power.entries_json is '词条JSON';
 comment on column personal_internal_power.elements_json is '五行JSON';
 comment on column personal_internal_power.remark is '备注';

@@ -19,6 +19,8 @@ class PersonalInternalPower(Base):
     category = Column(String(64), nullable=True, server_default="''", comment='内功种类')
     category_trait = Column(String(128), nullable=True, server_default="''", comment='种类特性')
     bonus_percent = Column(Float, nullable=False, server_default='0', comment='基础百分比增伤')
+    lingyun_enabled = Column(String(1), nullable=False, server_default='0', comment='是否启用灵韵（0否 1是）')
+    lingyun_bonus_percent = Column(Float, nullable=False, server_default='0', comment='灵韵百分比提升')
     entries_json = Column(Text, nullable=True, comment='词条JSON')
     elements_json = Column(Text, nullable=True, comment='五行JSON')
     remark = Column(String(500), nullable=True, server_default="''", comment='备注')

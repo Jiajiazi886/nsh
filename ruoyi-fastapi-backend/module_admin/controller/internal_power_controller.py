@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import File, Path, Request, Response, UploadFile
+from fastapi import File, Form, Path, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.annotation.log_annotation import Log
@@ -164,14 +164,15 @@ async def import_personal_internal_power_from_local(
 
 @internal_power_controller.post(
     '/recognize-images',
-    summary='内功图片识别占位接口',
-    description='用于上传一张或多张内功图片并消耗AI识图次数，当前返回空识别结果',
+    summary='内功图片AI识别接口',
+    description='用于上传一张或多张内功图片并调用Mimo识别，成功解析的图片才消耗AI识图次数',
     response_model=DynamicResponseModel[InternalPowerRecognizeResultModel],
 )
 @Log(title='内功图片识别', business_type=BusinessType.OTHER)
 async def recognize_personal_internal_power_images(
     request: Request,
     files: Annotated[list[UploadFile], File(description='待识别图片列表')],
+    prompt: Annotated[str, Form(description='固定识别提示词')],
     query_db: Annotated[AsyncSession, DBSessionDependency()],
     current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
 ) -> Response:
@@ -180,7 +181,7 @@ async def recognize_personal_internal_power_images(
     for file in files:
         if not (file.content_type or '').startswith('image/'):
             return ResponseUtil.failure(msg='只能上传图片文件')
-    result = await InternalPowerService.recognize_images_services(query_db, current_user, len(files))
-    logger.info(f'内功图片识别占位成功，消耗{result.consumed_count}次')
+    result = await InternalPowerService.recognize_images_services(query_db, current_user, files, prompt)
+    logger.info(f'内功图片识别完成，消耗{result.consumed_count}次')
 
-    return ResponseUtil.success(model_content=result, msg='识别完成，AI结果待接入')
+    return ResponseUtil.success(model_content=result, msg='识别完成')
