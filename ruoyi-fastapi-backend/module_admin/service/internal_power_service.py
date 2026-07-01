@@ -1,6 +1,7 @@
+import base64
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,13 +11,17 @@ from exceptions.exception import ServiceException
 from module_admin.constants.internal_power_entries import DEFAULT_INTERNAL_POWER_ENTRIES
 from module_admin.dao.internal_power_dao import InternalPowerDao
 from module_admin.dao.internal_power_entry_conversion_dao import InternalPowerEntryConversionDao
+from module_admin.dao.internal_power_recognition_history_dao import InternalPowerRecognitionHistoryDao
 from module_admin.dao.user_dao import UserDao
-from module_admin.entity.do.internal_power_do import PersonalInternalPower
+from module_admin.entity.do.internal_power_do import PersonalInternalPower, PersonalInternalPowerRecognitionHistory
 from module_admin.entity.vo.internal_power_vo import (
     InternalPowerImportModel,
     InternalPowerListModel,
     InternalPowerModel,
     InternalPowerQuotaModel,
+    InternalPowerRecognitionHistoryItemModel,
+    InternalPowerRecognitionHistoryListModel,
+    InternalPowerRecognitionSavedModel,
     InternalPowerRecognizeResultModel,
 )
 from module_admin.entity.vo.user_vo import CurrentUserModel
@@ -33,6 +38,8 @@ class InternalPowerEntryStats:
 
 
 class InternalPowerService:
+    RECOGNITION_STALE_MINUTES = 10
+
     """
     个人内功服务层
     """
@@ -163,16 +170,23 @@ class InternalPowerService:
     async def recognize_images_services(
         cls, query_db: AsyncSession, current_user: CurrentUserModel, files: list[Any], prompt: str
     ) -> InternalPowerRecognizeResultModel:
+        current_user_id = int(current_user.user.user_id)
+        current_user_name = current_user.user.user_name
         image_count = len(files or [])
         if image_count <= 0:
             raise ServiceException(message='请至少上传一张图片')
-        user = (await UserDao.get_user_detail_by_id(query_db, current_user.user.user_id)).get('user_basic_info')
+        user = (await UserDao.get_user_detail_by_id(query_db, current_user_id)).get('user_basic_info')
         if user is None:
             raise ServiceException(message='用户不存在')
+        target_user_id = int(user.user_id)
         is_unlimited_recognition = UserService.is_admin_role(current_user)
-        current_count = max(0, int(user.ai_image_recognition_count or 0))
-        if not is_unlimited_recognition and current_count < image_count:
-            raise ServiceException(message=f'AI识图次数不足，当前剩余{current_count}次')
+        is_effective_vip = UserService.is_effective_vip(user)
+        current_vip_count = max(0, int(getattr(user, 'vip_ai_image_recognition_count', 0) or 0))
+        usable_vip_count = current_vip_count if is_effective_vip else 0
+        current_normal_count = max(0, int(user.ai_image_recognition_count or 0))
+        available_count = usable_vip_count + current_normal_count
+        if not is_unlimited_recognition and available_count < image_count:
+            raise ServiceException(message=f'AI识图次数不足，当前剩余{available_count}次')
         presets = await InternalPowerPresetService.get_personal_enabled_presets_service(query_db)
         preset_map: dict[str, list[dict[str, Any]]] = {}
         for preset in presets:
@@ -180,52 +194,104 @@ class InternalPowerService:
         valid_entry_names = {item['entry_name'] for item in DEFAULT_INTERNAL_POWER_ENTRIES}
         items = []
         success_count = 0
+        success_history_ids: list[int] = []
         for file in files:
             file_name = file.filename or 'image'
             content_type = file.content_type or 'image/png'
+            history_record_id = 0
+            history_user_id = target_user_id
             try:
                 image_bytes = await file.read()
             except Exception as exc:
-                items.append(cls.__recognize_item(file_name, False, None, '', f'图片读取失败：{exc}', []))
+                item = cls.__recognize_item(file_name, False, None, '', f'图片读取失败：{exc}', [])
+                history = await cls.__create_recognition_history(
+                    query_db, target_user_id, file_name, b'', content_type, 'failed'
+                )
+                history_record_id = int(history.record_id)
+                history_user_id = int(history.user_id)
+                await cls.__update_recognition_history(query_db, history_record_id, history_user_id, item)
+                await query_db.commit()
+                items.append({**item, 'recordId': history_record_id})
                 continue
+            history = await cls.__create_recognition_history(
+                query_db, target_user_id, file_name, image_bytes, content_type, 'recognizing'
+            )
+            history_record_id = int(history.record_id)
+            history_user_id = int(history.user_id)
+            await InternalPowerRecognitionHistoryDao.trim_by_user_id(query_db, target_user_id)
+            await query_db.commit()
             mimo_result = await InternalPowerMimoService.recognize_image(image_bytes, content_type, prompt)
             if mimo_result.parsed is None:
-                items.append(cls.__recognize_item(file_name, False, None, mimo_result.raw_text, mimo_result.error, []))
+                item = cls.__recognize_item(file_name, False, None, mimo_result.raw_text, mimo_result.error, [])
+                await cls.__update_recognition_history(query_db, history_record_id, history_user_id, item)
+                await query_db.commit()
+                items.append({**item, 'recordId': history_record_id})
                 continue
             invalid_entry = cls.__find_invalid_recognized_entry(mimo_result.parsed, valid_entry_names)
             if invalid_entry:
-                items.append(
-                    cls.__recognize_item(file_name, False, mimo_result.parsed, mimo_result.raw_text, invalid_entry, [])
-                )
+                item = cls.__recognize_item(file_name, False, mimo_result.parsed, mimo_result.raw_text, invalid_entry, [])
+                await cls.__update_recognition_history(query_db, history_record_id, history_user_id, item)
+                await query_db.commit()
+                items.append({**item, 'recordId': history_record_id})
                 continue
-            candidates = preset_map.get(str(mimo_result.parsed.get('内功名') or '').strip(), [])
+            power_name = cls.__extract_recognized_power_name(mimo_result.parsed)
+            if power_name:
+                mimo_result.parsed['内功名'] = power_name
+            candidates = cls.__resolve_recognition_candidates(
+                preset_map.get(power_name, []),
+                mimo_result.parsed,
+            )
             if not candidates:
-                items.append(
-                    cls.__recognize_item(
-                        file_name,
-                        False,
-                        mimo_result.parsed,
-                        mimo_result.raw_text,
-                        '识别到的内功名没有匹配到启用预设',
-                        [],
-                    )
+                item = cls.__recognize_item(
+                    file_name,
+                    False,
+                    mimo_result.parsed,
+                    mimo_result.raw_text,
+                    '识别到的内功名没有匹配到启用预设',
+                    [],
                 )
+                await cls.__update_recognition_history(query_db, history_record_id, history_user_id, item)
+                await query_db.commit()
+                items.append({**item, 'recordId': history_record_id})
                 continue
             success_count += 1
-            items.append(cls.__recognize_item(file_name, True, mimo_result.parsed, mimo_result.raw_text, '', candidates))
-        remaining_count = current_count
+            needs_preset_selection = len(candidates) > 1
+            item = cls.__recognize_item(
+                file_name,
+                True,
+                mimo_result.parsed,
+                mimo_result.raw_text,
+                '',
+                candidates,
+                needs_preset_selection=needs_preset_selection,
+                preset_selection_message='该内功存在多个元素，请选择元素后再新增' if needs_preset_selection else '',
+            )
+            await cls.__update_recognition_history(query_db, history_record_id, history_user_id, item)
+            await query_db.commit()
+            success_history_ids.append(history_record_id)
+            items.append({**item, 'recordId': history_record_id})
+        consumed_vip_count = 0
+        consumed_normal_count = 0
+        remaining_vip_count = current_vip_count
+        remaining_normal_count = current_normal_count
         if success_count > 0 and not is_unlimited_recognition:
-            deducted = await UserDao.decrement_ai_image_recognition_count(
+            consumed_vip_count = min(usable_vip_count, success_count)
+            consumed_normal_count = success_count - consumed_vip_count
+            deducted = await UserDao.decrement_ai_recognition_counts(
                 query_db,
-                user.user_id,
-                success_count,
-                current_user.user.user_name,
+                target_user_id,
+                consumed_vip_count,
+                consumed_normal_count,
+                current_user_name,
             )
             if deducted:
-                remaining_count = max(0, current_count - success_count)
+                remaining_vip_count = max(0, current_vip_count - consumed_vip_count)
+                remaining_normal_count = max(0, current_normal_count - consumed_normal_count)
                 await query_db.commit()
             else:
                 success_count = 0
+                consumed_vip_count = 0
+                consumed_normal_count = 0
                 items = [
                     cls.__recognize_item(
                         item.get('fileName') or 'image',
@@ -235,15 +301,66 @@ class InternalPowerService:
                         'AI识图次数不足，未扣次',
                         [],
                     )
+                    | {'recordId': item.get('recordId')}
                     if item.get('success')
                     else item
                     for item in items
                 ]
+                for record_id in success_history_ids:
+                    await InternalPowerRecognitionHistoryDao.update(
+                        query_db,
+                        record_id,
+                        target_user_id,
+                        {
+                            'status': 'failed',
+                            'error': 'AI识图次数不足，未扣次',
+                            'preset_candidates_json': '[]',
+                        },
+                    )
+                await query_db.commit()
         return InternalPowerRecognizeResultModel(
             result={'items': items},
             consumedCount=0 if is_unlimited_recognition else success_count,
-            remainingAiImageRecognitionCount=remaining_count,
+            consumedVipCount=0 if is_unlimited_recognition else consumed_vip_count,
+            consumedNormalCount=0 if is_unlimited_recognition else consumed_normal_count,
+            remainingVipAiImageRecognitionCount=remaining_vip_count,
+            remainingAiImageRecognitionCount=remaining_normal_count,
         )
+
+    @classmethod
+    async def get_recognition_history_services(
+        cls, query_db: AsyncSession, current_user: CurrentUserModel
+    ) -> InternalPowerRecognitionHistoryListModel:
+        rows = await InternalPowerRecognitionHistoryDao.list_by_user_id(query_db, current_user.user.user_id)
+        if await cls.__mark_stale_recognition_history_failed(query_db, rows):
+            await query_db.commit()
+            rows = await InternalPowerRecognitionHistoryDao.list_by_user_id(query_db, current_user.user.user_id)
+        return InternalPowerRecognitionHistoryListModel(items=[cls.__history_to_model(row) for row in rows])
+
+    @classmethod
+    async def clear_recognition_history_services(
+        cls, query_db: AsyncSession, current_user: CurrentUserModel
+    ) -> CrudResponseModel:
+        await InternalPowerRecognitionHistoryDao.clear_by_user_id(query_db, current_user.user.user_id)
+        await query_db.commit()
+        return CrudResponseModel(is_success=True, message='识别记录已清空')
+
+    @classmethod
+    async def mark_recognition_history_saved_services(
+        cls,
+        query_db: AsyncSession,
+        current_user: CurrentUserModel,
+        record_id: int,
+        payload: InternalPowerRecognitionSavedModel,
+    ) -> CrudResponseModel:
+        await InternalPowerRecognitionHistoryDao.update(
+            query_db,
+            record_id,
+            current_user.user.user_id,
+            {'status': 'saved', 'saved_power_id': payload.saved_power_id},
+        )
+        await query_db.commit()
+        return CrudResponseModel(is_success=True, message='识别记录已更新')
 
     @staticmethod
     def __recognize_item(
@@ -253,6 +370,8 @@ class InternalPowerService:
         raw_text: str,
         error: str,
         preset_candidates: list[dict[str, Any]],
+        needs_preset_selection: bool = False,
+        preset_selection_message: str = '',
     ) -> dict[str, Any]:
         return {
             'fileName': file_name,
@@ -261,7 +380,108 @@ class InternalPowerService:
             'rawText': raw_text or '',
             'error': error or '',
             'presetCandidates': preset_candidates,
+            'needsPresetSelection': needs_preset_selection,
+            'presetSelectionMessage': preset_selection_message,
         }
+
+    @classmethod
+    async def __create_recognition_history(
+        cls,
+        query_db: AsyncSession,
+        user_id: int,
+        file_name: str,
+        image_bytes: bytes,
+        mime_type: str,
+        status: str,
+    ) -> PersonalInternalPowerRecognitionHistory:
+        now = datetime.now()
+        image_base64 = base64.b64encode(image_bytes).decode('ascii') if image_bytes else ''
+        return await InternalPowerRecognitionHistoryDao.add(
+            query_db,
+            {
+                'user_id': user_id,
+                'file_name': file_name or 'image',
+                'image_base64': image_base64,
+                'mime_type': mime_type or 'image/png',
+                'status': status,
+                'parsed_json': '{}',
+                'raw_text': '',
+                'error': '',
+                'preset_candidates_json': '[]',
+                'create_time': now,
+                'update_time': now,
+            },
+        )
+
+    @classmethod
+    async def __update_recognition_history(
+        cls, query_db: AsyncSession, record_id: int, user_id: int, item: dict[str, Any]
+    ) -> None:
+        await InternalPowerRecognitionHistoryDao.update(
+            query_db,
+            record_id,
+            user_id,
+            {
+                'status': 'recognized' if item.get('success') else 'failed',
+                'parsed_json': cls.__json_dumps(item.get('parsed') or {}),
+                'raw_text': item.get('rawText') or '',
+                'error': item.get('error') or '',
+                'preset_candidates_json': cls.__json_dumps(item.get('presetCandidates') or []),
+            },
+        )
+
+    @classmethod
+    async def __mark_stale_recognition_history_failed(
+        cls, query_db: AsyncSession, rows: list[PersonalInternalPowerRecognitionHistory]
+    ) -> bool:
+        now = datetime.now()
+        cutoff = now - timedelta(minutes=cls.RECOGNITION_STALE_MINUTES)
+        changed = False
+        for history in rows:
+            if (history.status or '') != 'recognizing':
+                continue
+            last_update = history.update_time or history.create_time
+            if last_update and last_update > cutoff:
+                continue
+            await InternalPowerRecognitionHistoryDao.update(
+                query_db,
+                history.record_id,
+                history.user_id,
+                {
+                    'status': 'failed',
+                    'error': f'识别任务已中断或超时，超过{cls.RECOGNITION_STALE_MINUTES}分钟没有更新，请重新上传识别',
+                    'preset_candidates_json': '[]',
+                },
+            )
+            changed = True
+        return changed
+
+    @classmethod
+    def __history_to_model(
+        cls, history: PersonalInternalPowerRecognitionHistory
+    ) -> InternalPowerRecognitionHistoryItemModel:
+        preset_candidates = cls.__json_loads(history.preset_candidates_json, [])
+        needs_preset_selection = (
+            (history.status or '') == 'recognized'
+            and not history.saved_power_id
+            and len(preset_candidates) > 1
+        )
+        return InternalPowerRecognitionHistoryItemModel(
+            recordId=history.record_id,
+            fileName=history.file_name or '',
+            imageBase64=history.image_base64 or '',
+            mimeType=history.mime_type or 'image/png',
+            status=history.status or 'recognizing',
+            parsed=cls.__json_loads(history.parsed_json, {}),
+            rawText=history.raw_text or '',
+            error=history.error or '',
+            presetCandidates=preset_candidates,
+            needsPresetSelection=needs_preset_selection,
+            presetSelectionMessage='该内功存在多个元素，请选择元素后再新增' if needs_preset_selection else '',
+            savedPowerId=history.saved_power_id,
+            createTime=history.create_time,
+            updateTime=history.update_time,
+        )
 
     @staticmethod
     def __find_invalid_recognized_entry(parsed: dict[str, Any], valid_entry_names: set[str]) -> str:
@@ -271,6 +491,84 @@ class InternalPowerService:
             if entry_name not in valid_entry_names:
                 return f'识别到白名单外词条：{entry_name or "空词条"}'
         return ''
+
+    @classmethod
+    def __extract_recognized_power_name(cls, parsed: dict[str, Any]) -> str:
+        return cls.__normalize_recognized_power_name(parsed.get('内功名') or parsed.get('name'))
+
+    @staticmethod
+    def __normalize_recognized_power_name(value: Any) -> str:
+        text = str(value or '').strip()
+        if not text:
+            return ''
+        text = text.replace('·试用', '').replace('・试用', '').replace('试用', '').strip()
+        rare_aliases = {
+            '日月两仪': '稀有-日月两仪',
+            '稀有-日月两仪': '稀有-日月两仪',
+            '不动明王': '稀有-不动明王',
+            '稀有-不动明王': '稀有-不动明王',
+            '绝电惊沙': '稀有-绝电惊沙',
+            '稀有-绝电惊沙': '稀有-绝电惊沙',
+            '承影锋烁': '稀有-承影锋烁',
+            '稀有-承影锋烁': '稀有-承影锋烁',
+            '灼星贯日': '稀有-灼星贯日',
+            '稀有-灼星贯日': '稀有-灼星贯日',
+        }
+        return rare_aliases.get(text, text)
+
+    @classmethod
+    def __resolve_recognition_candidates(
+        cls, candidates: list[dict[str, Any]], parsed: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        if len(candidates) <= 1:
+            return candidates
+        element_key = cls.__extract_recognized_element_key(parsed)
+        if not element_key:
+            return candidates
+        matched_candidates = [
+            candidate for candidate in candidates if str(candidate.get('elementKey') or '') == element_key
+        ]
+        return matched_candidates if len(matched_candidates) == 1 else candidates
+
+    @classmethod
+    def __extract_recognized_element_key(cls, parsed: dict[str, Any]) -> str:
+        for field_name in ('元素', '五行', 'element'):
+            element_key = cls.__normalize_recognized_element_key(parsed.get(field_name))
+            if element_key:
+                return element_key
+        return ''
+
+    @staticmethod
+    def __normalize_recognized_element_key(value: Any) -> str:
+        text = str(value or '').strip().lower()
+        if not text:
+            return ''
+        compact_text = ''.join(text.split())
+        element_aliases = {
+            'metal': 'metal',
+            'gold': 'metal',
+            'jin': 'metal',
+            '金': 'metal',
+            'wood': 'wood',
+            'mu': 'wood',
+            '木': 'wood',
+            'water': 'water',
+            'shui': 'water',
+            '水': 'water',
+            'fire': 'fire',
+            'huo': 'fire',
+            '火': 'fire',
+            'earth': 'earth',
+            'soil': 'earth',
+            'tu': 'earth',
+            '土': 'earth',
+            'mixed': 'mixed',
+            'all': 'mixed',
+            '金木水火土': 'mixed',
+            '五行': 'mixed',
+            '全元素': 'mixed',
+        }
+        return element_aliases.get(compact_text, '')
 
     @classmethod
     def __preset_candidate_to_dict(cls, preset: Any) -> dict[str, Any]:

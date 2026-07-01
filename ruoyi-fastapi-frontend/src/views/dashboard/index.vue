@@ -1,5 +1,170 @@
 <template>
-  <div ref="pageRef" class="app-container guild-dashboard" v-loading="loading">
+  <div ref="pageRef" class="app-container guild-dashboard" v-loading="pageLoading">
+    <template v-if="isMemberDashboard">
+      <section class="member-command" data-guild-motion="hero">
+        <div class="member-command-main">
+          <div class="section-kicker">
+            <el-icon><Flag /></el-icon>
+            <span>个人养成台</span>
+          </div>
+          <h1>{{ memberHeroTitle }}</h1>
+          <div class="member-meta">
+            <span>{{ memberGuildText }}</span>
+            <span>{{ memberClassText }}</span>
+            <el-tag :type="vipTagType" effect="light">{{ vipStatusLabel }}</el-tag>
+          </div>
+          <div class="invite-actions">
+            <el-button type="primary" :icon="Grid" @click="goTo('/personal/skill')">内功管理</el-button>
+            <el-button :icon="Tickets" @click="goToSkillAction('recognize')">图片识别</el-button>
+            <el-button :icon="Refresh" @click="refreshMemberDashboard">刷新</el-button>
+          </div>
+        </div>
+
+        <div class="member-ai-panel">
+          <span>AI识图次数</span>
+          <strong>{{ aiRecognitionTotalText }}</strong>
+          <small>VIP {{ formatNumber(userStore.vipAiImageRecognitionCount) }} / 普通 {{ formatNumber(userStore.aiImageRecognitionCount) }}</small>
+        </div>
+      </section>
+
+      <section class="member-metric-grid">
+        <article class="metric-card member-metric" data-guild-reveal>
+          <div class="metric-icon green"><el-icon><Grid /></el-icon></div>
+          <div>
+            <span>内功数量</span>
+            <strong>{{ powerQuotaText }}</strong>
+            <el-progress
+              class="member-progress"
+              :percentage="powerQuotaPercent"
+              :show-text="false"
+              :stroke-width="7"
+            />
+          </div>
+        </article>
+        <article class="metric-card member-metric" data-guild-reveal>
+          <div class="metric-icon amber"><el-icon><Flag /></el-icon></div>
+          <div>
+            <span>最高总增益</span>
+            <strong>{{ bestPowerBonusText }}</strong>
+            <small>{{ bestPower?.name || '暂无内功' }}</small>
+          </div>
+        </article>
+        <article class="metric-card member-metric" data-guild-reveal>
+          <div class="metric-icon blue"><el-icon><UserFilled /></el-icon></div>
+          <div>
+            <span>灵韵内功</span>
+            <strong>{{ formatNumber(lingyunPowerCount) }}</strong>
+            <small>已启用灵韵勾选</small>
+          </div>
+        </article>
+        <article class="metric-card member-metric" data-guild-reveal>
+          <div class="metric-icon red"><el-icon><Bell /></el-icon></div>
+          <div>
+            <span>识别记录</span>
+            <strong>{{ formatNumber(recognitionHistory.length) }}</strong>
+            <small>{{ recognitionSummaryText }}</small>
+          </div>
+        </article>
+      </section>
+
+      <section class="member-content-grid">
+        <article class="panel" data-guild-reveal>
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Internal Power</span>
+              <h2>最近内功</h2>
+            </div>
+            <el-button text type="primary" :icon="Right" @click="goTo('/personal/skill')">查看全部</el-button>
+          </div>
+          <div v-if="recentPowers.length" class="member-power-list">
+            <div v-for="power in recentPowers" :key="power.id || power.powerId" class="member-power-row">
+              <div>
+                <strong>{{ power.name || '未命名内功' }}</strong>
+                <span>{{ power.category || '未设置种类' }} · {{ formatDateTime(power.updatedAt) }}</span>
+              </div>
+              <el-tag effect="light">{{ formatPercent(power.totalBonusPercent) }}</el-tag>
+            </div>
+          </div>
+          <el-empty v-else description="还没有保存内功" :image-size="86">
+            <el-button type="primary" @click="goToSkillAction('create')">新增内功</el-button>
+          </el-empty>
+        </article>
+
+        <article class="panel" data-guild-reveal>
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Recognition</span>
+              <h2>识别记录</h2>
+            </div>
+            <el-button text type="primary" :icon="Right" @click="goToSkillAction('history')">打开记录</el-button>
+          </div>
+          <div v-if="recentRecognition.length" class="member-recognition-list">
+            <div v-for="item in recentRecognition" :key="item.recordId" class="member-recognition-row">
+              <div>
+                <strong>{{ item.fileName || '剪贴板图片' }}</strong>
+                <span>{{ formatDateTime(item.updateTime || item.createTime) }}</span>
+              </div>
+              <el-tag :type="recognitionStatusTagType(item.status)" effect="light">
+                {{ recognitionStatusLabel(item.status) }}
+              </el-tag>
+            </div>
+          </div>
+          <el-empty v-else description="暂无识别记录" :image-size="86">
+            <el-button @click="goToSkillAction('recognize')">去识别图片</el-button>
+          </el-empty>
+        </article>
+      </section>
+
+      <section class="member-content-grid">
+        <article class="panel" data-guild-reveal>
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Guild Status</span>
+              <h2>我的帮会状态</h2>
+            </div>
+            <el-button text type="primary" :icon="Right" @click="goTo(memberProfile ? '/personal/profile-edit' : '/personal/join')">
+              {{ memberProfile ? '编辑资料' : '加入帮会' }}
+            </el-button>
+          </div>
+          <div class="member-status-list">
+            <div class="member-status-row">
+              <span>当前帮会</span>
+              <strong>{{ memberGuildText }}</strong>
+            </div>
+            <div class="member-status-row">
+              <span>当前报名</span>
+              <strong>{{ activeInvite ? activeInvite.battle_name || '当前约战' : '暂无生效报名' }}</strong>
+            </div>
+            <div class="member-status-row">
+              <span>我的排表</span>
+              <strong>{{ memberScheduleText }}</strong>
+            </div>
+            <div class="member-status-row">
+              <span>申请状态</span>
+              <strong>{{ memberApplicationText }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel" data-guild-reveal>
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Quick Actions</span>
+              <h2>常用入口</h2>
+            </div>
+          </div>
+          <div class="member-action-grid">
+            <el-button type="primary" :icon="Grid" @click="goTo('/personal/skill')">内功管理</el-button>
+            <el-button :icon="Tickets" @click="goToSkillAction('recognize')">图片识别</el-button>
+            <el-button :icon="Bell" @click="goToSkillAction('history')">识别记录</el-button>
+            <el-button :icon="UserFilled" @click="goTo('/personal/profile-edit')">个人信息</el-button>
+            <el-button :icon="Link" @click="goTo('/personal/join')">加入帮会</el-button>
+          </div>
+        </article>
+      </section>
+    </template>
+
+    <template v-else>
     <section class="signup-command" data-guild-motion="hero">
       <div class="command-main">
         <div class="section-kicker">
@@ -346,6 +511,7 @@
         <el-empty v-else description="最近约战还没有复盘明细" :image-size="90" />
       </article>
     </section>
+    </template>
   </div>
 </template>
 
@@ -368,6 +534,7 @@ import {
 import { getGuildDashboardSummary } from '@/api/guild/dashboard'
 import { approveBattleRegistration, rejectBattleRegistration } from '@/api/guild/battle'
 import { approveJoinApplication, rejectJoinApplication } from '@/api/guild/join'
+import { listInternalPowers, listInternalPowerRecognitionHistory } from '@/api/personal/internalPower'
 import useGuildMemberStore from '@/store/modules/guildMember'
 import useUserStore from '@/store/modules/user'
 import { useGuildClassColors } from '@/utils/guildClassColor'
@@ -385,14 +552,41 @@ const loading = ref(false)
 const battleActionId = ref('')
 const joinActionId = ref('')
 const dashboard = ref({})
+const memberLoading = ref(false)
+const memberPowers = ref([])
+const memberQuota = ref({ count: 0, maxCount: 20, unlimited: false })
+const recognitionHistory = ref([])
 const { getGuildClassTokenStyle, loadGuildClassColors } = useGuildClassColors()
 
 useGuildPageMotion(pageRef)
 
 const scope = computed(() => dashboard.value.scope || {})
+const isMemberDashboard = computed(() => scope.value.type === 'user')
+const pageLoading = computed(() => loading.value || (isMemberDashboard.value && memberLoading.value))
 const scopeLabel = computed(() => scope.value.label || '当前数据')
 const guild = computed(() => dashboard.value.guild || {})
 const guildName = computed(() => guild.value.guild_name || '')
+const memberProfile = computed(() => guild.value.membership || null)
+const memberHeroTitle = computed(() => {
+  if (memberProfile.value?.player_name) return `${memberProfile.value.player_name}的个人养成台`
+  return '先加入帮会，开始养成记录'
+})
+const memberGuildText = computed(() => guildName.value || '暂未加入帮会')
+const memberClassText = computed(() => {
+  const mainClass = memberProfile.value?.player_class || '未设置主职'
+  const secondaryClass = memberProfile.value?.secondary_class || '未设置副职'
+  return `${mainClass} / ${secondaryClass}`
+})
+const vipStatusLabel = computed(() => {
+  if (userStore.effectiveVipType === 'sponsored') return '赞助VIP'
+  if (userStore.effectiveVipType === 'manual' || userStore.isVipEffective) return 'VIP'
+  return '普通用户'
+})
+const vipTagType = computed(() => vipStatusLabel.value === '普通用户' ? 'info' : 'success')
+const aiRecognitionTotalText = computed(() => {
+  const total = Number(userStore.aiImageRecognitionCount || 0) + Number(userStore.vipAiImageRecognitionCount || 0)
+  return formatNumber(total)
+})
 const activeInvite = computed(() => dashboard.value.active_invite_summary || null)
 const signupClasses = computed(() => activeInvite.value?.registration_class_distribution || [])
 const leaveClasses = computed(() => activeInvite.value?.leave_class_distribution || [])
@@ -414,6 +608,47 @@ const battleRecordSummary = computed(() => latestBattle.value?.my_guild_summary 
 const memberSummary = computed(() => dashboard.value.member_summary || {})
 const reviewSummary = computed(() => dashboard.value.review_summary || {})
 const scheduleSummary = computed(() => dashboard.value.schedule_summary || {})
+const memberApplications = computed(() => reviewSummary.value.my_applications || [])
+const latestMemberApplication = computed(() => memberApplications.value[0] || null)
+const memberApplicationText = computed(() => {
+  if (memberProfile.value) return '已加入帮会'
+  if (!latestMemberApplication.value) return '暂无申请'
+  return reviewStatusLabel(latestMemberApplication.value.review_status)
+})
+const memberScheduleText = computed(() => {
+  const assignment = scheduleSummary.value.my_assignment
+  if (!assignment) return '暂无排表'
+  return [assignment.team_name, assignment.squad_name].filter(Boolean).join(' / ') || '已分配'
+})
+const powerCount = computed(() => Number(memberQuota.value.count ?? memberPowers.value.length))
+const powerMaxCount = computed(() => Number(memberQuota.value.maxCount || 20))
+const powerQuotaText = computed(() => {
+  if (memberQuota.value.unlimited) return `${formatNumber(powerCount.value)} / 不限`
+  return `${formatNumber(powerCount.value)} / ${formatNumber(powerMaxCount.value)}`
+})
+const powerQuotaPercent = computed(() => {
+  if (memberQuota.value.unlimited) return 100
+  if (!powerMaxCount.value) return 0
+  return Math.min(100, Math.round((powerCount.value / powerMaxCount.value) * 100))
+})
+const sortedPowers = computed(() => {
+  return [...memberPowers.value].sort((a, b) => getPowerScore(b) - getPowerScore(a))
+})
+const bestPower = computed(() => sortedPowers.value[0] || null)
+const bestPowerBonusText = computed(() => bestPower.value ? formatPercent(bestPower.value.totalBonusPercent) : '0.00000%')
+const lingyunPowerCount = computed(() => memberPowers.value.filter(item => item.lingyunEnabled).length)
+const recentPowers = computed(() => {
+  return [...memberPowers.value]
+    .sort((a, b) => new Date(b.updatedAt || b.updateTime || 0).getTime() - new Date(a.updatedAt || a.updateTime || 0).getTime())
+    .slice(0, 5)
+})
+const recentRecognition = computed(() => recognitionHistory.value.slice(0, 4))
+const recognitionSummaryText = computed(() => {
+  const failed = recognitionHistory.value.filter(item => item.status === 'failed').length
+  if (failed) return `${failed} 条失败需查看`
+  const saved = recognitionHistory.value.filter(item => item.savedPowerId).length
+  return saved ? `${saved} 条已新增` : '最近50条'
+})
 
 const scheduleLabel = computed(() => {
   if (!scheduleSummary.value.schedule_id) return '暂无启用排表'
@@ -437,9 +672,44 @@ async function fetchDashboard() {
   try {
     const res = await getGuildDashboardSummary()
     dashboard.value = res.data || {}
+    if (dashboard.value.scope?.type === 'user') {
+      await fetchMemberCultivationData()
+    }
   } finally {
     loading.value = false
   }
+}
+
+async function fetchMemberCultivationData() {
+  memberLoading.value = true
+  try {
+    const [powerResult, historyResult] = await Promise.allSettled([
+      listInternalPowers(),
+      listInternalPowerRecognitionHistory()
+    ])
+
+    if (powerResult.status === 'fulfilled') {
+      const response = powerResult.value || {}
+      memberPowers.value = (response.powers || response.data?.powers || []).map(normalizeMemberPower)
+      memberQuota.value = {
+        count: response.quota?.count ?? response.data?.quota?.count ?? memberPowers.value.length,
+        maxCount: response.quota?.maxCount ?? response.data?.quota?.maxCount ?? 20,
+        unlimited: !!(response.quota?.unlimited ?? response.data?.quota?.unlimited)
+      }
+    }
+
+    if (historyResult.status === 'fulfilled') {
+      const response = historyResult.value || {}
+      recognitionHistory.value = response.items || response.data?.items || []
+    }
+  } finally {
+    memberLoading.value = false
+  }
+}
+
+async function refreshMemberDashboard() {
+  await fetchDashboard()
+  ElMessage.success('个人首页已刷新')
 }
 
 function warmGuildMemberCache() {
@@ -479,6 +749,13 @@ function buildClassDistributionFromMembers(members = []) {
 
 function goTo(path) {
   router.push(path)
+}
+
+function goToSkillAction(action) {
+  router.push({
+    path: '/personal/skill',
+    query: { action }
+  })
 }
 
 async function copyInviteLink() {
@@ -556,6 +833,46 @@ function formatCompactNumber(value) {
   if (number >= 100000000) return `${(number / 100000000).toFixed(1)}亿`
   if (number >= 10000) return `${(number / 10000).toFixed(1)}万`
   return formatNumber(number)
+}
+
+function getPowerScore(power) {
+  return Number(power?.totalBonusPercent || power?.bonusPercent || 0)
+}
+
+function formatPercent(value) {
+  return `${Number(value || 0).toFixed(5)}%`
+}
+
+function normalizeMemberPower(power = {}) {
+  return {
+    ...power,
+    id: power.id || String(power.powerId || ''),
+    powerId: power.powerId,
+    name: power.name || '',
+    category: power.category || '',
+    totalBonusPercent: Number(power.totalBonusPercent || 0),
+    bonusPercent: Number(power.bonusPercent || 0),
+    lingyunEnabled: !!power.lingyunEnabled,
+    updatedAt: power.updatedAt || power.updateTime || power.updated_at || ''
+  }
+}
+
+function recognitionStatusLabel(status) {
+  return {
+    recognizing: '识别中',
+    recognized: '已识别',
+    saved: '已新增',
+    failed: '失败'
+  }[String(status || '')] || '未记录'
+}
+
+function recognitionStatusTagType(status) {
+  return {
+    recognizing: 'warning',
+    recognized: 'success',
+    saved: 'success',
+    failed: 'danger'
+  }[String(status || '')] || 'info'
 }
 
 function normalizeDate(value) {
@@ -666,6 +983,72 @@ onMounted(() => {
     linear-gradient(90deg, rgba(47, 111, 99, 0.08), rgba(232, 215, 84, 0.08));
 }
 
+.member-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.28fr);
+  gap: 16px;
+  min-height: 168px;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(23, 32, 51, 0.09);
+  border-radius: 8px;
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.97), rgba(246, 251, 249, 0.93)),
+    linear-gradient(90deg, rgba(47, 111, 99, 0.1), rgba(39, 118, 199, 0.08));
+  box-shadow: 0 10px 26px rgba(23, 32, 51, 0.06);
+}
+
+.member-command-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.member-command-main h1 {
+  margin: 10px 0 8px;
+  color: #121826;
+  font-size: 30px;
+  line-height: 1.12;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.member-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  color: #5f6f86;
+  font-weight: 800;
+}
+
+.member-ai-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, #11261f, #1e473d),
+    #11261f;
+  color: #e8fff5;
+}
+
+.member-ai-panel span,
+.member-ai-panel small {
+  color: rgba(232, 255, 245, 0.76);
+  font-size: 13px;
+}
+
+.member-ai-panel strong {
+  display: block;
+  margin: 8px 0;
+  font-size: 38px;
+  line-height: 1;
+}
+
 .command-main {
   display: flex;
   flex-direction: column;
@@ -763,6 +1146,88 @@ onMounted(() => {
   grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
   align-items: start;
   gap: 12px;
+}
+
+.member-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.member-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.member-metric {
+  min-width: 0;
+}
+
+.member-metric > div:last-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.member-progress {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.member-power-list,
+.member-recognition-list,
+.member-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-power-row,
+.member-recognition-row,
+.member-status-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 1px solid rgba(23, 32, 51, 0.07);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.member-power-row strong,
+.member-recognition-row strong,
+.member-status-row strong {
+  display: block;
+  color: #121826;
+  overflow-wrap: anywhere;
+}
+
+.member-power-row span,
+.member-recognition-row span,
+.member-status-row span {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.member-status-row strong {
+  text-align: right;
+}
+
+.member-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.member-action-grid .el-button {
+  width: 100%;
+  min-height: 42px;
+  margin-left: 0;
 }
 
 .detail-grid {
@@ -1110,25 +1575,30 @@ onMounted(() => {
 
 @media (max-width: 1180px) {
   .signup-command,
+  .member-command,
   .signup-grid,
   .detail-grid,
   .history-grid,
-  .ops-grid {
+  .ops-grid,
+  .member-content-grid {
     grid-template-columns: 1fr;
   }
 
-  .ops-grid {
+  .ops-grid,
+  .member-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
   .signup-command,
+  .member-command,
   .panel {
     padding: 18px;
   }
 
-  .command-main h1 {
+  .command-main h1,
+  .member-command-main h1 {
     font-size: 28px;
   }
 
@@ -1154,8 +1624,20 @@ onMounted(() => {
   }
 
   .record-metrics,
-  .ops-grid {
+  .ops-grid,
+  .member-metric-grid,
+  .member-action-grid {
     grid-template-columns: 1fr;
+  }
+
+  .member-power-row,
+  .member-recognition-row,
+  .member-status-row {
+    grid-template-columns: 1fr;
+  }
+
+  .member-status-row strong {
+    text-align: left;
   }
 }
 </style>

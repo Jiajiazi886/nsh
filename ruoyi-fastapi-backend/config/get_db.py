@@ -10,6 +10,7 @@ from utils.log_util import logger
 INTERNAL_POWER_ENTRY_TABLE = 'system_internal_power_entry'
 SYSTEM_INTERNAL_POWER_PRESET_TABLE = 'system_internal_power_preset'
 PERSONAL_INTERNAL_POWER_TABLE = 'personal_internal_power'
+SYS_USER_TABLE = 'sys_user'
 INTERNAL_POWER_ENTRY_LIMIT_COLUMN_SQL = {
     'mysql': {
         'limit_text': (
@@ -72,6 +73,74 @@ INTERNAL_POWER_LINGYUN_COLUMN_SQL = {
         },
     },
 }
+
+SYS_USER_VIP_SPONSOR_COLUMN_SQL = {
+    'mysql': {
+        'vip_ai_image_recognition_count': (
+            "ALTER TABLE sys_user ADD COLUMN vip_ai_image_recognition_count int NOT NULL DEFAULT 0 "
+            "COMMENT 'VIP AI识图剩余次数' AFTER ai_image_recognition_count"
+        ),
+        'sponsor_enabled': (
+            "ALTER TABLE sys_user ADD COLUMN sponsor_enabled char(1) NOT NULL DEFAULT '0' "
+            "COMMENT '赞助开关（0关闭 1开启）' AFTER vip_ai_image_recognition_count"
+        ),
+        'sponsored_vip': (
+            "ALTER TABLE sys_user ADD COLUMN sponsored_vip char(1) NOT NULL DEFAULT '0' "
+            "COMMENT '赞助VIP标识（0非VIP 1VIP）' AFTER sponsor_enabled"
+        ),
+        'sponsored_by_user_id': (
+            "ALTER TABLE sys_user ADD COLUMN sponsored_by_user_id bigint NULL "
+            "COMMENT '赞助来源帮会管理用户ID' AFTER sponsored_vip"
+        ),
+    },
+    'postgresql': {
+        'vip_ai_image_recognition_count': (
+            'ALTER TABLE sys_user ADD COLUMN vip_ai_image_recognition_count integer NOT NULL DEFAULT 0'
+        ),
+        'sponsor_enabled': "ALTER TABLE sys_user ADD COLUMN sponsor_enabled char(1) NOT NULL DEFAULT '0'",
+        'sponsored_vip': "ALTER TABLE sys_user ADD COLUMN sponsored_vip char(1) NOT NULL DEFAULT '0'",
+        'sponsored_by_user_id': 'ALTER TABLE sys_user ADD COLUMN sponsored_by_user_id bigint NULL',
+    },
+}
+
+SYS_USER_VIP_SPONSOR_PERMISSION_SQL = [
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache,
+      menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark
+    )
+    SELECT 3130, 'VIP授权修改', menu_id, 8, '#', '', '', '', 1, 0, 'F', '0', '0',
+           'system:user:vip:edit', '#', 'admin', NOW(), '', NULL, ''
+    FROM sys_menu
+    WHERE perms = 'system:user:list'
+      AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'system:user:vip:edit')
+    LIMIT 1
+    """,
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache,
+      menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark
+    )
+    SELECT 3131, '赞助状态修改', menu_id, 9, '#', '', '', '', 1, 0, 'F', '0', '0',
+           'system:user:sponsor:edit', '#', 'admin', NOW(), '', NULL, ''
+    FROM sys_menu
+    WHERE perms = 'system:user:list'
+      AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'system:user:sponsor:edit')
+    LIMIT 1
+    """,
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache,
+      menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark
+    )
+    SELECT 3132, 'AI识图次数修改', menu_id, 10, '#', '', '', '', 1, 0, 'F', '0', '0',
+           'system:user:ai:edit', '#', 'admin', NOW(), '', NULL, ''
+    FROM sys_menu
+    WHERE perms = 'system:user:list'
+      AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'system:user:ai:edit')
+    LIMIT 1
+    """,
+]
 
 INTERNAL_POWER_ENTRY_LIMIT_BACKFILL_SQL = """
 UPDATE system_internal_power_entry
@@ -201,6 +270,33 @@ async def ensure_internal_power_lingyun_columns() -> None:
                     logger.info(f'已补齐{table_name}.{column_name}字段')
 
 
+async def ensure_sys_user_vip_sponsor_columns() -> None:
+    """
+    补齐VIP识图次数与赞助字段，兼容已部署库升级。
+    """
+    ddl_map = SYS_USER_VIP_SPONSOR_COLUMN_SQL.get(DataBaseConfig.db_type)
+    if not ddl_map:
+        return
+
+    async with async_engine.begin() as conn:
+        existing_columns = await conn.run_sync(_get_table_columns, SYS_USER_TABLE)
+        if not existing_columns:
+            return
+        for column_name, ddl in ddl_map.items():
+            if column_name not in existing_columns:
+                await conn.execute(text(ddl))
+                logger.info(f'已补齐{SYS_USER_TABLE}.{column_name}字段')
+
+
+async def ensure_sys_user_vip_sponsor_permission_menus() -> None:
+    """
+    补齐用户管理下的VIP、赞助和AI识图次数细分权限按钮。
+    """
+    async with async_engine.begin() as conn:
+        for sql in SYS_USER_VIP_SPONSOR_PERMISSION_SQL:
+            await conn.execute(text(sql))
+
+
 async def init_create_table() -> None:
     """
     应用启动时初始化数据库连接
@@ -212,6 +308,8 @@ async def init_create_table() -> None:
         await conn.run_sync(Base.metadata.create_all)
     await ensure_internal_power_entry_limit_columns()
     await ensure_internal_power_lingyun_columns()
+    await ensure_sys_user_vip_sponsor_columns()
+    await ensure_sys_user_vip_sponsor_permission_menus()
     logger.info('✅️ 数据库连接成功')
 
 

@@ -27,6 +27,7 @@ from module_admin.entity.vo.user_vo import (
     AiRecognitionCountModel,
     AddUserModel,
     AvatarModel,
+    ChangeSponsorModel,
     ChangeVipModel,
     CrudUserRoleModel,
     CurrentUserModel,
@@ -44,6 +45,7 @@ from module_admin.entity.vo.user_vo import (
     UserRoleQueryModel,
     UserRoleResponseModel,
     UserRowModel,
+    VipAiRecognitionCountModel,
 )
 from module_admin.service.role_service import RoleService
 from module_admin.service.user_service import UserService
@@ -103,6 +105,9 @@ async def add_system_user(
             return ResponseUtil.failure(msg='无权修改用户VIP状态')
         add_user.is_vip = '0'
         add_user.ai_image_recognition_count = 0
+        add_user.vip_ai_image_recognition_count = 0
+        add_user.sponsor_enabled = '0'
+        add_user.sponsored_vip = '0'
     if not current_user.user.admin:
         await RoleService.check_role_data_scope_services(
             query_db, ','.join([str(item) for item in add_user.role_ids]), role_data_scope_sql
@@ -142,6 +147,10 @@ async def edit_system_user(
             return ResponseUtil.failure(msg='无权修改用户VIP状态')
         if 'ai_image_recognition_count' in edit_user.model_fields_set:
             return ResponseUtil.failure(msg='无权修改AI识图次数')
+        if 'vip_ai_image_recognition_count' in edit_user.model_fields_set:
+            return ResponseUtil.failure(msg='无权修改VIP AI识图次数')
+        if 'sponsor_enabled' in edit_user.model_fields_set:
+            return ResponseUtil.failure(msg='无权修改赞助状态')
         if 'max_internal_power_count' in edit_user.model_fields_set:
             return ResponseUtil.failure(msg='无权修改最大内功数')
     if not current_user.user.admin:
@@ -162,7 +171,7 @@ async def edit_system_user(
     summary='修改用户VIP状态接口',
     description='用于修改用户VIP状态',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:user:edit')],
+    dependencies=[UserInterfaceAuthDependency('system:user:vip:edit')],
 )
 @ApiCacheEvict(namespaces=ApiGroup.USER_PERMISSION_MUTATION)
 @Log(title='用户管理', business_type=BusinessType.UPDATE)
@@ -231,7 +240,7 @@ async def change_system_user_internal_power_limit(
     summary='修改用户AI识图次数接口',
     description='用于修改单个用户AI识图剩余次数',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:user:edit')],
+    dependencies=[UserInterfaceAuthDependency('system:user:ai:edit')],
 )
 @ApiCacheEvict(namespaces=ApiGroup.USER_INFO_MUTATION)
 @Log(title='用户管理', business_type=BusinessType.UPDATE)
@@ -250,6 +259,72 @@ async def change_system_user_ai_recognition_count(
         query_db,
         change_user.user_id,
         change_user.ai_image_recognition_count,
+        current_user.user.user_name,
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
+@user_controller.put(
+    '/changeVipAiRecognitionCount',
+    summary='修改用户VIP AI识图次数接口',
+    description='用于修改单个用户VIP AI识图剩余次数',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:user:ai:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_INFO_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def change_system_user_vip_ai_recognition_count(
+    request: Request,
+    change_user: VipAiRecognitionCountModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改VIP AI识图次数')
+    if change_user.user_id is None:
+        return ResponseUtil.failure(msg='用户ID不能为空')
+    await UserService.check_user_allowed_services(UserModel(userId=change_user.user_id))
+    result = await UserService.change_vip_ai_recognition_count_services(
+        query_db,
+        change_user.user_id,
+        change_user.vip_ai_image_recognition_count,
+        current_user.user.user_name,
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
+@user_controller.put(
+    '/changeSponsor',
+    summary='修改帮会管理赞助状态接口',
+    description='用于修改帮会管理赞助开关并同步成员赞助VIP',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:user:sponsor:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_INFO_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def change_system_user_sponsor(
+    request: Request,
+    change_user: ChangeSponsorModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改赞助状态')
+    if change_user.user_id is None:
+        return ResponseUtil.failure(msg='用户ID不能为空')
+    await UserService.check_user_allowed_services(UserModel(userId=change_user.user_id))
+    detail = await UserService.user_detail_services(query_db, change_user.user_id)
+    role_keys = {role.role_key for role in (detail.data.role or []) if role}
+    if 'common' not in role_keys:
+        return ResponseUtil.failure(msg='只有帮会管理角色可以开启赞助')
+    result = await UserService.change_sponsor_services(
+        query_db,
+        change_user.user_id,
+        change_user.sponsor_enabled,
         current_user.user.user_name,
     )
     logger.info(result.message)

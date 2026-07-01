@@ -20,6 +20,10 @@ from module_admin.entity.vo.user_vo import (
 from utils.page_util import PageUtil
 
 
+def _now() -> datetime:
+    return datetime.now()
+
+
 class UserDao:
     """
     用户管理模块数据库操作层
@@ -367,6 +371,113 @@ class UserDao:
             )
         )
         return bool(result.rowcount or 0)
+
+    @classmethod
+    async def decrement_ai_recognition_counts(
+        cls, db: AsyncSession, user_id: int, vip_count: int, normal_count: int, update_by: str
+    ) -> bool:
+        """
+        原子扣减用户VIP/普通AI识图次数。
+        """
+        vip_count = max(0, int(vip_count or 0))
+        normal_count = max(0, int(normal_count or 0))
+        if vip_count <= 0 and normal_count <= 0:
+            return True
+        result = await db.execute(
+            update(SysUser)
+            .where(
+                SysUser.user_id == user_id,
+                SysUser.del_flag == '0',
+                SysUser.vip_ai_image_recognition_count >= vip_count,
+                SysUser.ai_image_recognition_count >= normal_count,
+            )
+            .values(
+                vip_ai_image_recognition_count=SysUser.vip_ai_image_recognition_count - vip_count,
+                ai_image_recognition_count=SysUser.ai_image_recognition_count - normal_count,
+                update_by=update_by,
+                update_time=_now(),
+            )
+        )
+        return bool(result.rowcount or 0)
+
+    @classmethod
+    async def change_sponsor_enabled(cls, db: AsyncSession, user_id: int, enabled: str, update_by: str) -> None:
+        await db.execute(
+            update(SysUser)
+            .where(SysUser.user_id == user_id, SysUser.del_flag == '0')
+            .values(sponsor_enabled=enabled, update_by=update_by, update_time=_now())
+        )
+
+    @classmethod
+    async def sync_sponsored_members(cls, db: AsyncSession, sponsor_user_id: int, enabled: bool, update_by: str) -> None:
+        from module_guild.entity.do.member_do import GuildMember
+
+        if enabled:
+            member_user_ids = select(GuildMember.member_user_id).where(
+                GuildMember.guild_id == sponsor_user_id,
+                GuildMember.member_user_id > 0,
+            )
+            await db.execute(
+                update(SysUser)
+                .where(SysUser.user_id.in_(member_user_ids), SysUser.del_flag == '0')
+                .values(
+                    sponsored_vip='1',
+                    sponsored_by_user_id=sponsor_user_id,
+                    update_by=update_by,
+                    update_time=_now(),
+                )
+            )
+            return
+
+        await db.execute(
+            update(SysUser)
+            .where(
+                SysUser.sponsored_vip == '1',
+                SysUser.sponsored_by_user_id == sponsor_user_id,
+                SysUser.del_flag == '0',
+            )
+            .values(
+                sponsored_vip='0',
+                sponsored_by_user_id=None,
+                update_by=update_by,
+                update_time=_now(),
+            )
+        )
+
+    @classmethod
+    async def grant_sponsored_vip(cls, db: AsyncSession, user_id: int, sponsor_user_id: int, update_by: str) -> None:
+        if not user_id or not sponsor_user_id:
+            return
+        await db.execute(
+            update(SysUser)
+            .where(SysUser.user_id == user_id, SysUser.del_flag == '0')
+            .values(
+                sponsored_vip='1',
+                sponsored_by_user_id=sponsor_user_id,
+                update_by=update_by,
+                update_time=_now(),
+            )
+        )
+
+    @classmethod
+    async def clear_sponsored_vip(cls, db: AsyncSession, user_id: int, sponsor_user_id: int, update_by: str) -> None:
+        if not user_id or not sponsor_user_id:
+            return
+        await db.execute(
+            update(SysUser)
+            .where(
+                SysUser.user_id == user_id,
+                SysUser.sponsored_vip == '1',
+                SysUser.sponsored_by_user_id == sponsor_user_id,
+                SysUser.del_flag == '0',
+            )
+            .values(
+                sponsored_vip='0',
+                sponsored_by_user_id=None,
+                update_by=update_by,
+                update_time=_now(),
+            )
+        )
 
     @classmethod
     async def delete_user_dao(cls, db: AsyncSession, user: UserModel) -> None:

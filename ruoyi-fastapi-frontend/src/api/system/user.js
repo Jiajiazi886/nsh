@@ -84,6 +84,18 @@ export function changeUserVip(userId, isVip, vipExpireTime) {
   })
 }
 
+// 帮会管理赞助状态修改
+export function changeUserSponsor(userId, sponsorEnabled) {
+  return request({
+    url: '/system/user/changeSponsor',
+    method: 'put',
+    data: {
+      userId,
+      sponsorEnabled
+    }
+  })
+}
+
 // 用户最大内功数修改
 export function changeInternalPowerLimit(userId, maxInternalPowerCount) {
   return request({
@@ -104,6 +116,18 @@ export function changeAiRecognitionCount(userId, aiImageRecognitionCount) {
     data: {
       userId,
       aiImageRecognitionCount
+    }
+  })
+}
+
+// 用户VIP AI识图次数修改
+export function changeVipAiRecognitionCount(userId, vipAiImageRecognitionCount) {
+  return request({
+    url: '/system/user/changeVipAiRecognitionCount',
+    method: 'put',
+    data: {
+      userId,
+      vipAiImageRecognitionCount
     }
   })
 }

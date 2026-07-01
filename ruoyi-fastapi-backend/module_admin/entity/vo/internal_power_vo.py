@@ -76,7 +76,41 @@ class InternalPowerRecognizeResultModel(BaseModel):
 
     result: dict[str, Any] = Field(default_factory=dict, description='AI识图结果占位')
     consumed_count: int = Field(default=0, description='本次消耗次数')
+    consumed_vip_count: int = Field(default=0, description='本次消耗VIP AI识图次数')
+    consumed_normal_count: int = Field(default=0, description='本次消耗普通AI识图次数')
+    remaining_vip_ai_image_recognition_count: int = Field(default=0, ge=0, description='剩余VIP AI识图次数')
     remaining_ai_image_recognition_count: int = Field(default=0, ge=0, description='剩余AI识图次数')
+
+
+class InternalPowerRecognitionHistoryItemModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    record_id: int = Field(description='识别记录ID')
+    file_name: str = Field(default='', description='文件名')
+    image_base64: str = Field(default='', description='图片Base64')
+    mime_type: str = Field(default='image/png', description='图片MIME类型')
+    status: str = Field(default='recognizing', description='状态')
+    parsed: dict[str, Any] = Field(default_factory=dict, description='解析JSON')
+    raw_text: str = Field(default='', description='模型原始返回')
+    error: str = Field(default='', description='完整错误')
+    preset_candidates: list[dict[str, Any]] = Field(default_factory=list, description='候选预设')
+    needs_preset_selection: bool = Field(default=False, description='是否需要手动选择预设')
+    preset_selection_message: str = Field(default='', description='手动选择预设提示')
+    saved_power_id: int | None = Field(default=None, description='已保存内功ID')
+    create_time: datetime | None = Field(default=None, description='创建时间')
+    update_time: datetime | None = Field(default=None, description='更新时间')
+
+
+class InternalPowerRecognitionHistoryListModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    items: list[InternalPowerRecognitionHistoryItemModel] = Field(default_factory=list, description='识别记录列表')
+
+
+class InternalPowerRecognitionSavedModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    saved_power_id: int = Field(description='已保存内功ID')
 
 
 class InternalPowerImportModel(BaseModel):

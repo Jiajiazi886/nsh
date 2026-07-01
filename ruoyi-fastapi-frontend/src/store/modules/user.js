@@ -19,6 +19,8 @@ const useUserStore = defineStore(
       isVipEffective: false,
       vipExpireTime: '',
       aiImageRecognitionCount: 0,
+      vipAiImageRecognitionCount: 0,
+      effectiveVipType: 'none',
       maxInternalPowerCount: 20,
       effectiveInternalPowerLimit: 20,
       roles: [],
@@ -60,8 +62,10 @@ const useUserStore = defineStore(
             this.avatar = avatar
             this.isVip = user.isVip || '0'
             this.isVipEffective = !!user.isVipEffective
+            this.effectiveVipType = user.effectiveVipType || 'none'
             this.vipExpireTime = user.vipExpireTime || ''
             this.aiImageRecognitionCount = Number(user.aiImageRecognitionCount || 0)
+            this.vipAiImageRecognitionCount = Number(user.vipAiImageRecognitionCount || 0)
             this.maxInternalPowerCount = user.maxInternalPowerCount || 20
             this.effectiveInternalPowerLimit = user.effectiveInternalPowerLimit ?? null
             /* 初始密码提示 */
@@ -95,6 +99,8 @@ const useUserStore = defineStore(
             this.isVipEffective = false
             this.vipExpireTime = ''
             this.aiImageRecognitionCount = 0
+            this.vipAiImageRecognitionCount = 0
+            this.effectiveVipType = 'none'
             this.maxInternalPowerCount = 20
             this.effectiveInternalPowerLimit = 20
             this.roles = []

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel
 from exceptions.exception import ServiceException
+from module_admin.dao.user_dao import UserDao
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_guild.dao.join_application_dao import JoinApplicationDao
 from module_guild.dao.member_dao import MemberDao
@@ -88,6 +89,7 @@ class JoinApplicationService:
 
         await MemberDao.delete_member_by_member_user(db, applicant_user_id)
         await JoinApplicationDao.archive_effective_applications(db, applicant_user_id)
+        await UserDao.clear_sponsored_vip(db, applicant_user_id, membership.user_id, current_user.user.user_name)
         await db.commit()
         return CrudResponseModel(is_success=True, message='退会成功')
 
@@ -165,6 +167,14 @@ class JoinApplicationService:
             await MemberDao.update_member(db, existing_member.member_id, member_payload)
         else:
             await MemberDao.create_member(db, member_payload)
+        guild = await JoinApplicationDao.get_guild_by_id(db, application.guild_id)
+        if application.applicant_user_id and getattr(guild, 'sponsor_enabled', '0') == '1':
+            await UserDao.grant_sponsored_vip(
+                db,
+                application.applicant_user_id,
+                application.guild_id,
+                current_user.user.user_name,
+            )
 
         await JoinApplicationDao.update_application(
             db,

@@ -238,6 +238,9 @@
               <div>
                 <strong>{{ item.fileName }}</strong>
                 <span>{{ item.parsed?.内功名 || '未识别内功名' }}</span>
+                <small v-if="getRecognizedElementLabel(item.parsed)" class="recognition-element-hint">
+                  元素 {{ getRecognizedElementLabel(item.parsed) }}
+                </small>
               </div>
               <el-tag :type="getRecognitionStatusType(item)" effect="plain">
                 {{ getRecognitionStatusText(item) }}
@@ -260,6 +263,14 @@
               :closable="false"
             />
             <pre v-if="item.error" class="recognition-error-detail">{{ item.error }}</pre>
+            <el-alert
+              v-if="item.needsPresetSelection && !item.saved"
+              title="需要选择元素"
+              :description="item.presetSelectionMessage || '该内功存在多个元素，请选择元素后再新增'"
+              type="warning"
+              show-icon
+              :closable="false"
+            />
             <div v-if="item.success" class="recognition-candidate">
               <span>匹配预设</span>
               <el-select v-model="item.selectedPresetId" placeholder="请选择具体内功预设">
@@ -296,7 +307,7 @@
               <summary>查看原始返回</summary>
               <pre>{{ item.rawText }}</pre>
             </details>
-            <div v-if="item.success && !item.background" class="recognition-card-actions">
+            <div v-if="item.success && (!item.background || item.needsPresetSelection)" class="recognition-card-actions">
               <el-button
                 type="success"
                 plain
@@ -338,7 +349,7 @@
       append-to-body
       class="recognition-history-drawer"
     >
-      <div class="recognition-history">
+      <div class="recognition-history" v-loading="recognitionHistoryInitialLoading">
         <div class="recognition-history-summary">
           <div>
             <span>总数</span>
@@ -359,7 +370,7 @@
         </div>
         <div class="recognition-history-actions">
           <el-button plain icon="Refresh" @click="openRecognitionDialog">继续识别</el-button>
-          <el-button plain type="danger" :disabled="!recognitionItems.length" @click="clearRecognitionHistory">清空记录</el-button>
+          <el-button plain type="danger" :disabled="!recognitionItems.length || recognitionHistoryLoading" @click="clearRecognitionHistory">清空记录</el-button>
         </div>
         <el-empty v-if="!recognitionItems.length" description="暂无识别记录" />
         <div v-else class="recognition-history-list">
@@ -378,6 +389,9 @@
                 <div>
                   <strong>{{ item.parsed?.内功名 || item.fileName }}</strong>
                   <span>{{ item.fileName }}</span>
+                  <small v-if="getRecognizedElementLabel(item.parsed)" class="recognition-element-hint">
+                    元素 {{ getRecognizedElementLabel(item.parsed) }}
+                  </small>
                 </div>
                 <el-tag :type="getRecognitionStatusType(item)" effect="plain">
                   {{ getRecognitionStatusText(item) }}
@@ -402,6 +416,14 @@
                 title="完整错误"
                 :description="item.error"
                 type="error"
+                show-icon
+                :closable="false"
+              />
+              <el-alert
+                v-if="item.needsPresetSelection && !item.saved"
+                title="待选择元素"
+                :description="item.presetSelectionMessage || '该内功存在多个元素，请选择元素后再新增'"
+                type="warning"
                 show-icon
                 :closable="false"
               />
@@ -432,8 +454,9 @@
             <p>{{ editorStatusText }}</p>
           </div>
           <div class="editor-actions">
+            <el-button plain @click="openJsonImportDialog">JSON导入</el-button>
             <el-button plain @click="duplicateSelected">复制</el-button>
-            <el-button v-if="selectedPower" plain type="danger" @click="deleteSelected">删除</el-button>
+            <el-button v-if="selectedPower" class="editor-delete-button" plain type="danger" @click="deleteSelected">删除内功</el-button>
             <button type="button" class="editor-close" @click="editingVisible = false">×</button>
           </div>
         </header>
@@ -706,6 +729,19 @@
       </main>
     </el-drawer>
 
+    <el-dialog v-model="jsonImportDialog.open" title="JSON导入内功" width="620px" append-to-body>
+      <el-input
+        v-model="jsonImportDialog.text"
+        type="textarea"
+        :rows="12"
+        placeholder='粘贴识别原始JSON，例如 {"内功名":"鲸落","元素":"水","属性加成":[{"词条":"气血上限","数值":991}]}'
+      />
+      <template #footer>
+        <el-button @click="jsonImportDialog.open = false">取消</el-button>
+        <el-button type="primary" @click="submitJsonImportDialog">导入为草稿</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog
       v-model="valueEditorVisible"
       title="内功数值编辑"
@@ -771,6 +807,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { ArrowDown, ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
@@ -778,10 +815,13 @@ import internalPowerRecognitionPrompt from '@/assets/prompts/internal-power-reco
 import {
   addInternalPower,
   deleteInternalPower,
+  clearInternalPowerRecognitionHistory,
   importLocalInternalPowers,
   listInternalPowerEntries,
   listInternalPowers,
+  listInternalPowerRecognitionHistory,
   listInternalPowerPresets,
+  markInternalPowerRecognitionHistorySaved,
   recognizeInternalPowerImage,
   updateInternalPower
 } from '@/api/personal/internalPower'
@@ -789,6 +829,8 @@ import { getInternalPowerEntryConversion } from '@/api/personal/internalPowerEnt
 import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
 
 const userStore = useUserStore()
+const route = useRoute()
+const router = useRouter()
 const formRef = ref(null)
 const powers = ref([])
 const quota = ref({ count: 0, maxCount: 20, unlimited: false, isVip: '0', vipExpireTime: null })
@@ -815,6 +857,8 @@ const deleteConfirmSkipForSession = ref(false)
 const deleteConfirmResolve = ref(null)
 const recognitionDialogVisible = ref(false)
 const recognitionHistoryVisible = ref(false)
+const recognitionHistoryLoading = ref(false)
+const recognitionHistoryInitialLoading = ref(false)
 const recognitionFileList = ref([])
 const recognitionSubmitting = ref(false)
 const recognitionItems = ref([])
@@ -823,6 +867,11 @@ const backgroundRecognitionRunning = ref(false)
 const backgroundRecognitionFileUids = ref(new Set())
 const recognitionPasteTarget = ref(null)
 const recognitionObjectUrls = new Set()
+let recognitionHistoryPollTimer = null
+const jsonImportDialog = reactive({
+  open: false,
+  text: ''
+})
 
 const filters = reactive({
   keyword: '',
@@ -837,6 +886,44 @@ const elementOptions = [
   { key: 'fire', label: '火', color: '#d74b37', bg: 'rgba(215, 75, 55, 0.14)' },
   { key: 'earth', label: '土', color: '#8c6a3e', bg: 'rgba(140, 106, 62, 0.16)' }
 ]
+
+const recognizedRarePowerNameMap = {
+  日月两仪: '稀有-日月两仪',
+  '稀有-日月两仪': '稀有-日月两仪',
+  不动明王: '稀有-不动明王',
+  '稀有-不动明王': '稀有-不动明王',
+  绝电惊沙: '稀有-绝电惊沙',
+  '稀有-绝电惊沙': '稀有-绝电惊沙',
+  承影锋烁: '稀有-承影锋烁',
+  '稀有-承影锋烁': '稀有-承影锋烁',
+  灼星贯日: '稀有-灼星贯日',
+  '稀有-灼星贯日': '稀有-灼星贯日'
+}
+
+const recognizedElementAliases = {
+  metal: 'metal',
+  gold: 'metal',
+  jin: 'metal',
+  金: 'metal',
+  wood: 'wood',
+  mu: 'wood',
+  木: 'wood',
+  water: 'water',
+  shui: 'water',
+  水: 'water',
+  fire: 'fire',
+  huo: 'fire',
+  火: 'fire',
+  earth: 'earth',
+  soil: 'earth',
+  tu: 'earth',
+  土: 'earth',
+  mixed: 'mixed',
+  all: 'mixed',
+  金木水火土: 'mixed',
+  五行: 'mixed',
+  全元素: 'mixed'
+}
 
 const rules = {
   name: [{ required: true, message: '内功名字不能为空', trigger: 'blur' }],
@@ -857,12 +944,20 @@ const deleteConfirmSkipKey = computed(() => {
   return `personal-skill:skip-delete-confirm:v1:${userStore.id}`
 })
 const canEditPowerValues = computed(() => false)
-const aiRecognitionCount = computed(() => Number(userStore.aiImageRecognitionCount || 0))
+const aiRecognitionNormalCount = computed(() => Number(userStore.aiImageRecognitionCount || 0))
+const aiRecognitionVipCount = computed(() => Number(userStore.vipAiImageRecognitionCount || 0))
+const aiRecognitionCount = computed(() => aiRecognitionNormalCount.value + aiRecognitionVipCount.value)
 const aiRecognitionUnlimited = computed(() => {
   return (userStore.roles || []).includes('admin') || (userStore.permissions || []).includes('*:*:*')
 })
 const aiRecognitionQuotaValue = computed(() => aiRecognitionUnlimited.value ? '不限' : aiRecognitionCount.value)
-const aiRecognitionQuotaLabel = computed(() => aiRecognitionUnlimited.value ? '管理员不限' : `剩余 ${aiRecognitionCount.value} 次`)
+const aiRecognitionQuotaLabel = computed(() => {
+  if (aiRecognitionUnlimited.value) return '管理员不限'
+  if (aiRecognitionVipCount.value > 0) {
+    return `剩余 ${aiRecognitionCount.value} 次（VIP ${aiRecognitionVipCount.value} / 普通 ${aiRecognitionNormalCount.value}）`
+  }
+  return `剩余 ${aiRecognitionNormalCount.value} 次`
+})
 const recognitionSelectionCostText = computed(() => {
   if (aiRecognitionUnlimited.value) return `已选择 ${recognitionFileList.value.length} 张，管理员识别不扣次数`
   return `已选择 ${recognitionFileList.value.length} 张，成功识别将消耗对应次数`
@@ -872,7 +967,7 @@ const recognitionRecordStats = computed(() => {
   return {
     total: items.length,
     running: items.filter(isRecognitionPending).length,
-    success: items.filter(item => ['saved', 'recognized'].includes(getRecognitionDisplayStatus(item))).length,
+    success: items.filter(item => ['saved', 'recognized', 'needs_preset'].includes(getRecognitionDisplayStatus(item))).length,
     failed: items.filter(item => getRecognitionDisplayStatus(item) === 'failed').length
   }
 })
@@ -885,8 +980,9 @@ const backgroundRecognitionProgressText = computed(() => {
   if (!items.length) return '后台模式已开启：拖入或选择图片后会自动识别。'
   const running = items.filter(isRecognitionPending).length
   const saved = items.filter(item => getRecognitionDisplayStatus(item) === 'saved').length
+  const selection = items.filter(item => getRecognitionDisplayStatus(item) === 'needs_preset').length
   const failed = items.filter(item => getRecognitionDisplayStatus(item) === 'failed').length
-  return `后台进度：共 ${items.length} 张，进行中 ${running} 张，已新增 ${saved} 个，失败 ${failed} 张。`
+  return `后台进度：共 ${items.length} 张，进行中 ${running} 张，已新增 ${saved} 个，待选择 ${selection} 张，失败 ${failed} 张。`
 })
 const canCreateMore = computed(() => quota.value.unlimited || powers.value.length < Number(quota.value.maxCount || 20))
 const limitText = computed(() => quota.value.unlimited ? `${powers.value.length} 个已保存 · 不限上限` : `${powers.value.length}/${quota.value.maxCount || 20} 个已保存`)
@@ -1011,9 +1107,11 @@ onMounted(async () => {
   await loadEntryOptions()
   await loadEntryConversion()
   await loadPowers()
+  consumeSkillRouteAction(route.query.action)
 })
 
 onBeforeUnmount(() => {
+  stopRecognitionHistoryPolling()
   revokeRecognitionObjectUrls()
 })
 
@@ -1022,6 +1120,20 @@ watch(recognitionBackgroundMode, enabled => {
     enqueueBackgroundRecognitionFromUploadItems(recognitionFileList.value)
   }
 })
+
+watch(recognitionHistoryVisible, visible => {
+  if (visible) {
+    void refreshRecognitionHistory()
+    startRecognitionHistoryPolling()
+  } else {
+    stopRecognitionHistoryPolling()
+  }
+})
+
+watch(
+  () => route.query.action,
+  action => consumeSkillRouteAction(action)
+)
 
 async function loadImageDisplayStatus() {
   try {
@@ -1145,6 +1257,65 @@ function openRecognitionDialog() {
 
 function openRecognitionHistory() {
   recognitionHistoryVisible.value = true
+}
+
+function consumeSkillRouteAction(action) {
+  const actionName = Array.isArray(action) ? action[0] : action
+  if (!actionName) return
+
+  nextTick(() => {
+    if (actionName === 'recognize') {
+      openRecognitionDialog()
+    } else if (actionName === 'history') {
+      openRecognitionHistory()
+    } else if (actionName === 'create') {
+      createPower()
+    }
+
+    const nextQuery = { ...route.query }
+    delete nextQuery.action
+    router.replace({ path: route.path, query: nextQuery })
+  })
+}
+
+async function refreshRecognitionHistory(options = {}) {
+  if (recognitionHistoryLoading.value && !options.force) return
+  const showLoading = !options.silent
+  recognitionHistoryLoading.value = true
+  if (showLoading) {
+    recognitionHistoryInitialLoading.value = true
+  }
+  try {
+    const response = await listInternalPowerRecognitionHistory()
+    const serverItems = normalizeRecognitionHistoryItems(response.items || response.data?.items || [])
+    const pendingLocalItems = recognitionItems.value.filter(item => isRecognitionPending(item) && !item.recordId)
+    recognitionItems.value = [...pendingLocalItems, ...serverItems]
+  } catch (error) {
+    if (!options.silent) {
+      ElMessage.error(formatRecognitionError(error, '识别记录加载失败'))
+    }
+  } finally {
+    recognitionHistoryLoading.value = false
+    if (showLoading) {
+      recognitionHistoryInitialLoading.value = false
+    }
+  }
+}
+
+function startRecognitionHistoryPolling() {
+  stopRecognitionHistoryPolling()
+  recognitionHistoryPollTimer = window.setInterval(() => {
+    if (!recognitionHistoryVisible.value) return
+    if (!recognitionItems.value.some(item => isRecognitionPending(item))) return
+    void refreshRecognitionHistory({ silent: true })
+  }, 2500)
+}
+
+function stopRecognitionHistoryPolling() {
+  if (recognitionHistoryPollTimer) {
+    window.clearInterval(recognitionHistoryPollTimer)
+    recognitionHistoryPollTimer = null
+  }
 }
 
 function handleRecognitionFileChange(file, fileList) {
@@ -1274,14 +1445,16 @@ function revokeRecognitionObjectUrls() {
   recognitionObjectUrls.clear()
 }
 
-function clearRecognitionHistory() {
+async function clearRecognitionHistory() {
   if (backgroundRecognitionRunning.value) {
     ElMessage.warning('后台识别仍在进行，完成后再清空记录')
     return
   }
+  await clearInternalPowerRecognitionHistory()
   recognitionItems.value = []
   backgroundRecognitionFileUids.value = new Set()
   revokeRecognitionObjectUrls()
+  ElMessage.success('识别记录已清空')
 }
 
 function shouldWarnEmptyClipboardPaste(target) {
@@ -1383,9 +1556,13 @@ async function recognizeFiles(files = []) {
 
 function applyRecognitionConsumption(initialRecognitionCount, consumedCount, response = {}) {
   if (!aiRecognitionUnlimited.value) {
-    const remainingCount = Number(response.remainingCount ?? response.remainingAiImageRecognitionCount)
-    if (Number.isFinite(remainingCount)) {
-      userStore.aiImageRecognitionCount = Math.max(0, remainingCount)
+    const remainingNormalCount = Number(response.remainingCount ?? response.remainingAiImageRecognitionCount)
+    const remainingVipCount = Number(response.remainingVipAiImageRecognitionCount)
+    if (Number.isFinite(remainingVipCount)) {
+      userStore.vipAiImageRecognitionCount = Math.max(0, remainingVipCount)
+    }
+    if (Number.isFinite(remainingNormalCount)) {
+      userStore.aiImageRecognitionCount = Math.max(0, remainingNormalCount)
       return
     }
     userStore.aiImageRecognitionCount = Math.max(0, Number(initialRecognitionCount || 0) - Number(consumedCount || 0))
@@ -1399,30 +1576,74 @@ function createRecognitionFailureItem(file, error) {
     parsed: {},
     rawText: '',
     error: formatRecognitionError(error, '图片识别请求失败'),
-    presetCandidates: []
+    presetCandidates: [],
+    needsPresetSelection: false,
+    presetSelectionMessage: ''
   }
 }
 
 function normalizeRecognitionItems(items = [], options = {}) {
   return (Array.isArray(items) ? items : []).map((item, index) => {
     const candidates = Array.isArray(item.presetCandidates) ? item.presetCandidates.map(normalizeCatalogItem) : []
+    const parsed = normalizeRecognitionParsed(item.parsed || {}, candidates)
     const success = !!item.success
+    const needsPresetSelection = !!item.needsPresetSelection || (success && candidates.length > 1)
     return {
       clientId: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
+      recordId: item.recordId || item.record_id || null,
       fileName: item.fileName || `图片${index + 1}`,
       imageUrl: item.imageUrl || options.imageUrl || '',
       fileSize: item.fileSize || options.fileSize || 0,
       success,
-      status: item.status || (success ? 'recognized' : 'failed'),
+      status: item.status || (needsPresetSelection ? 'needs_preset' : (success ? 'recognized' : 'failed')),
       background: !!options.background || !!item.background,
-      parsed: item.parsed || {},
-      entries: normalizeRecognitionEntriesForEdit(item.parsed?.属性加成),
+      parsed,
+      entries: normalizeRecognitionEntriesForEdit(parsed?.属性加成),
       rawText: item.rawText || '',
       error: item.error || '',
       presetCandidates: candidates,
-      selectedPresetId: candidates.length === 1 ? candidates[0].presetId : '',
+      selectedPresetId: needsPresetSelection ? '' : (candidates.length === 1 ? candidates[0].presetId : ''),
+      needsPresetSelection,
+      presetSelectionMessage: item.presetSelectionMessage || (needsPresetSelection ? '该内功存在多个元素，请选择元素后再新增' : ''),
       saving: false,
-      saved: false
+      saved: false,
+      savedPowerId: item.savedPowerId || null
+    }
+  })
+}
+
+function normalizeRecognitionHistoryItems(items = []) {
+  return (Array.isArray(items) ? items : []).map((item, index) => {
+    const candidates = Array.isArray(item.presetCandidates) ? item.presetCandidates.map(normalizeCatalogItem) : []
+    const parsed = normalizeRecognitionParsed(item.parsed || {}, candidates)
+    const status = item.status || (item.error ? 'failed' : 'recognized')
+    const saved = status === 'saved' || !!item.savedPowerId
+    const needsPresetSelection = !!item.needsPresetSelection || (status === 'recognized' && !saved && candidates.length > 1)
+    const imageUrl = item.imageBase64
+      ? `data:${item.mimeType || 'image/png'};base64,${item.imageBase64}`
+      : ''
+    return {
+      clientId: `history-${item.recordId || index}`,
+      recordId: item.recordId,
+      fileName: item.fileName || `图片${index + 1}`,
+      imageUrl,
+      fileSize: item.fileSize || 0,
+      success: ['recognized', 'saved'].includes(status) || (!item.error && !!Object.keys(parsed).length),
+      status: saved ? 'saved' : (needsPresetSelection ? 'needs_preset' : status),
+      background: false,
+      parsed,
+      entries: normalizeRecognitionEntriesForEdit(parsed?.属性加成),
+      rawText: item.rawText || '',
+      error: item.error || '',
+      presetCandidates: candidates,
+      selectedPresetId: needsPresetSelection ? '' : (candidates.length === 1 ? candidates[0].presetId : ''),
+      needsPresetSelection,
+      presetSelectionMessage: item.presetSelectionMessage || (needsPresetSelection ? '该内功存在多个元素，请选择元素后再新增' : ''),
+      saving: false,
+      saved,
+      savedPowerId: item.savedPowerId || null,
+      startedAt: item.createTime || '',
+      updatedAt: item.updateTime || item.createTime || ''
     }
   })
 }
@@ -1511,13 +1732,18 @@ async function processRecognitionUploadItem(uploadItem, progressItem, options = 
       clientId: progressItem.clientId,
       imageUrl: normalizedItem.imageUrl || previewUrl,
       background: !!options.background,
-      status: normalizedItem.success ? (options.autoSave ? 'saving' : 'recognized') : 'failed',
+      status: normalizedItem.success
+        ? (normalizedItem.needsPresetSelection ? 'needs_preset' : (options.autoSave ? 'saving' : 'recognized'))
+        : 'failed',
       updatedAt: new Date().toISOString()
     })
     if (!progressItem.success) {
       return
     }
     selectDefaultRecognitionCandidate(progressItem)
+    if (progressItem.needsPresetSelection) {
+      return
+    }
     if (!options.autoSave) {
       return
     }
@@ -1526,6 +1752,7 @@ async function processRecognitionUploadItem(uploadItem, progressItem, options = 
       if (savedPower) {
         progressItem.status = 'saved'
         progressItem.saved = true
+        progressItem.needsPresetSelection = false
         progressItem.error = ''
         progressItem.updatedAt = new Date().toISOString()
       } else {
@@ -1561,10 +1788,11 @@ function updateBackgroundRecognitionRunning() {
     const backgroundItems = recognitionItems.value.filter(item => item.background)
     const savedCount = backgroundItems.filter(item => getRecognitionDisplayStatus(item) === 'saved').length
     const failedCount = backgroundItems.filter(item => getRecognitionDisplayStatus(item) === 'failed').length
-    if (savedCount || failedCount) {
+    const selectionCount = backgroundItems.filter(item => getRecognitionDisplayStatus(item) === 'needs_preset').length
+    if (savedCount || failedCount || selectionCount) {
       ElNotification({
         title: '后台识别进度',
-        message: `当前已新增 ${savedCount} 个内功，失败 ${failedCount} 张`,
+        message: `当前已新增 ${savedCount} 个内功，待选择 ${selectionCount} 张，失败 ${failedCount} 张`,
         type: failedCount ? 'warning' : 'success'
       })
     }
@@ -1576,6 +1804,7 @@ function getRecognitionStatusText(item = {}) {
   const statusTextMap = {
     queued: '等待识别',
     recognizing: '识别中',
+    needs_preset: '待选择',
     saving: '保存中',
     saved: '已新增',
     failed: '失败',
@@ -1588,6 +1817,7 @@ function getRecognitionDisplayStatus(item = {}) {
   const status = String(item.status || '').trim()
   if (item.error || status === 'failed') return 'failed'
   if (item.saved || status === 'saved') return 'saved'
+  if (item.needsPresetSelection || status === 'needs_preset') return 'needs_preset'
   if (status === 'recognized' || (item.success && !item.saving)) return 'recognized'
   if (item.saving || status === 'saving') return 'saving'
   if (status === 'recognizing') return 'recognizing'
@@ -1604,6 +1834,7 @@ function getRecognitionProgressPercent(item = {}) {
   const percentMap = {
     queued: 8,
     recognizing: 45,
+    needs_preset: 100,
     saving: 82,
     recognized: 100,
     saved: 100,
@@ -1616,6 +1847,7 @@ function getRecognitionProgressStatus(item = {}) {
   const status = getRecognitionDisplayStatus(item)
   if (status === 'failed') return 'exception'
   if (status === 'saved' || status === 'recognized') return 'success'
+  if (status === 'needs_preset') return 'warning'
   return undefined
 }
 
@@ -1623,7 +1855,7 @@ function getRecognitionStatusType(item = {}) {
   const status = getRecognitionDisplayStatus(item)
   if (status === 'saved' || status === 'recognized') return 'success'
   if (status === 'queued' || status === 'recognizing') return 'info'
-  if (status === 'saving') return 'warning'
+  if (status === 'saving' || status === 'needs_preset') return 'warning'
   return item.success ? 'success' : 'danger'
 }
 
@@ -1666,7 +1898,81 @@ function stringifyRecognitionErrorData(value) {
   }
 }
 
+function normalizeRecognitionParsed(parsed = {}, candidates = []) {
+  const nextParsed = { ...(parsed || {}) }
+  const powerName = normalizeRecognizedPowerName(nextParsed.内功名 || nextParsed.name)
+  if (powerName) {
+    nextParsed.内功名 = powerName
+  }
+  const elementKey = getRecognizedElementKey(nextParsed)
+  if (!elementKey && candidates.length === 1) {
+    const candidateElementKey = candidates[0]?.elementKey
+    if (candidateElementKey) {
+      nextParsed.元素 = getElementLabel(candidateElementKey)
+    }
+  }
+  return nextParsed
+}
+
+function normalizeRecognizedPowerName(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const cleaned = text
+    .replace(/·试用/g, '')
+    .replace(/・试用/g, '')
+    .replace(/试用/g, '')
+    .trim()
+  return recognizedRarePowerNameMap[cleaned] || cleaned
+}
+
+function getRecognizedElementKey(parsed = {}) {
+  const values = [parsed?.元素, parsed?.五行, parsed?.element]
+  for (const value of values) {
+    const elementKey = normalizeRecognizedElementKey(value)
+    if (elementKey) return elementKey
+  }
+  return ''
+}
+
+function normalizeRecognizedElementKey(value) {
+  const text = String(value || '').trim().toLowerCase()
+  if (!text) return ''
+  return recognizedElementAliases[text.replace(/\s+/g, '')] || ''
+}
+
+function resolveRecognizedPresetCandidates(parsed = {}) {
+  const normalizedParsed = normalizeRecognitionParsed(parsed)
+  const powerName = normalizedParsed.内功名
+  const namedCandidates = powerCatalog.value.filter(item => item.name === powerName)
+  const elementKey = getRecognizedElementKey(normalizedParsed)
+  if (elementKey && namedCandidates.length > 1) {
+    const matchedCandidates = namedCandidates.filter(item => item.elementKey === elementKey)
+    if (matchedCandidates.length === 1) {
+      normalizedParsed.元素 = getElementLabel(elementKey)
+      return {
+        parsed: normalizedParsed,
+        candidates: matchedCandidates,
+        needsPresetSelection: false
+      }
+    }
+  }
+  const resolvedParsed = normalizeRecognitionParsed(normalizedParsed, namedCandidates)
+  return {
+    parsed: resolvedParsed,
+    candidates: namedCandidates,
+    needsPresetSelection: namedCandidates.length > 1
+  }
+}
+
+function getRecognizedElementLabel(parsed = {}) {
+  const elementKey = getRecognizedElementKey(parsed)
+  if (elementKey) return getElementLabel(elementKey)
+  const rawElement = String(parsed?.元素 || parsed?.五行 || parsed?.element || '').trim()
+  return rawElement || ''
+}
+
 function selectDefaultRecognitionCandidate(item) {
+  if (item?.needsPresetSelection) return
   if (!item?.selectedPresetId && item?.presetCandidates?.length) {
     item.selectedPresetId = item.presetCandidates[0].presetId
   }
@@ -1685,6 +1991,72 @@ function importRecognizedPower(item) {
   ElMessage.success(importedLingyun ? '已导入为内功草稿，已勾选灵韵' : '已导入为内功草稿')
 }
 
+function openJsonImportDialog() {
+  jsonImportDialog.text = ''
+  jsonImportDialog.open = true
+}
+
+function submitJsonImportDialog() {
+  let parsed
+  try {
+    parsed = parseJsonImportText(jsonImportDialog.text)
+  } catch (error) {
+    ElMessage.error(formatRecognitionError(error, 'JSON格式不正确'))
+    return
+  }
+  const powerName = normalizeRecognizedPowerName(parsed?.内功名 || parsed?.name)
+  if (!powerName) {
+    ElMessage.error('JSON缺少内功名')
+    return
+  }
+  const resolved = resolveRecognizedPresetCandidates(parsed)
+  const candidates = resolved.candidates
+  if (!candidates.length) {
+    ElMessage.error(`未匹配到启用内功预设：${powerName}`)
+    return
+  }
+  const importItem = {
+    fileName: 'JSON导入结果',
+    success: true,
+    parsed: resolved.parsed,
+    entries: normalizeRecognitionEntriesForEdit(resolved.parsed?.属性加成),
+    rawText: jsonImportDialog.text,
+    presetCandidates: candidates,
+    selectedPresetId: resolved.needsPresetSelection ? '' : candidates[0].presetId,
+    needsPresetSelection: resolved.needsPresetSelection,
+    presetSelectionMessage: resolved.needsPresetSelection ? '该内功存在多个元素，请选择元素后再新增' : ''
+  }
+  if (resolved.needsPresetSelection) {
+    const [recognitionItem] = normalizeRecognitionItems([importItem])
+    recognitionItems.value = [recognitionItem, ...recognitionItems.value]
+    recognitionDialogVisible.value = true
+    jsonImportDialog.open = false
+    ElMessage.warning('JSON已导入识别列表，请先选择元素/预设')
+    return
+  }
+  const nextPower = buildRecognizedPowerDraft(importItem)
+  if (!nextPower) return
+  selectedId.value = ''
+  draft.value = nextPower
+  savedDraftSignature.value = JSON.stringify(draft.value)
+  editingVisible.value = true
+  jsonImportDialog.open = false
+  nextTick(() => formRef.value?.clearValidate())
+  ElMessage.success('JSON已导入为内功草稿')
+}
+
+function parseJsonImportText(text = '') {
+  const trimmed = String(text || '').trim()
+  if (!trimmed) {
+    throw new Error('请先粘贴JSON')
+  }
+  const unfenced = trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+  return JSON.parse(unfenced)
+}
+
 async function saveRecognizedPowerDirectly(item, options = {}) {
   const nextPower = buildRecognizedPowerDraft(item, options)
   if (!nextPower) return null
@@ -1694,6 +2066,12 @@ async function saveRecognizedPowerDirectly(item, options = {}) {
     powers.value.unshift(savedPower)
     updateQuotaCount()
     item.saved = true
+    item.savedPowerId = savedPower.powerId || savedPower.id || null
+    item.needsPresetSelection = false
+    item.presetSelectionMessage = ''
+    if (item.recordId && item.savedPowerId) {
+      await markInternalPowerRecognitionHistorySaved(item.recordId, item.savedPowerId)
+    }
     if (!options.silent) {
       ElMessage.success(`已新增内功「${savedPower.name || '未命名'}」`)
     }
@@ -2817,20 +3195,27 @@ function getSamplePowersForQuota() {
 
 .delete-card {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 22px;
-  height: 22px;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
   border: 0;
   border-radius: 999px;
   background: #ff4d5a;
   color: #ffffff;
-  font-size: 19px;
-  line-height: 20px;
+  font-size: 25px;
+  font-weight: 900;
+  line-height: 30px;
   cursor: pointer;
   display: grid;
   place-items: center;
-  box-shadow: 0 6px 16px rgba(255, 77, 90, 0.22);
+  box-shadow: 0 10px 24px rgba(255, 77, 90, 0.28);
+  z-index: 2;
+}
+
+.delete-card:hover {
+  transform: scale(1.06);
+  box-shadow: 0 14px 30px rgba(255, 77, 90, 0.34);
 }
 
 .card-center {
@@ -3058,6 +3443,12 @@ function getSamplePowersForQuota() {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.editor-delete-button {
+  min-width: 96px;
+  min-height: 38px;
+  font-weight: 900;
 }
 
 .editor-close {
@@ -3897,6 +4288,13 @@ function getSamplePowersForQuota() {
   color: #64748b;
   font-size: 13px;
   font-weight: 800;
+}
+
+.recognition-element-hint {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.4;
 }
 
 .recognition-card header > .el-tag {

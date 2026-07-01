@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -61,9 +62,11 @@ async def test_mimo_request_uses_openai_compatible_image_payload_and_disabled_th
 class FakeDb:
     def __init__(self):
         self.committed = False
+        self.commit_count = 0
 
     async def commit(self):
         self.committed = True
+        self.commit_count += 1
 
 
 class FakeUpload:
@@ -94,15 +97,259 @@ def make_preset(preset_id, name, element_key):
     )
 
 
+class ExpiringHistory:
+    def __init__(self, db, record_id, user_id):
+        self._db = db
+        self._record_id = record_id
+        self._user_id = user_id
+        self._loaded_commit_count = db.commit_count
+
+    @property
+    def record_id(self):
+        if self._db.commit_count > self._loaded_commit_count:
+            raise AssertionError('record_id was read after commit expired the ORM object')
+        return self._record_id
+
+    @property
+    def user_id(self):
+        if self._db.commit_count > self._loaded_commit_count:
+            raise AssertionError('user_id was read after commit expired the ORM object')
+        return self._user_id
+
+
+class ExpiringUser:
+    def __init__(self, db, user_id):
+        self._db = db
+        self._user_id = user_id
+        self._loaded_commit_count = db.commit_count
+        self.ai_image_recognition_count = 2
+        self.vip_ai_image_recognition_count = 0
+        self.is_vip = '0'
+        self.vip_expire_time = None
+        self.sponsored_vip = '0'
+
+    @property
+    def user_id(self):
+        if self._db.commit_count > self._loaded_commit_count:
+            raise AssertionError('user_id was read after commit expired the ORM object')
+        return self._user_id
+
+
+def install_history_fakes(monkeypatch):
+    counter = {'next': 0}
+
+    async def fake_add(db, values):
+        counter['next'] += 1
+        return SimpleNamespace(record_id=counter['next'], user_id=values['user_id'])
+
+    async def fake_update(db, record_id, user_id, values):
+        return None
+
+    async def fake_trim(db, user_id, keep_count=50):
+        return None
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.add', fake_add)
+    monkeypatch.setattr('module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.update', fake_update)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.trim_by_user_id',
+        fake_trim,
+    )
+
+
+@pytest.mark.asyncio
+async def test_recognize_images_keeps_history_ids_before_commit_to_avoid_async_lazy_load(monkeypatch):
+    counter = {'next': 0}
+    updates = []
+
+    async def fake_add(db, values):
+        counter['next'] += 1
+        return ExpiringHistory(db, counter['next'], values['user_id'])
+
+    async def fake_update(db, record_id, user_id, values):
+        updates.append((record_id, user_id, values.get('status')))
+
+    async def fake_trim(db, user_id, keep_count=50):
+        return None
+
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=2,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        return True
+
+    async def fake_presets(db):
+        return [make_preset(1, '贯山月', 'metal')]
+
+    async def fake_recognize_image(image_bytes, mime_type, prompt):
+        return SimpleNamespace(
+            parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
+            raw_text='{}',
+            error='',
+        )
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.add', fake_add)
+    monkeypatch.setattr('module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.update', fake_update)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.trim_by_user_id',
+        fake_trim,
+    )
+    monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
+        fake_presets,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerMimoService.recognize_image',
+        fake_recognize_image,
+    )
+
+    result = await InternalPowerService.recognize_images_services(
+        FakeDb(),
+        make_current_user(),
+        [FakeUpload('ok.png')],
+        'prompt',
+    )
+
+    assert result.result['items'][0]['recordId'] == 1
+    assert updates == [(1, 100, 'recognized')]
+
+
+@pytest.mark.asyncio
+async def test_recognize_images_keeps_user_scalars_before_commit_to_avoid_async_lazy_load(monkeypatch):
+    decrements = []
+
+    async def fake_add(db, values):
+        return SimpleNamespace(record_id=1, user_id=values['user_id'])
+
+    async def fake_update(db, record_id, user_id, values):
+        return None
+
+    async def fake_trim(db, user_id, keep_count=50):
+        return None
+
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {'user_basic_info': ExpiringUser(db, user_id)}
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        decrements.append({'user_id': user_id, 'vip_count': vip_count, 'normal_count': normal_count, 'update_by': update_by})
+        return True
+
+    async def fake_presets(db):
+        return [make_preset(1, '贯山月', 'metal')]
+
+    async def fake_recognize_image(image_bytes, mime_type, prompt):
+        return SimpleNamespace(
+            parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
+            raw_text='{}',
+            error='',
+        )
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.add', fake_add)
+    monkeypatch.setattr('module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.update', fake_update)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.trim_by_user_id',
+        fake_trim,
+    )
+    monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
+        fake_presets,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerMimoService.recognize_image',
+        fake_recognize_image,
+    )
+
+    result = await InternalPowerService.recognize_images_services(
+        FakeDb(),
+        make_current_user(),
+        [FakeUpload('ok.png')],
+        'prompt',
+    )
+
+    assert result.result['items'][0]['success'] is True
+    assert decrements == [{'user_id': 100, 'vip_count': 0, 'normal_count': 1, 'update_by': 'admin'}]
+
+
+@pytest.mark.asyncio
+async def test_recognition_history_marks_stale_recognizing_records_failed(monkeypatch):
+    stale_history = SimpleNamespace(
+        record_id=9,
+        user_id=100,
+        file_name='stale.png',
+        image_base64='',
+        mime_type='image/png',
+        status='recognizing',
+        parsed_json='{}',
+        raw_text='',
+        error='',
+        preset_candidates_json='[]',
+        saved_power_id=None,
+        create_time=datetime(2026, 6, 30, 10, 0, 0),
+        update_time=datetime(2026, 6, 30, 10, 0, 0),
+    )
+    fresh_failed_history = SimpleNamespace(**{**stale_history.__dict__, 'status': 'failed', 'error': '识别任务已中断或超时'})
+    calls = {'list': 0, 'updates': []}
+
+    async def fake_list_by_user_id(db, user_id):
+        calls['list'] += 1
+        return [stale_history] if calls['list'] == 1 else [fresh_failed_history]
+
+    async def fake_update(db, record_id, user_id, values):
+        calls['updates'].append((record_id, user_id, values))
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.list_by_user_id', fake_list_by_user_id)
+    monkeypatch.setattr('module_admin.service.internal_power_service.InternalPowerRecognitionHistoryDao.update', fake_update)
+    monkeypatch.setattr('module_admin.service.internal_power_service.datetime', SimpleNamespace(now=lambda: datetime(2026, 6, 30, 10, 30, 0)))
+
+    db = FakeDb()
+    result = await InternalPowerService.get_recognition_history_services(db, make_current_user())
+
+    assert db.committed is True
+    assert calls['updates'][0][0] == 9
+    assert calls['updates'][0][2]['status'] == 'failed'
+    assert result.items[0].status == 'failed'
+    assert result.items[0].error == '识别任务已中断或超时'
+
+
 @pytest.mark.asyncio
 async def test_recognize_images_deducts_only_successful_images_and_returns_candidates(monkeypatch):
     decrements = []
+    install_history_fakes(monkeypatch)
 
     async def fake_get_user_detail_by_id(db, user_id):
-        return {'user_basic_info': SimpleNamespace(user_id=user_id, ai_image_recognition_count=5)}
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=5,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
 
-    async def fake_decrement_ai_image_recognition_count(db, user_id, count, update_by):
-        decrements.append({'user_id': user_id, 'count': count, 'update_by': update_by})
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        decrements.append(
+            {'user_id': user_id, 'vip_count': vip_count, 'normal_count': normal_count, 'update_by': update_by}
+        )
         return True
 
     async def fake_presets(db):
@@ -126,8 +373,8 @@ async def test_recognize_images_deducts_only_successful_images_and_returns_candi
 
     monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
     monkeypatch.setattr(
-        'module_admin.service.internal_power_service.UserDao.decrement_ai_image_recognition_count',
-        fake_decrement_ai_image_recognition_count,
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
     )
     monkeypatch.setattr(
         'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
@@ -147,23 +394,332 @@ async def test_recognize_images_deducts_only_successful_images_and_returns_candi
     )
 
     assert result.consumed_count == 1
+    assert result.consumed_vip_count == 0
+    assert result.consumed_normal_count == 1
     assert result.remaining_ai_image_recognition_count == 4
     assert db.committed is True
-    assert decrements == [{'user_id': 100, 'count': 1, 'update_by': 'admin'}]
+    assert decrements == [{'user_id': 100, 'vip_count': 0, 'normal_count': 1, 'update_by': 'admin'}]
     assert result.result['items'][0]['success'] is True
+    assert result.result['items'][0]['recordId'] == 1
     assert len(result.result['items'][0]['presetCandidates']) == 2
+    assert result.result['items'][0]['needsPresetSelection'] is True
+    assert result.result['items'][0]['presetSelectionMessage'] == '该内功存在多个元素，请选择元素后再新增'
     assert result.result['items'][1]['success'] is False
+
+
+@pytest.mark.asyncio
+async def test_recognize_images_filters_multi_element_candidates_when_element_is_recognized(monkeypatch):
+    install_history_fakes(monkeypatch)
+
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=5,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        return True
+
+    async def fake_presets(db):
+        return [
+            make_preset(1, '稀有-不动明王', 'wood'),
+            make_preset(2, '稀有-不动明王', 'water'),
+        ]
+
+    async def fake_recognize_image(image_bytes, mime_type, prompt):
+        return SimpleNamespace(
+            parsed={'内功名': '稀有-不动明王', '元素': '水', '属性加成': [{'词条': '气血上限', '数值': 2084}]},
+            raw_text='{}',
+            error='',
+        )
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
+        fake_presets,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerMimoService.recognize_image',
+        fake_recognize_image,
+    )
+
+    result = await InternalPowerService.recognize_images_services(
+        FakeDb(),
+        make_current_user(),
+        [FakeUpload('water.png')],
+        'prompt',
+    )
+
+    item = result.result['items'][0]
+    assert item['success'] is True
+    assert item['needsPresetSelection'] is False
+    assert [candidate['elementKey'] for candidate in item['presetCandidates']] == ['water']
+
+
+@pytest.mark.asyncio
+async def test_recognize_images_normalizes_plain_rare_power_name_and_filters_by_element(monkeypatch):
+    install_history_fakes(monkeypatch)
+
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=5,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        return True
+
+    async def fake_presets(db):
+        return [
+            make_preset(1, '稀有-不动明王', 'wood'),
+            make_preset(2, '稀有-不动明王', 'water'),
+        ]
+
+    async def fake_recognize_image(image_bytes, mime_type, prompt):
+        return SimpleNamespace(
+            parsed={'内功名': '不动明王', '元素': '水', '属性加成': [{'词条': '气血上限', '数值': 2084}]},
+            raw_text='{}',
+            error='',
+        )
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
+        fake_presets,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerMimoService.recognize_image',
+        fake_recognize_image,
+    )
+
+    result = await InternalPowerService.recognize_images_services(
+        FakeDb(),
+        make_current_user(),
+        [FakeUpload('rare-water.png')],
+        'prompt',
+    )
+
+    item = result.result['items'][0]
+    assert item['success'] is True
+    assert item['parsed']['内功名'] == '稀有-不动明王'
+    assert item['needsPresetSelection'] is False
+    assert [candidate['elementKey'] for candidate in item['presetCandidates']] == ['water']
+
+
+@pytest.mark.asyncio
+async def test_recognize_images_normalizes_trial_rare_power_name(monkeypatch):
+    install_history_fakes(monkeypatch)
+
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=5,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        return True
+
+    async def fake_presets(db):
+        return [
+            make_preset(1, '稀有-绝电惊沙', 'metal'),
+            make_preset(2, '稀有-绝电惊沙', 'wood'),
+        ]
+
+    async def fake_recognize_image(image_bytes, mime_type, prompt):
+        return SimpleNamespace(
+            parsed={'内功名': '绝电惊沙·试用', '元素': '金', '属性加成': [{'词条': '会心', '数值': 57}]},
+            raw_text='{}',
+            error='',
+        )
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
+        fake_presets,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerMimoService.recognize_image',
+        fake_recognize_image,
+    )
+
+    result = await InternalPowerService.recognize_images_services(
+        FakeDb(),
+        make_current_user(),
+        [FakeUpload('trial-metal.png')],
+        'prompt',
+    )
+
+    item = result.result['items'][0]
+    assert item['success'] is True
+    assert item['parsed']['内功名'] == '稀有-绝电惊沙'
+    assert item['needsPresetSelection'] is False
+    assert [candidate['elementKey'] for candidate in item['presetCandidates']] == ['metal']
+
+
+@pytest.mark.asyncio
+async def test_recognize_images_keeps_old_json_without_element_when_single_candidate(monkeypatch):
+    install_history_fakes(monkeypatch)
+
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=5,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        return True
+
+    async def fake_presets(db):
+        return [make_preset(1, '贯山月', 'metal')]
+
+    async def fake_recognize_image(image_bytes, mime_type, prompt):
+        return SimpleNamespace(
+            parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
+            raw_text='{}',
+            error='',
+        )
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
+        fake_presets,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerMimoService.recognize_image',
+        fake_recognize_image,
+    )
+
+    result = await InternalPowerService.recognize_images_services(
+        FakeDb(),
+        make_current_user(),
+        [FakeUpload('old-json.png')],
+        'prompt',
+    )
+
+    item = result.result['items'][0]
+    assert item['success'] is True
+    assert item['needsPresetSelection'] is False
+    assert [candidate['elementKey'] for candidate in item['presetCandidates']] == ['metal']
+
+
+@pytest.mark.asyncio
+async def test_recognize_images_keeps_multi_element_candidates_when_element_is_unknown(monkeypatch):
+    install_history_fakes(monkeypatch)
+
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=5,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        return True
+
+    async def fake_presets(db):
+        return [
+            make_preset(1, '稀有-不动明王', 'wood'),
+            make_preset(2, '稀有-不动明王', 'water'),
+        ]
+
+    async def fake_recognize_image(image_bytes, mime_type, prompt):
+        return SimpleNamespace(
+            parsed={'内功名': '稀有-不动明王', '元素': '看不清', '属性加成': [{'词条': '气血上限', '数值': 2084}]},
+            raw_text='{}',
+            error='',
+        )
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
+        fake_presets,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerMimoService.recognize_image',
+        fake_recognize_image,
+    )
+
+    result = await InternalPowerService.recognize_images_services(
+        FakeDb(),
+        make_current_user(),
+        [FakeUpload('unknown.png')],
+        'prompt',
+    )
+
+    item = result.result['items'][0]
+    assert item['success'] is True
+    assert item['needsPresetSelection'] is True
+    assert [candidate['elementKey'] for candidate in item['presetCandidates']] == ['wood', 'water']
 
 
 @pytest.mark.asyncio
 async def test_recognize_images_does_not_deduct_when_all_images_fail(monkeypatch):
     decrements = []
+    install_history_fakes(monkeypatch)
 
     async def fake_get_user_detail_by_id(db, user_id):
-        return {'user_basic_info': SimpleNamespace(user_id=user_id, ai_image_recognition_count=3)}
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=3,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
 
-    async def fake_decrement_ai_image_recognition_count(db, user_id, count, update_by):
-        decrements.append({'user_id': user_id, 'count': count, 'update_by': update_by})
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        decrements.append({'user_id': user_id, 'vip_count': vip_count, 'normal_count': normal_count, 'update_by': update_by})
         return True
 
     async def fake_presets(db):
@@ -174,8 +730,8 @@ async def test_recognize_images_does_not_deduct_when_all_images_fail(monkeypatch
 
     monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
     monkeypatch.setattr(
-        'module_admin.service.internal_power_service.UserDao.decrement_ai_image_recognition_count',
-        fake_decrement_ai_image_recognition_count,
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
     )
     monkeypatch.setattr(
         'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
@@ -197,18 +753,28 @@ async def test_recognize_images_does_not_deduct_when_all_images_fail(monkeypatch
     assert result.consumed_count == 0
     assert result.remaining_ai_image_recognition_count == 3
     assert decrements == []
-    assert db.committed is False
+    assert db.committed is True
 
 
 @pytest.mark.asyncio
 async def test_recognize_images_admin_can_use_without_remaining_count_and_does_not_deduct(monkeypatch):
     decrements = []
+    install_history_fakes(monkeypatch)
 
     async def fake_get_user_detail_by_id(db, user_id):
-        return {'user_basic_info': SimpleNamespace(user_id=user_id, ai_image_recognition_count=0)}
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=0,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
 
-    async def fake_decrement_ai_image_recognition_count(db, user_id, count, update_by):
-        decrements.append({'user_id': user_id, 'count': count, 'update_by': update_by})
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        decrements.append({'user_id': user_id, 'vip_count': vip_count, 'normal_count': normal_count, 'update_by': update_by})
         return True
 
     async def fake_presets(db):
@@ -223,8 +789,8 @@ async def test_recognize_images_admin_can_use_without_remaining_count_and_does_n
 
     monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
     monkeypatch.setattr(
-        'module_admin.service.internal_power_service.UserDao.decrement_ai_image_recognition_count',
-        fake_decrement_ai_image_recognition_count,
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
     )
     monkeypatch.setattr(
         'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
@@ -247,15 +813,26 @@ async def test_recognize_images_admin_can_use_without_remaining_count_and_does_n
     assert result.remaining_ai_image_recognition_count == 0
     assert result.result['items'][0]['success'] is True
     assert decrements == []
-    assert db.committed is False
+    assert db.committed is True
 
 
 @pytest.mark.asyncio
 async def test_recognize_images_marks_success_items_failed_when_atomic_deduct_fails(monkeypatch):
-    async def fake_get_user_detail_by_id(db, user_id):
-        return {'user_basic_info': SimpleNamespace(user_id=user_id, ai_image_recognition_count=1)}
+    install_history_fakes(monkeypatch)
 
-    async def fake_decrement_ai_image_recognition_count(db, user_id, count, update_by):
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=1,
+                vip_ai_image_recognition_count=0,
+                is_vip='0',
+                vip_expire_time=None,
+                sponsored_vip='0',
+            )
+        }
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
         return False
 
     async def fake_presets(db):
@@ -270,8 +847,8 @@ async def test_recognize_images_marks_success_items_failed_when_atomic_deduct_fa
 
     monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
     monkeypatch.setattr(
-        'module_admin.service.internal_power_service.UserDao.decrement_ai_image_recognition_count',
-        fake_decrement_ai_image_recognition_count,
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
     )
     monkeypatch.setattr(
         'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
@@ -295,4 +872,64 @@ async def test_recognize_images_marks_success_items_failed_when_atomic_deduct_fa
     assert result.result['items'][0]['success'] is False
     assert result.result['items'][0]['error'] == 'AI识图次数不足，未扣次'
     assert result.result['items'][0]['presetCandidates'] == []
-    assert db.committed is False
+    assert db.committed is True
+
+
+@pytest.mark.asyncio
+async def test_recognize_images_deducts_vip_count_before_normal_count(monkeypatch):
+    install_history_fakes(monkeypatch)
+    decrements = []
+
+    async def fake_get_user_detail_by_id(db, user_id):
+        return {
+            'user_basic_info': SimpleNamespace(
+                user_id=user_id,
+                ai_image_recognition_count=5,
+                vip_ai_image_recognition_count=1,
+                is_vip='1',
+                vip_expire_time=datetime(2099, 1, 1),
+                sponsored_vip='0',
+            )
+        }
+
+    async def fake_decrement_ai_recognition_counts(db, user_id, vip_count, normal_count, update_by):
+        decrements.append({'vip_count': vip_count, 'normal_count': normal_count})
+        return True
+
+    async def fake_presets(db):
+        return [make_preset(1, '贯山月', 'metal')]
+
+    async def fake_recognize_image(image_bytes, mime_type, prompt):
+        return SimpleNamespace(
+            parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
+            raw_text='{}',
+            error='',
+        )
+
+    monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.UserDao.decrement_ai_recognition_counts',
+        fake_decrement_ai_recognition_counts,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerPresetService.get_personal_enabled_presets_service',
+        fake_presets,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerMimoService.recognize_image',
+        fake_recognize_image,
+    )
+
+    result = await InternalPowerService.recognize_images_services(
+        FakeDb(),
+        make_current_user(),
+        [FakeUpload('one.png'), FakeUpload('two.png')],
+        'prompt',
+    )
+
+    assert result.consumed_count == 2
+    assert result.consumed_vip_count == 1
+    assert result.consumed_normal_count == 1
+    assert result.remaining_vip_ai_image_recognition_count == 0
+    assert result.remaining_ai_image_recognition_count == 4
+    assert decrements == [{'vip_count': 1, 'normal_count': 1}]

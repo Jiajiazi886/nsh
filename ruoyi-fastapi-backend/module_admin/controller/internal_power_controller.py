@@ -13,6 +13,8 @@ from module_admin.entity.vo.internal_power_vo import (
     InternalPowerImportModel,
     InternalPowerListModel,
     InternalPowerModel,
+    InternalPowerRecognitionHistoryListModel,
+    InternalPowerRecognitionSavedModel,
     InternalPowerRecognizeResultModel,
 )
 from module_admin.entity.vo.internal_power_entry_vo import InternalPowerEntryListModel
@@ -125,7 +127,7 @@ async def edit_personal_internal_power(
 
 
 @internal_power_controller.delete(
-    '/{power_id}',
+    '/{power_id:int}',
     summary='删除当前用户内功接口',
     description='用于删除当前登录用户的内功',
     response_model=ResponseBaseModel,
@@ -185,3 +187,59 @@ async def recognize_personal_internal_power_images(
     logger.info(f'内功图片识别完成，消耗{result.consumed_count}次')
 
     return ResponseUtil.success(model_content=result, msg='识别完成')
+
+
+@internal_power_controller.get(
+    '/recognition-history',
+    summary='获取内功图片识别历史接口',
+    description='用于获取当前登录用户最近50条内功图片识别历史',
+    response_model=DynamicResponseModel[InternalPowerRecognitionHistoryListModel],
+)
+async def get_personal_internal_power_recognition_history(
+    request: Request,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    result = await InternalPowerService.get_recognition_history_services(query_db, current_user)
+    logger.info('获取内功图片识别历史成功')
+
+    return ResponseUtil.success(model_content=result)
+
+
+@internal_power_controller.delete(
+    '/recognition-history',
+    summary='清空内功图片识别历史接口',
+    description='用于清空当前登录用户的内功图片识别历史',
+    response_model=ResponseBaseModel,
+)
+@Log(title='内功图片识别历史', business_type=BusinessType.DELETE)
+async def clear_personal_internal_power_recognition_history(
+    request: Request,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    result = await InternalPowerService.clear_recognition_history_services(query_db, current_user)
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
+@internal_power_controller.put(
+    '/recognition-history/{record_id}/saved',
+    summary='标记内功图片识别历史已保存接口',
+    description='用于在识别结果新增内功后回写识别历史状态',
+    response_model=ResponseBaseModel,
+)
+async def mark_personal_internal_power_recognition_history_saved(
+    request: Request,
+    payload: InternalPowerRecognitionSavedModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+    record_id: Annotated[int, Path(description='识别记录ID')],
+) -> Response:
+    result = await InternalPowerService.mark_recognition_history_saved_services(
+        query_db, current_user, record_id, payload
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)

@@ -207,7 +207,7 @@
             min-width="150"
           >
             <template #default="scope">
-              <div class="vip-cell">
+              <div v-if="isGuildMemberRow(scope.row)" class="vip-cell">
                 <el-tag :type="getVipTagType(scope.row)" effect="light">
                   {{ getVipLabel(scope.row) }}
                 </el-tag>
@@ -217,13 +217,36 @@
                   link
                   type="primary"
                   @click="openVipDialog(scope.row)"
-                  v-hasPermi="['system:user:edit']"
+                  v-hasPermi="['system:user:vip:edit']"
                 >设置</el-button>
               </div>
+              <span v-else>--</span>
             </template>
           </el-table-column>
           <el-table-column
-            label="AI识图次数"
+            label="赞助"
+            align="center"
+            key="sponsorEnabled"
+            v-if="canManageVip && columns.sponsorEnabled.visible"
+            min-width="130"
+          >
+            <template #default="scope">
+              <el-switch
+                v-if="isGuildManagerRow(scope.row)"
+                v-model="scope.row.sponsorEnabled"
+                active-value="1"
+                inactive-value="0"
+                active-text="开"
+                inactive-text="关"
+                :disabled="scope.row.userId === 1 || scope.row._sponsorSaving"
+                @change="(value) => handleSponsorChange(scope.row, value)"
+                v-hasPermi="['system:user:sponsor:edit']"
+              />
+              <span v-else>--</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="普通AI识图次数"
             align="center"
             key="aiImageRecognitionCount"
             v-if="canManageVip && columns.aiImageRecognitionCount.visible"
@@ -231,6 +254,7 @@
           >
             <template #default="scope">
               <el-input-number
+                v-if="isGuildMemberRow(scope.row)"
                 v-model="scope.row.aiImageRecognitionCount"
                 :min="0"
                 :precision="0"
@@ -240,8 +264,33 @@
                 class="inline-limit-input"
                 :disabled="scope.row.userId === 1 || scope.row._aiCountSaving"
                 @change="(value, oldValue) => handleInlineAiCountChange(scope.row, value, oldValue)"
-                v-hasPermi="['system:user:edit']"
+                v-hasPermi="['system:user:ai:edit']"
               />
+              <span v-else>--</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="VIP AI识图次数"
+            align="center"
+            key="vipAiImageRecognitionCount"
+            v-if="canManageVip && columns.vipAiImageRecognitionCount.visible"
+            min-width="145"
+          >
+            <template #default="scope">
+              <el-input-number
+                v-if="isGuildMemberRow(scope.row)"
+                v-model="scope.row.vipAiImageRecognitionCount"
+                :min="0"
+                :precision="0"
+                :step="1"
+                controls-position="right"
+                size="small"
+                class="inline-limit-input"
+                :disabled="scope.row.userId === 1 || scope.row._vipAiCountSaving"
+                @change="(value, oldValue) => handleInlineVipAiCountChange(scope.row, value, oldValue)"
+                v-hasPermi="['system:user:ai:edit']"
+              />
+              <span v-else>--</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -462,8 +511,8 @@
           </el-col>
         </el-row>
         <el-row v-if="canManageVip">
-          <el-col :span="12">
-            <el-form-item label="AI识图次数">
+          <el-col :span="8">
+            <el-form-item label="普通AI识图次数">
               <el-input-number
                 v-model="form.aiImageRecognitionCount"
                 :min="0"
@@ -472,7 +521,17 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="8">
+            <el-form-item label="VIP AI识图次数">
+              <el-input-number
+                v-model="form.vipAiImageRecognitionCount"
+                :min="0"
+                :precision="0"
+                controls-position="right"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
             <el-form-item label="最大内功数">
               <el-input-number
                 v-model="form.maxInternalPowerCount"
@@ -616,8 +675,10 @@ import {
   batchInternalPowerLimit,
   changeAiRecognitionCount,
   changeInternalPowerLimit,
+  changeUserSponsor,
   changeUserVip,
   changeUserStatus,
+  changeVipAiRecognitionCount,
   listUser,
   resetUserPwd,
   delUser,
@@ -678,7 +739,9 @@ const columns = ref({
   nickName: { label: "用户昵称", visible: true },
   role: { label: "角色", visible: true },
   isVip: { label: "VIP", visible: true },
-  aiImageRecognitionCount: { label: "AI识图次数", visible: true },
+  sponsorEnabled: { label: "赞助", visible: true },
+  aiImageRecognitionCount: { label: "普通AI识图次数", visible: true },
+  vipAiImageRecognitionCount: { label: "VIP AI识图次数", visible: true },
   maxInternalPowerCount: { label: "最大内功数", visible: true },
   status: { label: "状态", visible: true },
   createTime: { label: "创建时间", visible: true },
@@ -687,7 +750,7 @@ const toolbarColumns = computed(() => {
   if (canManageVip.value) {
     return columns.value;
   }
-  return Object.fromEntries(Object.entries(columns.value).filter(([key]) => !["isVip", "aiImageRecognitionCount", "maxInternalPowerCount"].includes(key)));
+  return Object.fromEntries(Object.entries(columns.value).filter(([key]) => !["isVip", "sponsorEnabled", "aiImageRecognitionCount", "vipAiImageRecognitionCount", "maxInternalPowerCount"].includes(key)));
 });
 
 const data = reactive({
@@ -747,7 +810,12 @@ function getList() {
         ...item,
         isVip: item.isVip || "0",
         isVipEffective: !!item.isVipEffective,
+        sponsorEnabled: item.sponsorEnabled || "0",
+        sponsoredVip: item.sponsoredVip || "0",
+        sponsoredByUserId: item.sponsoredByUserId,
+        effectiveVipType: item.effectiveVipType || "none",
         aiImageRecognitionCount: Number(item.aiImageRecognitionCount || 0),
+        vipAiImageRecognitionCount: Number(item.vipAiImageRecognitionCount || 0),
         maxInternalPowerCount: item.maxInternalPowerCount || 20,
         effectiveInternalPowerLimit: item.effectiveInternalPowerLimit,
       }));
@@ -829,12 +897,23 @@ function handleStatusChange(row) {
       row.status = row.status === "0" ? "1" : "0";
     });
 }
+function getRowRoleKeys(row) {
+  return (row.role || []).map((role) => role?.roleKey).filter(Boolean);
+}
+function isGuildMemberRow(row) {
+  return getRowRoleKeys(row).includes("user");
+}
+function isGuildManagerRow(row) {
+  return getRowRoleKeys(row).includes("common");
+}
 function getVipLabel(row) {
+  if (row.effectiveVipType === "sponsored" || row.sponsoredVip === "1") return "赞助VIP";
   if (row.isVip === "1" && row.isVipEffective) return "VIP有效";
   if (row.isVip === "1" && row.vipExpireTime) return "已过期";
   return "普通";
 }
 function getVipTagType(row) {
+  if (row.effectiveVipType === "sponsored" || row.sponsoredVip === "1") return "success";
   if (row.isVip === "1" && row.isVipEffective) return "warning";
   if (row.isVip === "1" && row.vipExpireTime) return "danger";
   return "info";
@@ -876,6 +955,21 @@ function cancelVip() {
     getList();
   });
 }
+function handleSponsorChange(row, value) {
+  const previousValue = value === "1" ? "0" : "1";
+  row._sponsorSaving = true;
+  changeUserSponsor(row.userId, value)
+    .then(() => {
+      proxy.$modal.msgSuccess(value === "1" ? "赞助已开启" : "赞助已关闭");
+      getList();
+    })
+    .catch(() => {
+      row.sponsorEnabled = previousValue;
+    })
+    .finally(() => {
+      row._sponsorSaving = false;
+    });
+}
 function handleInlineAiCountChange(row, value, oldValue) {
   const nextValue = Math.max(0, Number(value || 0));
   const previousValue = Math.max(0, Number(oldValue ?? row.aiImageRecognitionCount ?? 0));
@@ -894,6 +988,26 @@ function handleInlineAiCountChange(row, value, oldValue) {
     })
     .finally(() => {
       row._aiCountSaving = false;
+    });
+}
+function handleInlineVipAiCountChange(row, value, oldValue) {
+  const nextValue = Math.max(0, Number(value || 0));
+  const previousValue = Math.max(0, Number(oldValue ?? row.vipAiImageRecognitionCount ?? 0));
+  if (nextValue === previousValue) {
+    row.vipAiImageRecognitionCount = nextValue;
+    return;
+  }
+  row.vipAiImageRecognitionCount = nextValue;
+  row._vipAiCountSaving = true;
+  changeVipAiRecognitionCount(row.userId, nextValue)
+    .then(() => {
+      proxy.$modal.msgSuccess("VIP AI识图次数已更新");
+    })
+    .catch(() => {
+      row.vipAiImageRecognitionCount = previousValue;
+    })
+    .finally(() => {
+      row._vipAiCountSaving = false;
     });
 }
 function openBatchLimitDialog() {
@@ -1031,6 +1145,8 @@ function reset() {
     status: "0",
     isVip: "0",
     aiImageRecognitionCount: 0,
+    vipAiImageRecognitionCount: 0,
+    sponsorEnabled: "0",
     maxInternalPowerCount: 20,
     remark: undefined,
     roleIds: [],
@@ -1056,6 +1172,7 @@ function buildUserPayload() {
   if (canManageVip.value) {
     payload.isVip = form.value.isVip === "1" ? "1" : "0";
     payload.aiImageRecognitionCount = Math.max(0, Number(form.value.aiImageRecognitionCount || 0));
+    payload.vipAiImageRecognitionCount = Math.max(0, Number(form.value.vipAiImageRecognitionCount || 0));
     payload.maxInternalPowerCount = Math.max(20, Number(form.value.maxInternalPowerCount || 20));
   }
   return payload;
@@ -1073,6 +1190,7 @@ function handleAdd() {
     form.value.password = initPassword.value;
     form.value.isVip = "0";
     form.value.aiImageRecognitionCount = 0;
+    form.value.vipAiImageRecognitionCount = 0;
     form.value.maxInternalPowerCount = 20;
   });
 }
@@ -1085,6 +1203,7 @@ function handleUpdate(row) {
     form.value.roleIds = response.roleIds;
     form.value.isVip = response.data?.isVip || "0";
     form.value.aiImageRecognitionCount = Number(response.data?.aiImageRecognitionCount || 0);
+    form.value.vipAiImageRecognitionCount = Number(response.data?.vipAiImageRecognitionCount || 0);
     form.value.maxInternalPowerCount = response.data?.maxInternalPowerCount || 20;
     open.value = true;
     title.value = "修改用户";

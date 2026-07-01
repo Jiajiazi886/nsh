@@ -85,3 +85,30 @@ export function recognizeInternalPowerImages(files, prompt = '') {
 export function recognizeInternalPowerImage(file, prompt = '') {
   return recognizeInternalPowerImages([file], prompt)
 }
+
+// 查询内功图片AI识别历史
+export function listInternalPowerRecognitionHistory() {
+  return request({
+    url: '/personal/internal-power/recognition-history',
+    method: 'get'
+  })
+}
+
+// 清空内功图片AI识别历史
+export function clearInternalPowerRecognitionHistory() {
+  return request({
+    url: '/personal/internal-power/recognition-history',
+    method: 'delete'
+  })
+}
+
+// 标记内功图片AI识别历史已保存
+export function markInternalPowerRecognitionHistorySaved(recordId, savedPowerId) {
+  return request({
+    url: `/personal/internal-power/recognition-history/${recordId}/saved`,
+    method: 'put',
+    data: {
+      savedPowerId
+    }
+  })
+}

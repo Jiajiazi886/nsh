@@ -9,6 +9,17 @@ from module_admin.service.internal_power_entry_service import InternalPowerEntry
 from module_admin.service.internal_power_service import InternalPowerService
 
 
+ENTRY_LIMITS = {
+    '攻击': {'limit_text': '33', 'limit_value': 33, 'value_type': 'number'},
+    '力量/气海': {'limit_text': '10', 'limit_value': 10, 'value_type': 'number'},
+    '赛年伤害/治疗提高': {'limit_text': '1.7%', 'limit_value': 1.7, 'value_type': 'percent'},
+}
+
+
+async def fake_entry_limit_map(db):
+    return ENTRY_LIMITS
+
+
 def test_default_internal_power_entries_seed_required_names():
     names = [item['entry_name'] for item in DEFAULT_INTERNAL_POWER_ENTRIES]
 
@@ -27,6 +38,9 @@ async def test_personal_entry_list_returns_enabled_entries_only(monkeypatch):
             entry_name='攻击',
             conversion_percent=None,
             conversion_desc='',
+            limit_text='33',
+            limit_value=33,
+            value_type='number',
             status='0',
             remark='',
             create_time=None,
@@ -37,6 +51,9 @@ async def test_personal_entry_list_returns_enabled_entries_only(monkeypatch):
             entry_name='停用词条',
             conversion_percent=None,
             conversion_desc='',
+            limit_text='',
+            limit_value=None,
+            value_type='number',
             status='1',
             remark='',
             create_time=None,
@@ -60,6 +77,11 @@ async def test_personal_entry_list_returns_enabled_entries_only(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_internal_power_save_rejects_non_builtin_entry(monkeypatch):
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerService._InternalPowerService__get_entry_limit_map',
+        fake_entry_limit_map,
+    )
+
     with pytest.raises(ServiceException):
         await InternalPowerService._InternalPowerService__assert_valid_entries(
             None,
@@ -75,6 +97,9 @@ async def test_personal_entry_list_excludes_lingyun(monkeypatch):
             entry_name='攻击',
             conversion_percent=None,
             conversion_desc='',
+            limit_text='33',
+            limit_value=33,
+            value_type='number',
             status='0',
             remark='',
             create_time=None,
@@ -85,6 +110,9 @@ async def test_personal_entry_list_excludes_lingyun(monkeypatch):
             entry_name='灵韵',
             conversion_percent=None,
             conversion_desc='',
+            limit_text='',
+            limit_value=None,
+            value_type='number',
             status='0',
             remark='',
             create_time=None,
@@ -106,7 +134,12 @@ async def test_personal_entry_list_excludes_lingyun(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_internal_power_entry_value_allows_limit_and_rejects_over_limit():
+async def test_internal_power_entry_value_allows_limit_and_rejects_over_limit(monkeypatch):
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerService._InternalPowerService__get_entry_limit_map',
+        fake_entry_limit_map,
+    )
+
     await InternalPowerService._InternalPowerService__assert_valid_entries(
         None,
         [InternalPowerEntryModel(name='攻击', value='33')],
@@ -120,7 +153,12 @@ async def test_internal_power_entry_value_allows_limit_and_rejects_over_limit():
 
 
 @pytest.mark.asyncio
-async def test_internal_power_percent_entry_value_uses_numeric_percent_limit():
+async def test_internal_power_percent_entry_value_uses_numeric_percent_limit(monkeypatch):
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_service.InternalPowerService._InternalPowerService__get_entry_limit_map',
+        fake_entry_limit_map,
+    )
+
     await InternalPowerService._InternalPowerService__assert_valid_entries(
         None,
         [InternalPowerEntryModel(name='赛年伤害/治疗提高', value='1.7')],
@@ -138,6 +176,7 @@ def test_internal_power_entry_ratio_converts_to_attack_power_and_percent():
         entries=[InternalPowerEntryModel(name='力量/气海', value='8')],
         conversion_values={'力量/气海': 225},
         unit_percent=0.01551,
+        entry_limits=ENTRY_LIMITS,
     )
 
     assert stats.entry_attack_power == 180
@@ -162,6 +201,7 @@ def test_internal_power_model_includes_entry_and_total_bonus_stats():
         power,
         conversion_values={'力量/气海': 225},
         unit_percent=0.01551,
+        entry_limits=ENTRY_LIMITS,
     )
 
     assert model.entry_attack_power == 180

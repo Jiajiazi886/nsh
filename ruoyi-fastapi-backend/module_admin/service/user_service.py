@@ -111,8 +111,19 @@ class UserService:
         """
         判断用户VIP授权是否仍然有效。
         """
+        return UserService.get_effective_vip_type(user) != 'none'
+
+    @staticmethod
+    def get_effective_vip_type(user: Any) -> str:
+        """
+        获取用户有效VIP来源。
+        """
+        if getattr(user, 'sponsored_vip', '0') == '1':
+            return 'sponsored'
         expire_time = getattr(user, 'vip_expire_time', None)
-        return getattr(user, 'is_vip', '0') == '1' and expire_time is not None and expire_time > datetime.now()
+        if getattr(user, 'is_vip', '0') == '1' and expire_time is not None and expire_time > datetime.now():
+            return 'manual'
+        return 'none'
 
     @staticmethod
     def decorate_user_model(
@@ -123,6 +134,7 @@ class UserService:
         """
         is_admin = bool(getattr(user, 'admin', False)) or 'admin' in (roles or [])
         is_effective_vip = UserService.is_effective_vip(user)
+        user.effective_vip_type = UserService.get_effective_vip_type(user)
         user.is_vip_effective = is_effective_vip
         user.effective_internal_power_limit = None if is_admin or is_effective_vip else max(
             20, int(getattr(user, 'max_internal_power_count', 20) or 20)
@@ -135,7 +147,10 @@ class UserService:
             role_keys = [role.get('roleKey') for role in row.get('role', []) if isinstance(role, dict)]
             is_admin = row.get('admin') or 'admin' in role_keys
             expire_time = row.get('vipExpireTime')
-            is_effective_vip = row.get('isVip') == '1' and isinstance(expire_time, datetime) and expire_time > datetime.now()
+            is_sponsored_vip = row.get('sponsoredVip') == '1'
+            is_manual_vip = row.get('isVip') == '1' and isinstance(expire_time, datetime) and expire_time > datetime.now()
+            is_effective_vip = is_sponsored_vip or is_manual_vip
+            row['effectiveVipType'] = 'sponsored' if is_sponsored_vip else 'manual' if is_manual_vip else 'none'
             row['isVipEffective'] = bool(is_effective_vip)
             row['effectiveInternalPowerLimit'] = None if is_admin or is_effective_vip else max(
                 20, int(row.get('maxInternalPowerCount') or 20)
@@ -556,6 +571,41 @@ class UserService:
         )
         await query_db.commit()
         return CrudResponseModel(is_success=True, message='AI识图次数已更新')
+
+    @classmethod
+    async def change_vip_ai_recognition_count_services(
+        cls, query_db: AsyncSession, user_id: int, count: int, update_by: str
+    ) -> CrudResponseModel:
+        """
+        修改单个用户VIP AI识图剩余次数。
+        """
+        if count < 0:
+            raise ServiceException(message='VIP AI识图次数不能小于0')
+        await UserDao.edit_user_dao(
+            query_db,
+            {
+                'user_id': user_id,
+                'vip_ai_image_recognition_count': count,
+                'update_by': update_by,
+                'update_time': datetime.now(),
+            },
+        )
+        await query_db.commit()
+        return CrudResponseModel(is_success=True, message='VIP AI识图次数已更新')
+
+    @classmethod
+    async def change_sponsor_services(
+        cls, query_db: AsyncSession, user_id: int, enabled: str, update_by: str
+    ) -> CrudResponseModel:
+        """
+        修改帮会管理赞助开关，并同步本帮会成员赞助VIP。
+        """
+        if enabled not in {'0', '1'}:
+            raise ServiceException(message='赞助状态参数错误')
+        await UserDao.change_sponsor_enabled(query_db, user_id, enabled, update_by)
+        await UserDao.sync_sponsored_members(query_db, user_id, enabled == '1', update_by)
+        await query_db.commit()
+        return CrudResponseModel(is_success=True, message='赞助状态已更新')
 
     @classmethod
     async def batch_change_internal_power_limit_services(
