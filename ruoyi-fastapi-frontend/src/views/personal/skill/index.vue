@@ -26,9 +26,9 @@
         <small>{{ quotaSummaryText }}</small>
       </article>
       <article class="summary-card">
-        <span>平均加成</span>
-        <strong>{{ averageBonus }}%</strong>
-        <small>后续可接随机生成</small>
+        <span>平均收益</span>
+        <strong>{{ averageBonus }}</strong>
+        <small>按当前面板动态计算</small>
       </article>
       <article class="summary-card">
         <span>词条总数</span>
@@ -113,10 +113,9 @@
           />
           <button class="delete-card" type="button" @click.stop="deletePower(item)">×</button>
           <div class="score-badge">
-            <strong>{{ formatBonus(getPowerScore(item)) }}</strong>
-            <span>基础：{{ formatBonus(getBaseBonus(item)) }}</span>
-            <span>词条：{{ formatBonus(getEntryAttackPercent(item)) }}</span>
-            <span>灵韵：{{ formatBonus(getLingyunBonus(item)) }}</span>
+            <strong>{{ formatBenefit(getPowerBenefit(item).totalGain) }}</strong>
+            <span>基础：{{ formatBenefit(getPowerBenefit(item).baseGain) }}</span>
+            <span>词条：{{ formatBenefit(getPowerBenefit(item).entryGain) }}</span>
           </div>
 
           <div class="card-center">
@@ -129,7 +128,7 @@
               {{ formatElementSequence(item.elements) }}
             </p>
             <div class="entry-pills">
-              <span v-for="entry in item.entries" :key="entry.id">{{ getEntryLabel(entry) }}</span>
+              <span v-for="entry in item.entries" :key="entry.id" :title="getEntryBenefitTitle(entry)">{{ getEntryLabel(entry, item) }}</span>
               <span v-if="!item.entries?.length" class="muted">词条等待后期随机开发</span>
             </div>
           </div>
@@ -231,8 +230,8 @@
             :class="{ failed: getRecognitionDisplayStatus(item) === 'failed', pending: isRecognitionPending(item) }"
           >
             <header>
-              <div class="recognition-card-thumb" :class="{ empty: !item.imageUrl }">
-                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="`${item.fileName}截图`" />
+              <div class="recognition-card-thumb" :class="{ empty: !internalPowerImageVisible || !item.imageUrl }">
+                <img v-if="internalPowerImageVisible && item.imageUrl" :src="item.imageUrl" :alt="`${item.fileName}截图`" />
                 <span v-else>无图</span>
               </div>
               <div>
@@ -360,8 +359,12 @@
             <strong>{{ recognitionRecordStats.running }}</strong>
           </div>
           <div>
-            <span>成功</span>
-            <strong>{{ recognitionRecordStats.success }}</strong>
+            <span>已新增</span>
+            <strong>{{ recognitionRecordStats.saved }}</strong>
+          </div>
+          <div>
+            <span>待入库</span>
+            <strong>{{ recognitionRecordStats.needsPreset }}</strong>
           </div>
           <div>
             <span>失败</span>
@@ -369,8 +372,11 @@
           </div>
         </div>
         <div class="recognition-history-actions">
+          <span v-if="recognitionRecordStats.total" class="recognition-history-loaded">
+            已加载 {{ recognitionRecordStats.loaded }} / {{ recognitionRecordStats.total }}
+          </span>
           <el-button plain icon="Refresh" @click="openRecognitionDialog">继续识别</el-button>
-          <el-button plain type="danger" :disabled="!recognitionItems.length || recognitionHistoryLoading" @click="clearRecognitionHistory">清空记录</el-button>
+          <el-button plain type="danger" :disabled="!recognitionRecordStats.total || recognitionHistoryLoading" @click="clearRecognitionHistory">清空记录</el-button>
         </div>
         <el-empty v-if="!recognitionItems.length" description="暂无识别记录" />
         <div v-else class="recognition-history-list">
@@ -380,8 +386,8 @@
             class="recognition-history-card"
             :class="{ failed: getRecognitionDisplayStatus(item) === 'failed', pending: isRecognitionPending(item) }"
           >
-            <div class="recognition-history-thumb" :class="{ empty: !item.imageUrl }">
-              <img v-if="item.imageUrl" :src="item.imageUrl" :alt="`${item.fileName}截图`" />
+            <div class="recognition-history-thumb" :class="{ empty: !internalPowerImageVisible || !item.imageUrl }">
+              <img v-if="internalPowerImageVisible && item.imageUrl" :src="item.imageUrl" :alt="`${item.fileName}截图`" />
               <span v-else>无图</span>
             </div>
             <div class="recognition-history-main">
@@ -434,6 +440,13 @@
               </details>
             </div>
           </article>
+          <div v-if="recognitionHistoryPager.hasNext" class="recognition-history-more">
+            <el-button
+              plain
+              :loading="recognitionHistoryLoading"
+              @click="loadMoreRecognitionHistory"
+            >查看更多</el-button>
+          </div>
         </div>
       </div>
     </el-drawer>
@@ -654,6 +667,7 @@
                     />
                     <span v-if="isPercentEntry(entry.name)" class="entry-value-suffix">%</span>
                     <small v-if="entry.name">最大数值 {{ getEntryMaxValueText(entry.name) }}</small>
+                    <small v-if="entry.name" class="entry-benefit-text">{{ getEntryBenefitTitle(entry) }}</small>
                   </div>
                   <el-button text type="danger" @click="removeEntry(index)">删除</el-button>
                 </div>
@@ -686,11 +700,10 @@
               <div class="seal">内</div>
               <h2>{{ draft.name || '未命名' }}</h2>
               <p>{{ draft.category }} · {{ draft.categoryTrait || '未设特性' }}</p>
-              <strong>{{ formatBonus(getPowerScore(draft)) }}</strong>
+              <strong>{{ formatBenefit(getPowerBenefit(draft).totalGain) }}</strong>
               <div class="preview-bonus-breakdown">
-                <span>基础 {{ formatBonus(getBaseBonus(draft)) }}</span>
-                <span>词条 {{ formatBonus(getEntryAttackPercent(draft)) }}</span>
-                <span>灵韵 {{ formatBonus(getLingyunBonus(draft)) }}</span>
+                <span>基础 {{ formatBenefit(getPowerBenefit(draft).baseGain) }}</span>
+                <span>词条 {{ formatBenefit(getPowerBenefit(draft).entryGain) }}</span>
               </div>
               <div class="full-elements preview-elements">
                 <span
@@ -703,13 +716,10 @@
                 </span>
               </div>
               <div class="full-entries preview-entries">
-                <span v-if="draft.lingyunEnabled" class="lingyun-entry">
-                  灵韵 {{ formatBonus(getLingyunBonus(draft)) }}
+                <span v-for="entry in draft.entries" :key="entry.id" :title="getEntryBenefitTitle(entry)">
+                  {{ getEntryLabel(entry, draft) }}
                 </span>
-                <span v-for="entry in draft.entries" :key="entry.id">
-                  {{ getEntryLabel(entry) }}
-                </span>
-                <span v-if="!draft.entries.length && !draft.lingyunEnabled" class="muted">词条等待后期随机开发</span>
+                <span v-if="!draft.entries.length" class="muted">词条等待后期随机开发</span>
               </div>
             </div>
             <div class="editor-note-card">
@@ -825,8 +835,18 @@ import {
   recognizeInternalPowerImage,
   updateInternalPower
 } from '@/api/personal/internalPower'
-import { getInternalPowerEntryConversion } from '@/api/personal/internalPowerEntry'
+import { getInternalPowerPanelSetting } from '@/api/personal/internalPowerPanel'
+import { getActiveFormulaVersion } from '@/api/system/formulaDesign'
 import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
+import {
+  calculateEntryBenefit,
+  calculatePowerBenefit,
+  createDefaultPanelSetting,
+  FORMULA_SCOPE_INTERNAL_POWER_PVP,
+  formatBenefitPercent,
+  normalizePanelSetting,
+  setActiveFormulaPackage
+} from '@/utils/internalPowerBenefit'
 
 const userStore = useUserStore()
 const route = useRoute()
@@ -848,6 +868,7 @@ const powerCatalog = ref([])
 const internalPowerImageVisible = ref(true)
 const entryOptions = ref([])
 const entryConversion = ref({ unitPercent: 0, entries: [] })
+const panelSetting = ref(createDefaultPanelSetting())
 const catalogDraft = ref([])
 const baseApi = import.meta.env.VITE_APP_BASE_API
 const deleteConfirmVisible = ref(false)
@@ -859,6 +880,12 @@ const recognitionDialogVisible = ref(false)
 const recognitionHistoryVisible = ref(false)
 const recognitionHistoryLoading = ref(false)
 const recognitionHistoryInitialLoading = ref(false)
+const recognitionHistoryPager = reactive({
+  pageNum: 1,
+  pageSize: 10,
+  total: 0,
+  hasNext: false
+})
 const recognitionFileList = ref([])
 const recognitionSubmitting = ref(false)
 const recognitionItems = ref([])
@@ -964,10 +991,15 @@ const recognitionSelectionCostText = computed(() => {
 })
 const recognitionRecordStats = computed(() => {
   const items = recognitionItems.value
+  const saved = items.filter(item => getRecognitionDisplayStatus(item) === 'saved').length
+  const needsPreset = items.filter(item => getRecognitionDisplayStatus(item) === 'needs_preset').length
   return {
-    total: items.length,
+    total: recognitionHistoryPager.total || items.length,
+    loaded: items.length,
     running: items.filter(isRecognitionPending).length,
-    success: items.filter(item => ['saved', 'recognized', 'needs_preset'].includes(getRecognitionDisplayStatus(item))).length,
+    saved,
+    needsPreset,
+    success: saved,
     failed: items.filter(item => getRecognitionDisplayStatus(item) === 'failed').length
   }
 })
@@ -1066,9 +1098,9 @@ const emptySlots = computed(() => {
 })
 
 const averageBonus = computed(() => {
-  if (!powers.value.length) return '0.0'
-  const total = powers.value.reduce((sum, item) => sum + getPowerScore(item), 0)
-  return (total / powers.value.length).toFixed(1)
+  if (!powers.value.length) return '+0.00000%'
+  const total = powers.value.reduce((sum, item) => sum + getPowerBenefit(item).totalGain, 0)
+  return formatBenefit(total / powers.value.length)
 })
 
 const totalEntries = computed(() => powers.value.reduce((sum, item) => sum + (item.entries?.length || 0), 0))
@@ -1103,9 +1135,10 @@ const elementSummaryText = computed(() => {
 
 onMounted(async () => {
   await loadImageDisplayStatus()
+  await loadActiveFormulaPackage()
   await loadPowerCatalog()
   await loadEntryOptions()
-  await loadEntryConversion()
+  await loadPanelSetting()
   await loadPowers()
   consumeSkillRouteAction(route.query.action)
 })
@@ -1123,7 +1156,7 @@ watch(recognitionBackgroundMode, enabled => {
 
 watch(recognitionHistoryVisible, visible => {
   if (visible) {
-    void refreshRecognitionHistory()
+    void refreshRecognitionHistory({ force: true, reset: true })
     startRecognitionHistoryPolling()
   } else {
     stopRecognitionHistoryPolling()
@@ -1141,6 +1174,17 @@ async function loadImageDisplayStatus() {
     internalPowerImageVisible.value = response.data?.enabled !== false
   } catch {
     internalPowerImageVisible.value = true
+  }
+}
+
+async function loadActiveFormulaPackage() {
+  try {
+    const response = await getActiveFormulaVersion(FORMULA_SCOPE_INTERNAL_POWER_PVP)
+    setActiveFormulaPackage(response.data?.formulaPackage || null)
+  } catch (error) {
+    setActiveFormulaPackage(null)
+    ElMessage.warning('公式配置加载失败，已使用内置公式计算收益')
+    console.warn('公式配置加载失败，已使用内置公式计算收益', error)
   }
 }
 
@@ -1165,15 +1209,17 @@ async function loadEntryOptions() {
 }
 
 async function loadEntryConversion() {
+  // 旧接口保留给历史菜单缓存，当前收益由面板设置 + Excel 公式引擎计算。
+  entryConversion.value = { unitPercent: 0, entries: [] }
+}
+
+async function loadPanelSetting() {
   try {
-    const response = await getInternalPowerEntryConversion()
-    entryConversion.value = {
-      unitPercent: Number(response.unitPercent || 0),
-      entries: (response.entries || []).map(normalizeEntryConversion)
-    }
+    const response = await getInternalPowerPanelSetting()
+    panelSetting.value = normalizePanelSetting(response.data || response)
   } catch {
-    entryConversion.value = { unitPercent: 0, entries: [] }
-    ElMessage.error('内功词条换算配置加载失败')
+    panelSetting.value = createDefaultPanelSetting()
+    console.warn('内功面板设置加载失败，已使用默认面板计算收益')
   }
 }
 
@@ -1256,7 +1302,11 @@ function openRecognitionDialog() {
 }
 
 function openRecognitionHistory() {
+  const wasVisible = recognitionHistoryVisible.value
   recognitionHistoryVisible.value = true
+  if (wasVisible) {
+    void refreshRecognitionHistory({ force: true, reset: true })
+  }
 }
 
 function consumeSkillRouteAction(action) {
@@ -1278,18 +1328,53 @@ function consumeSkillRouteAction(action) {
   })
 }
 
+function getRecognitionHistoryPayload(response = {}) {
+  return response.data && Array.isArray(response.data.items) ? response.data : response
+}
+
+function updateRecognitionHistoryPager(payload = {}, requestedPage = 1) {
+  recognitionHistoryPager.pageNum = Number(payload.pageNum || requestedPage || 1)
+  recognitionHistoryPager.pageSize = Number(payload.pageSize || recognitionHistoryPager.pageSize || 10)
+  recognitionHistoryPager.total = Number(payload.total ?? 0)
+  recognitionHistoryPager.hasNext = !!payload.hasNext
+}
+
+function mergeRecognitionHistoryItems(currentItems = [], nextItems = []) {
+  const merged = []
+  const seen = new Set()
+  ;[...currentItems, ...nextItems].forEach(item => {
+    const key = item.recordId ? `record-${item.recordId}` : `client-${item.clientId}`
+    if (seen.has(key)) return
+    seen.add(key)
+    merged.push(item)
+  })
+  return merged
+}
+
 async function refreshRecognitionHistory(options = {}) {
   if (recognitionHistoryLoading.value && !options.force) return
+  const requestedPage = Number(options.pageNum || (options.append ? recognitionHistoryPager.pageNum + 1 : 1))
   const showLoading = !options.silent
   recognitionHistoryLoading.value = true
   if (showLoading) {
     recognitionHistoryInitialLoading.value = true
   }
   try {
-    const response = await listInternalPowerRecognitionHistory()
-    const serverItems = normalizeRecognitionHistoryItems(response.items || response.data?.items || [])
+    const response = await listInternalPowerRecognitionHistory({
+      pageNum: requestedPage,
+      pageSize: recognitionHistoryPager.pageSize
+    })
+    const payload = getRecognitionHistoryPayload(response)
+    const serverItems = normalizeRecognitionHistoryItems(payload.items || [])
     const pendingLocalItems = recognitionItems.value.filter(item => isRecognitionPending(item) && !item.recordId)
-    recognitionItems.value = [...pendingLocalItems, ...serverItems]
+    const existingServerItems = options.append
+      ? recognitionItems.value.filter(item => item.recordId)
+      : []
+    recognitionItems.value = [
+      ...pendingLocalItems,
+      ...mergeRecognitionHistoryItems(existingServerItems, serverItems)
+    ]
+    updateRecognitionHistoryPager(payload, requestedPage)
   } catch (error) {
     if (!options.silent) {
       ElMessage.error(formatRecognitionError(error, '识别记录加载失败'))
@@ -1300,6 +1385,11 @@ async function refreshRecognitionHistory(options = {}) {
       recognitionHistoryInitialLoading.value = false
     }
   }
+}
+
+function loadMoreRecognitionHistory() {
+  if (!recognitionHistoryPager.hasNext || recognitionHistoryLoading.value) return
+  void refreshRecognitionHistory({ append: true })
 }
 
 function startRecognitionHistoryPolling() {
@@ -1452,6 +1542,7 @@ async function clearRecognitionHistory() {
   }
   await clearInternalPowerRecognitionHistory()
   recognitionItems.value = []
+  updateRecognitionHistoryPager({ total: 0, pageNum: 1, pageSize: recognitionHistoryPager.pageSize, hasNext: false }, 1)
   backgroundRecognitionFileUids.value = new Set()
   revokeRecognitionObjectUrls()
   ElMessage.success('识别记录已清空')
@@ -1619,7 +1710,7 @@ function normalizeRecognitionHistoryItems(items = []) {
     const status = item.status || (item.error ? 'failed' : 'recognized')
     const saved = status === 'saved' || !!item.savedPowerId
     const needsPresetSelection = !!item.needsPresetSelection || (status === 'recognized' && !saved && candidates.length > 1)
-    const imageUrl = item.imageBase64
+    const imageUrl = internalPowerImageVisible.value && item.imageBase64
       ? `data:${item.mimeType || 'image/png'};base64,${item.imageBase64}`
       : ''
     return {
@@ -2558,9 +2649,18 @@ function formatBonus(value) {
   return `+${Number(value || 0).toFixed(5)}%`
 }
 
-function getEntryLabel(entry = {}) {
+function formatBenefit(value) {
+  return formatBenefitPercent(value, 5)
+}
+
+function getEntryLabel(entry = {}, power = null) {
   const name = String(entry.name || '').trim() || '随机词条'
-  return name
+  const option = getEntryOption(name)
+  const valueText = entry.value !== undefined && entry.value !== null && entry.value !== ''
+    ? ` ${formatEntryValue(entry.value, option || {})}`
+    : ''
+  const benefitText = power ? ` · ${formatBenefit(getSingleEntryBenefit(entry))}` : ''
+  return `${name}${valueText}${benefitText}`
 }
 
 function formatEntryOptionLabel(entry = {}) {
@@ -2573,10 +2673,7 @@ function getBaseBonus(power = {}) {
 }
 
 function getEntryAttackPercent(power = {}) {
-  if (!(draft.value && power === draft.value) && power.entryAttackPercent !== undefined && power.entryAttackPercent !== null) {
-    return Number(power.entryAttackPercent || 0)
-  }
-  return calculatePowerEntryStats(power).entryAttackPercent
+  return roundTo(getPowerBenefit(power).entryGain * 100, 5)
 }
 
 function getLingyunBonus(power = {}) {
@@ -2586,27 +2683,32 @@ function getLingyunBonus(power = {}) {
 }
 
 function calculatePowerEntryStats(power = {}) {
-  return (power.entries || []).reduce((total, entry) => {
-    const attackPower = calculateEntryAttackPower(entry)
-    const attackPercent = roundTo(attackPower * Number(entryConversion.value.unitPercent || 0), 5)
-    return {
-      entryAttackPower: roundTo(total.entryAttackPower + attackPower, 5),
-      entryAttackPercent: roundTo(total.entryAttackPercent + attackPercent, 5)
-    }
-  }, { entryAttackPower: 0, entryAttackPercent: 0 })
+  return {
+    entryAttackPower: 0,
+    entryAttackPercent: getEntryAttackPercent(power)
+  }
 }
 
 function calculateEntryAttackPower(entry = {}) {
-  const option = getEntryOption(entry.name)
-  const conversion = getEntryConversion(entry.name)
-  const value = parseEntryValue(entry.value)
-  const limitValue = Number(option?.limitValue || 0)
-  if (!option || !conversion || value === null || limitValue <= 0 || value < 0 || value > limitValue) return 0
-  return roundTo(value / limitValue * Number(conversion.attackPower || 0), 5)
+  return roundTo(getSingleEntryBenefit(entry) * 100, 5)
 }
 
 function calculateEntryAttackPercent(entry = {}) {
-  return roundTo(calculateEntryAttackPower(entry) * Number(entryConversion.value.unitPercent || 0), 5)
+  return roundTo(getSingleEntryBenefit(entry) * 100, 5)
+}
+
+function getPowerBenefit(power = {}) {
+  return calculatePowerBenefit(power, panelSetting.value)
+}
+
+function getSingleEntryBenefit(entry = {}) {
+  return calculateEntryBenefit(entry, panelSetting.value).gain
+}
+
+function getEntryBenefitTitle(entry = {}) {
+  const benefit = calculateEntryBenefit(entry, panelSetting.value)
+  const note = benefit.note ? ` · ${benefit.note}` : ''
+  return `收益 ${formatBenefit(benefit.gain)}${note}`
 }
 
 function getEntryOption(name) {
@@ -2721,13 +2823,7 @@ function formatElementCounts(elements = {}) {
 }
 
 function getPowerScore(power = {}) {
-  if (draft.value && power === draft.value) {
-    return roundTo(getBaseBonus(power) + getEntryAttackPercent(power) + getLingyunBonus(power), 5)
-  }
-  if (power.totalBonusPercent !== undefined && power.totalBonusPercent !== null) {
-    return Number(power.totalBonusPercent || 0)
-  }
-  return roundTo(getBaseBonus(power) + getEntryAttackPercent(power) + getLingyunBonus(power), 5)
+  return roundTo(getPowerBenefit(power).totalGain * 100, 5)
 }
 
 function getCatalogByName(name) {
@@ -3874,6 +3970,10 @@ function getSamplePowersForQuota() {
   font-weight: 800;
 }
 
+.entry-value-control .entry-benefit-text {
+  color: #256f4a;
+}
+
 .entry-value-suffix {
   color: #64748b;
   font-size: 12px;
@@ -4463,13 +4563,27 @@ function getSamplePowersForQuota() {
 
 .recognition-history-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.recognition-history-loaded {
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .recognition-history-list {
   display: grid;
   gap: 12px;
+}
+
+.recognition-history-more {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 2px;
 }
 
 .recognition-history-card {

@@ -415,6 +415,7 @@ class UserDao:
         if enabled:
             member_user_ids = select(GuildMember.member_user_id).where(
                 GuildMember.guild_id == sponsor_user_id,
+                GuildMember.is_active == '1',
                 GuildMember.member_user_id > 0,
             )
             await db.execute(

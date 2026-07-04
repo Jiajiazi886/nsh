@@ -11,6 +11,7 @@ INTERNAL_POWER_ENTRY_TABLE = 'system_internal_power_entry'
 SYSTEM_INTERNAL_POWER_PRESET_TABLE = 'system_internal_power_preset'
 PERSONAL_INTERNAL_POWER_TABLE = 'personal_internal_power'
 SYS_USER_TABLE = 'sys_user'
+DAMAGE_FORMULA_VERSION_TABLE = 'system_damage_formula_version'
 INTERNAL_POWER_ENTRY_LIMIT_COLUMN_SQL = {
     'mysql': {
         'limit_text': (
@@ -142,6 +143,122 @@ SYS_USER_VIP_SPONSOR_PERMISSION_SQL = [
     """,
 ]
 
+INTERNAL_POWER_PANEL_SETTING_MENU_SQL = [
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+      is_frame, is_cache, menu_type, visible, status, perms, icon,
+      create_by, create_time, update_by, update_time, remark
+    ) VALUES (
+      3115, '面板设置', 3000, 7, 'internal-power-panel', 'personal/internalPowerPanel/index', '',
+      'PersonalInternalPowerPanel', 1, 0, 'C', '0', '0', 'personal:internal-power-panel:list',
+      'chart', 'admin', NOW(), '', NULL, '个人内功PVP收益面板设置菜单'
+    )
+    ON DUPLICATE KEY UPDATE
+      menu_name = VALUES(menu_name),
+      parent_id = VALUES(parent_id),
+      order_num = VALUES(order_num),
+      path = VALUES(path),
+      component = VALUES(component),
+      route_name = VALUES(route_name),
+      menu_type = VALUES(menu_type),
+      visible = VALUES(visible),
+      status = VALUES(status),
+      perms = VALUES(perms),
+      icon = VALUES(icon),
+      update_by = 'admin',
+      update_time = NOW(),
+      remark = VALUES(remark)
+    """,
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+      is_frame, is_cache, menu_type, visible, status, perms, icon,
+      create_by, create_time, update_by, update_time, remark
+    ) VALUES (
+      3116, '面板设置保存', 3115, 1, '#', '', '', '', 1, 0, 'F', '0', '0',
+      'personal:internal-power-panel:edit', '#', 'admin', NOW(), '', NULL, ''
+    )
+    ON DUPLICATE KEY UPDATE
+      menu_name = VALUES(menu_name),
+      parent_id = VALUES(parent_id),
+      perms = VALUES(perms),
+      update_by = 'admin',
+      update_time = NOW(),
+      remark = VALUES(remark)
+    """,
+    """
+    INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+      (1, 3115), (1, 3116),
+      (2, 3115), (2, 3116)
+    """,
+]
+
+FORMULA_DESIGN_MENU_SQL = [
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+      is_frame, is_cache, menu_type, visible, status, perms, icon,
+      create_by, create_time, update_by, update_time, remark
+    ) VALUES (
+      3140, '公式设计', 1, 13, 'formulaDesign', 'system/formulaDesign/index', '',
+      'SystemFormulaDesign', 1, 0, 'C', '0', '0', 'system:formula-design:list',
+      'edit', 'admin', NOW(), '', NULL, '系统内功PVP收益公式设计菜单'
+    )
+    ON DUPLICATE KEY UPDATE
+      menu_name = VALUES(menu_name),
+      parent_id = VALUES(parent_id),
+      order_num = VALUES(order_num),
+      path = VALUES(path),
+      component = VALUES(component),
+      route_name = VALUES(route_name),
+      menu_type = VALUES(menu_type),
+      visible = VALUES(visible),
+      status = VALUES(status),
+      perms = VALUES(perms),
+      icon = VALUES(icon),
+      update_by = 'admin',
+      update_time = NOW(),
+      remark = VALUES(remark)
+    """,
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+      is_frame, is_cache, menu_type, visible, status, perms, icon,
+      create_by, create_time, update_by, update_time, remark
+    ) VALUES
+      (3141, '公式版本查询', 3140, 1, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:formula-design:query', '#', 'admin', NOW(), '', NULL, ''),
+      (3142, '公式版本新增', 3140, 2, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:formula-design:add', '#', 'admin', NOW(), '', NULL, ''),
+      (3143, '公式版本修改', 3140, 3, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:formula-design:edit', '#', 'admin', NOW(), '', NULL, ''),
+      (3144, '公式版本发布', 3140, 4, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:formula-design:publish', '#', 'admin', NOW(), '', NULL, '')
+    ON DUPLICATE KEY UPDATE
+      menu_name = VALUES(menu_name),
+      parent_id = VALUES(parent_id),
+      perms = VALUES(perms),
+      update_by = 'admin',
+      update_time = NOW(),
+      remark = VALUES(remark)
+    """,
+    """
+    INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+      (1, 3140), (1, 3141), (1, 3142), (1, 3143), (1, 3144)
+    """,
+]
+
+DAMAGE_FORMULA_VERSION_COLUMN_SQL = {
+    'mysql': {
+        'formula_package_json': (
+            "ALTER TABLE system_damage_formula_version "
+            "MODIFY COLUMN formula_package_json LONGTEXT NOT NULL COMMENT '公式包JSON'"
+        ),
+    },
+    'postgresql': {},
+}
+
 INTERNAL_POWER_ENTRY_LIMIT_BACKFILL_SQL = """
 UPDATE system_internal_power_entry
 SET
@@ -228,6 +345,16 @@ def _get_table_columns(sync_conn: Connection, table_name: str) -> set[str]:
     return {column['name'] for column in inspector.get_columns(table_name)}
 
 
+def _get_table_column_info(sync_conn: Connection, table_name: str, column_name: str) -> dict | None:
+    inspector = inspect(sync_conn)
+    if not inspector.has_table(table_name):
+        return None
+    for column in inspector.get_columns(table_name):
+        if column['name'] == column_name:
+            return column
+    return None
+
+
 async def ensure_internal_power_entry_limit_columns() -> None:
     """
     补齐系统内功词条上限字段。
@@ -297,6 +424,49 @@ async def ensure_sys_user_vip_sponsor_permission_menus() -> None:
             await conn.execute(text(sql))
 
 
+async def ensure_internal_power_panel_setting_menu() -> None:
+    """
+    补齐个人内功PVP收益面板设置菜单，并迁移旧词条换算菜单入口。
+    """
+    async with async_engine.begin() as conn:
+        for sql in INTERNAL_POWER_PANEL_SETTING_MENU_SQL:
+            await conn.execute(text(sql))
+
+
+async def ensure_damage_formula_version_schema() -> None:
+    """
+    补齐公式版本表字段容量，兼容已部署库升级。
+
+    完整公式包包含工作簿数据，MySQL TEXT 容量不够；Base.metadata.create_all 不会修改已有列。
+    """
+    ddl_map = DAMAGE_FORMULA_VERSION_COLUMN_SQL.get(DataBaseConfig.db_type)
+    if ddl_map is None:
+        return
+
+    async with async_engine.begin() as conn:
+        column_info = await conn.run_sync(
+            _get_table_column_info,
+            DAMAGE_FORMULA_VERSION_TABLE,
+            'formula_package_json',
+        )
+        if not column_info:
+            return
+        if DataBaseConfig.db_type == 'mysql':
+            column_type = str(column_info.get('type', '')).lower()
+            if column_type != 'longtext':
+                await conn.execute(text(ddl_map['formula_package_json']))
+                logger.info(f'已升级{DAMAGE_FORMULA_VERSION_TABLE}.formula_package_json字段为LONGTEXT')
+
+
+async def ensure_formula_design_menu() -> None:
+    """
+    补齐系统管理下的公式设计菜单。
+    """
+    async with async_engine.begin() as conn:
+        for sql in FORMULA_DESIGN_MENU_SQL:
+            await conn.execute(text(sql))
+
+
 async def init_create_table() -> None:
     """
     应用启动时初始化数据库连接
@@ -310,6 +480,9 @@ async def init_create_table() -> None:
     await ensure_internal_power_lingyun_columns()
     await ensure_sys_user_vip_sponsor_columns()
     await ensure_sys_user_vip_sponsor_permission_menus()
+    await ensure_internal_power_panel_setting_menu()
+    await ensure_damage_formula_version_schema()
+    await ensure_formula_design_menu()
     logger.info('✅️ 数据库连接成功')
 
 

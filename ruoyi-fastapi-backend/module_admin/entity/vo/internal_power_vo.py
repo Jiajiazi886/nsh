@@ -105,6 +105,10 @@ class InternalPowerRecognitionHistoryListModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     items: list[InternalPowerRecognitionHistoryItemModel] = Field(default_factory=list, description='识别记录列表')
+    total: int = Field(default=0, description='总记录数')
+    page_num: int = Field(default=1, description='当前页码')
+    page_size: int = Field(default=10, description='每页记录数')
+    has_next: bool = Field(default=False, description='是否有下一页')
 
 
 class InternalPowerRecognitionSavedModel(BaseModel):

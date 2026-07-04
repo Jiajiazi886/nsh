@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from module_admin.dao.user_dao import UserDao
 from module_admin.service.user_service import UserService
 
 
@@ -47,3 +48,20 @@ async def test_change_sponsor_updates_switch_and_syncs_members(monkeypatch):
     assert result.is_success is True
     assert db.committed is True
     assert calls == [('switch', 200, '1', 'admin'), ('sync', 200, True, 'admin')]
+
+
+@pytest.mark.asyncio
+async def test_sync_sponsored_members_only_targets_active_members():
+    class CaptureDb:
+        def __init__(self):
+            self.statements = []
+
+        async def execute(self, statement):
+            self.statements.append(str(statement))
+
+    db = CaptureDb()
+    await UserDao.sync_sponsored_members(db, 200, True, 'admin')
+
+    combined_sql = '\n'.join(db.statements)
+    assert 'guild_member.is_active' in combined_sql
+    assert 'guild_member.member_user_id >' in combined_sql

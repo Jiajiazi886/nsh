@@ -104,8 +104,8 @@
                 <strong>{{ item.fileName || '剪贴板图片' }}</strong>
                 <span>{{ formatDateTime(item.updateTime || item.createTime) }}</span>
               </div>
-              <el-tag :type="recognitionStatusTagType(item.status)" effect="light">
-                {{ recognitionStatusLabel(item.status) }}
+              <el-tag :type="recognitionStatusTagType(item)" effect="light">
+                {{ recognitionStatusLabel(item) }}
               </el-tag>
             </div>
           </div>
@@ -647,7 +647,7 @@ const recognitionSummaryText = computed(() => {
   const failed = recognitionHistory.value.filter(item => item.status === 'failed').length
   if (failed) return `${failed} 条失败需查看`
   const saved = recognitionHistory.value.filter(item => item.savedPowerId).length
-  return saved ? `${saved} 条已新增` : '最近50条'
+  return saved ? `${saved} 条已新增` : '最近10条'
 })
 
 const scheduleLabel = computed(() => {
@@ -685,7 +685,7 @@ async function fetchMemberCultivationData() {
   try {
     const [powerResult, historyResult] = await Promise.allSettled([
       listInternalPowers(),
-      listInternalPowerRecognitionHistory()
+      listInternalPowerRecognitionHistory({ pageNum: 1, pageSize: 10 })
     ])
 
     if (powerResult.status === 'fulfilled') {
@@ -857,22 +857,34 @@ function normalizeMemberPower(power = {}) {
   }
 }
 
-function recognitionStatusLabel(status) {
-  return {
-    recognizing: '识别中',
-    recognized: '已识别',
-    saved: '已新增',
-    failed: '失败'
-  }[String(status || '')] || '未记录'
+function getRecognitionDashboardStatus(item = {}) {
+  const status = String(item.status || '')
+  if (status === 'failed') return 'failed'
+  if (status === 'saved' || item.savedPowerId) return 'saved'
+  if (item.needsPresetSelection) return 'needs_preset'
+  return status || 'unknown'
 }
 
-function recognitionStatusTagType(status) {
+function recognitionStatusLabel(item) {
+  const status = getRecognitionDashboardStatus(item)
+  return {
+    recognizing: '识别中',
+    recognized: '待入库',
+    needs_preset: '待入库',
+    saved: '已新增',
+    failed: '失败'
+  }[status] || '未记录'
+}
+
+function recognitionStatusTagType(item) {
+  const status = getRecognitionDashboardStatus(item)
   return {
     recognizing: 'warning',
-    recognized: 'success',
+    recognized: 'warning',
+    needs_preset: 'warning',
     saved: 'success',
     failed: 'danger'
-  }[String(status || '')] || 'info'
+  }[status] || 'info'
 }
 
 function normalizeDate(value) {

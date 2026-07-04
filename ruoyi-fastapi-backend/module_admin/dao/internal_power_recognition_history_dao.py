@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from common.vo import PageModel
 from module_admin.entity.do.internal_power_do import PersonalInternalPowerRecognitionHistory
 
 
@@ -15,17 +16,44 @@ class InternalPowerRecognitionHistoryDao:
     MAX_HISTORY_COUNT = 50
 
     @classmethod
-    async def list_by_user_id(cls, db: AsyncSession, user_id: int) -> list[PersonalInternalPowerRecognitionHistory]:
-        result = await db.execute(
-            select(PersonalInternalPowerRecognitionHistory)
+    async def list_by_user_id(
+        cls, db: AsyncSession, user_id: int, page_num: int = 1, page_size: int = 10
+    ) -> PageModel:
+        page_num = max(1, int(page_num or 1))
+        page_size = min(10, max(1, int(page_size or 10)))
+        total_result = await db.execute(
+            select(func.count()).select_from(PersonalInternalPowerRecognitionHistory).where(
+                PersonalInternalPowerRecognitionHistory.user_id == user_id
+            )
+        )
+        total = min(int(total_result.scalar() or 0), cls.MAX_HISTORY_COUNT)
+        latest_ids = (
+            select(PersonalInternalPowerRecognitionHistory.record_id)
             .where(PersonalInternalPowerRecognitionHistory.user_id == user_id)
             .order_by(
                 PersonalInternalPowerRecognitionHistory.create_time.desc(),
                 PersonalInternalPowerRecognitionHistory.record_id.desc(),
             )
             .limit(cls.MAX_HISTORY_COUNT)
+            .subquery()
         )
-        return list(result.scalars().all())
+        result = await db.execute(
+            select(PersonalInternalPowerRecognitionHistory)
+            .where(PersonalInternalPowerRecognitionHistory.record_id.in_(select(latest_ids.c.record_id)))
+            .order_by(
+                PersonalInternalPowerRecognitionHistory.create_time.desc(),
+                PersonalInternalPowerRecognitionHistory.record_id.desc(),
+            )
+            .offset((page_num - 1) * page_size)
+            .limit(page_size)
+        )
+        return PageModel(
+            rows=list(result.scalars().all()),
+            pageNum=page_num,
+            pageSize=page_size,
+            total=total,
+            hasNext=page_num * page_size < total,
+        )
 
     @classmethod
     async def add(cls, db: AsyncSession, values: dict[str, Any]) -> PersonalInternalPowerRecognitionHistory:

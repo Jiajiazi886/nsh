@@ -82,7 +82,32 @@
 
     <div class="auth-footer">
       <span>{{ footerContent }}</span>
+      <button type="button" class="contact-admin-button" @click="contactDialogVisible = true">联系管理员</button>
     </div>
+
+    <el-dialog
+      v-model="contactDialogVisible"
+      title="联系管理员"
+      width="380px"
+      class="contact-admin-dialog"
+      append-to-body
+      align-center
+    >
+      <div class="contact-admin-card">
+        <img
+          v-if="!qrLoadFailed"
+          class="contact-admin-qr"
+          :src="contactQrUrl"
+          alt="联系管理员微信二维码"
+          @error="qrLoadFailed = true"
+        />
+        <div v-else class="contact-admin-missing">
+          <strong>二维码图片未放入项目</strong>
+          <span>请放到 public/contact-admin-wechat.png</span>
+        </div>
+        <p>{{ qrLoadFailed ? "放入图片后刷新页面即可显示" : "扫码添加管理员微信" }}</p>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -96,6 +121,7 @@ import defaultSettings from "@/settings";
 import AnimatedCharacters from "@/components/AuthCharacters/AnimatedCharacters.vue";
 
 const footerContent = defaultSettings.footerContent;
+const contactQrUrl = "/contact-admin-wechat.png";
 const userStore = useUserStore();
 const route = useRoute();
 const router = useRouter();
@@ -119,6 +145,24 @@ const showPassword = ref(false);
 const isTyping = ref(false);
 const loginFailed = ref(false);
 const loginSuccess = ref(false);
+const contactDialogVisible = ref(false);
+const qrLoadFailed = ref(false);
+
+function printContactToConsole() {
+  console.log("联系这个微信");
+  console.log(`二维码图片：${window.location.origin}${contactQrUrl}`);
+  console.log(
+    "%c ",
+    [
+      "display: block",
+      "width: 260px",
+      "height: 340px",
+      `background: url('${contactQrUrl}') center / contain no-repeat`,
+      "border-radius: 12px",
+      "background-color: #fff"
+    ].join(";")
+  );
+}
 
 watch(route, (newRoute) => {
   redirect.value = newRoute.query && newRoute.query.redirect;
@@ -180,6 +224,9 @@ function getCookie() {
 
 fetchAuthConfig();
 getCookie();
+onMounted(() => {
+  printContactToConsole();
+});
 </script>
 
 <style lang="scss" scoped>
@@ -444,9 +491,75 @@ getCookie();
   bottom: 10px;
   width: 54vw;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   text-align: center;
   color: rgba(255, 255, 255, 0.76);
   font-size: 12px;
+}
+
+.contact-admin-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(232, 215, 84, 0.95);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.contact-admin-button:hover {
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.contact-admin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0 4px;
+}
+
+.contact-admin-qr {
+  width: min(100%, 300px);
+  aspect-ratio: 1 / 1.28;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.contact-admin-missing {
+  width: min(100%, 300px);
+  aspect-ratio: 1 / 1.28;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  border: 1px dashed rgba(107, 114, 128, 0.4);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(232, 215, 84, 0.12), rgba(108, 63, 245, 0.08)),
+    #ffffff;
+  color: #111827;
+  text-align: center;
+}
+
+.contact-admin-missing span {
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.contact-admin-card p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
 }
 
 @media (max-width: 1080px) {
@@ -465,6 +578,10 @@ getCookie();
   .auth-footer {
     width: 100%;
     color: #9ca3af;
+  }
+
+  .contact-admin-button {
+    color: #6c3ff5;
   }
 }
 

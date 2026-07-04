@@ -329,13 +329,33 @@ class InternalPowerService:
 
     @classmethod
     async def get_recognition_history_services(
-        cls, query_db: AsyncSession, current_user: CurrentUserModel
+        cls, query_db: AsyncSession, current_user: CurrentUserModel, page_num: int = 1, page_size: int = 10
     ) -> InternalPowerRecognitionHistoryListModel:
-        rows = await InternalPowerRecognitionHistoryDao.list_by_user_id(query_db, current_user.user.user_id)
+        page_result = await InternalPowerRecognitionHistoryDao.list_by_user_id(
+            query_db, current_user.user.user_id, page_num, page_size
+        )
+        rows = page_result.rows if hasattr(page_result, 'rows') else page_result
+        total = page_result.total if hasattr(page_result, 'total') else len(rows)
+        page_num_value = page_result.page_num if hasattr(page_result, 'page_num') else page_num
+        page_size_value = page_result.page_size if hasattr(page_result, 'page_size') else page_size
+        has_next = page_result.has_next if hasattr(page_result, 'has_next') else False
         if await cls.__mark_stale_recognition_history_failed(query_db, rows):
             await query_db.commit()
-            rows = await InternalPowerRecognitionHistoryDao.list_by_user_id(query_db, current_user.user.user_id)
-        return InternalPowerRecognitionHistoryListModel(items=[cls.__history_to_model(row) for row in rows])
+            page_result = await InternalPowerRecognitionHistoryDao.list_by_user_id(
+                query_db, current_user.user.user_id, page_num, page_size
+            )
+            rows = page_result.rows if hasattr(page_result, 'rows') else page_result
+            total = page_result.total if hasattr(page_result, 'total') else len(rows)
+            page_num_value = page_result.page_num if hasattr(page_result, 'page_num') else page_num
+            page_size_value = page_result.page_size if hasattr(page_result, 'page_size') else page_size
+            has_next = page_result.has_next if hasattr(page_result, 'has_next') else False
+        return InternalPowerRecognitionHistoryListModel(
+            items=[cls.__history_to_model(row) for row in rows],
+            total=total,
+            pageNum=page_num_value,
+            pageSize=page_size_value,
+            hasNext=has_next,
+        )
 
     @classmethod
     async def clear_recognition_history_services(

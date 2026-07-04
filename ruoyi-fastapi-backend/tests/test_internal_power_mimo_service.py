@@ -308,9 +308,10 @@ async def test_recognition_history_marks_stale_recognizing_records_failed(monkey
     fresh_failed_history = SimpleNamespace(**{**stale_history.__dict__, 'status': 'failed', 'error': '识别任务已中断或超时'})
     calls = {'list': 0, 'updates': []}
 
-    async def fake_list_by_user_id(db, user_id):
+    async def fake_list_by_user_id(db, user_id, page_num=1, page_size=10):
         calls['list'] += 1
-        return [stale_history] if calls['list'] == 1 else [fresh_failed_history]
+        rows = [stale_history] if calls['list'] == 1 else [fresh_failed_history]
+        return SimpleNamespace(rows=rows, total=1, page_num=page_num, page_size=page_size, has_next=False)
 
     async def fake_update(db, record_id, user_id, values):
         calls['updates'].append((record_id, user_id, values))
@@ -327,6 +328,8 @@ async def test_recognition_history_marks_stale_recognizing_records_failed(monkey
     assert calls['updates'][0][2]['status'] == 'failed'
     assert result.items[0].status == 'failed'
     assert result.items[0].error == '识别任务已中断或超时'
+    assert result.total == 1
+    assert result.page_size == 10
 
 
 @pytest.mark.asyncio

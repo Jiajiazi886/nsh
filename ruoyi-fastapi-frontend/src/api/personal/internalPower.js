@@ -87,10 +87,11 @@ export function recognizeInternalPowerImage(file, prompt = '') {
 }
 
 // 查询内功图片AI识别历史
-export function listInternalPowerRecognitionHistory() {
+export function listInternalPowerRecognitionHistory(params = {}) {
   return request({
     url: '/personal/internal-power/recognition-history',
-    method: 'get'
+    method: 'get',
+    params
   })
 }
 

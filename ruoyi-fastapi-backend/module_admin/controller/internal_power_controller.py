@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import File, Form, Path, Request, Response, UploadFile
+from fastapi import File, Form, Path, Query, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.annotation.log_annotation import Log
@@ -192,15 +192,17 @@ async def recognize_personal_internal_power_images(
 @internal_power_controller.get(
     '/recognition-history',
     summary='获取内功图片识别历史接口',
-    description='用于获取当前登录用户最近50条内功图片识别历史',
+    description='用于分页获取当前登录用户最近50条内功图片识别历史',
     response_model=DynamicResponseModel[InternalPowerRecognitionHistoryListModel],
 )
 async def get_personal_internal_power_recognition_history(
     request: Request,
     query_db: Annotated[AsyncSession, DBSessionDependency()],
     current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+    page_num: Annotated[int, Query(alias='pageNum', ge=1)] = 1,
+    page_size: Annotated[int, Query(alias='pageSize', ge=1, le=10)] = 10,
 ) -> Response:
-    result = await InternalPowerService.get_recognition_history_services(query_db, current_user)
+    result = await InternalPowerService.get_recognition_history_services(query_db, current_user, page_num, page_size)
     logger.info('获取内功图片识别历史成功')
 
     return ResponseUtil.success(model_content=result)

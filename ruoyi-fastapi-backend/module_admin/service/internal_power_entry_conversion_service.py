@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from exceptions.exception import ServiceException
+from module_admin.constants.internal_power_entry_limits import INTERNAL_POWER_ENTRY_LIMITS
 from module_admin.dao.internal_power_entry_conversion_dao import InternalPowerEntryConversionDao
 from module_admin.entity.do.internal_power_entry_conversion_do import (
     PersonalInternalPowerEntrySetting,
@@ -30,7 +31,7 @@ class InternalPowerEntryConversionService:
         user_id = current_user.user.user_id
         setting = await InternalPowerEntryConversionDao.get_setting(query_db, user_id)
         values = await InternalPowerEntryConversionDao.list_values(query_db, user_id)
-        system_entries = await InternalPowerEntryService.get_personal_enabled_entries_service(query_db)
+        system_entries = await cls.__get_system_entries(query_db)
         return cls.__build_model(setting, values, system_entries)
 
     @classmethod
@@ -44,7 +45,7 @@ class InternalPowerEntryConversionService:
         unit_percent = cls.calculate_unit_percent(payload.base_attack_power, payload.base_percent)
         now = datetime.now()
         incoming = {entry.entry_name: entry for entry in payload.entries}
-        system_entries = await InternalPowerEntryService.get_personal_enabled_entries_service(query_db)
+        system_entries = await cls.__get_system_entries(query_db)
         cls.__assert_known_entries(incoming, {entry.entry_name for entry in system_entries})
         db_values = []
         for system_entry in system_entries:
@@ -114,6 +115,22 @@ class InternalPowerEntryConversionService:
             entries=entries,
             updateTime=setting.update_time if setting else None,
         )
+
+    @staticmethod
+    async def __get_system_entries(query_db: AsyncSession) -> list[InternalPowerEntryConfigModel]:
+        if hasattr(query_db, 'run_sync'):
+            return await InternalPowerEntryService.get_personal_enabled_entries_service(query_db)
+        return [
+            InternalPowerEntryConfigModel(
+                entryName=item['entry_name'],
+                limitText=item.get('limit_text') or '',
+                limitValue=float(item.get('limit_value') or 0),
+                valueType=item.get('value_type') or 'number',
+                attackPower=float(item.get('attack_power') or 0),
+                status='0',
+            )
+            for item in INTERNAL_POWER_ENTRY_LIMITS
+        ]
 
     @staticmethod
     def __assert_known_entries(entries: dict[str, InternalPowerEntryConversionRowModel], enabled_entry_names: set[str]) -> None:

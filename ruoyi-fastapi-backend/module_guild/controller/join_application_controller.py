@@ -97,7 +97,9 @@ async def list_pending_applications(
         return ResponseUtil.error(msg=f'{e!s}')
 
 
-@join_application_controller.post('/approve', summary='同意入会申请')
+@join_application_controller.post(
+    '/approve', summary='同意入会申请', dependencies=[UserInterfaceAuthDependency('guild:review:member:approve')]
+)
 async def approve_application(
     data: JoinApplicationReviewModel,
     query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
@@ -113,7 +115,9 @@ async def approve_application(
         return ResponseUtil.error(msg=f'{e!s}')
 
 
-@join_application_controller.post('/reject', summary='拒绝入会申请')
+@join_application_controller.post(
+    '/reject', summary='拒绝入会申请', dependencies=[UserInterfaceAuthDependency('guild:review:member:reject')]
+)
 async def reject_application(
     data: JoinApplicationReviewModel,
     query_db: Annotated[AsyncSession, DBSessionDependency()] = None,

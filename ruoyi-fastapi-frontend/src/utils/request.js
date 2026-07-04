@@ -98,6 +98,7 @@ service.interceptors.request.use(async config => {
 service.interceptors.response.use(async res => {
     // 响应若命中了传输层加密，这里先还原为原始业务 JSON。
     res = await decryptTransportResponse(res)
+    const silentError = (res.config?.headers || {}).silentError === true
     // 未设置状态码则默认成功状态
     const code = res.data.code || 200;
     // 获取错误信息
@@ -120,13 +121,13 @@ service.interceptors.response.use(async res => {
     }
       return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
     } else if (code === 500) {
-      ElMessage({ message: msg, type: 'error' })
+      if (!silentError) ElMessage({ message: msg, type: 'error' })
       return Promise.reject(new Error(msg))
     } else if (code === 601) {
-      ElMessage({ message: msg, type: 'warning' })
+      if (!silentError) ElMessage({ message: msg, type: 'warning' })
       return Promise.reject(new Error(msg))
     } else if (code !== 200) {
-      ElNotification.error({ title: msg })
+      if (!silentError) ElNotification.error({ title: msg })
       return Promise.reject('error')
     } else {
       return  Promise.resolve(res.data)
@@ -146,12 +147,13 @@ service.interceptors.response.use(async res => {
     }
     console.log('err' + error)
     const response = error.response
+    const silentError = (error.config?.headers || {}).silentError === true
     const responseStatus = response?.status
     const responseCode = response?.data?.code
     const responseMsg = response?.data?.msg
     if (responseMsg) {
       const messageType = responseStatus === 429 || responseCode === 429 ? 'warning' : 'error'
-      ElMessage({ message: responseMsg, type: messageType, duration: 5 * 1000 })
+      if (!silentError) ElMessage({ message: responseMsg, type: messageType, duration: 5 * 1000 })
       return Promise.reject(new Error(responseMsg))
     }
     let { message } = error;
@@ -162,7 +164,7 @@ service.interceptors.response.use(async res => {
     } else if (message.includes("Request failed with status code")) {
       message = "系统接口" + message.slice(-3) + "异常";
     }
-    ElMessage({ message: message, type: 'error', duration: 5 * 1000 })
+    if (!silentError) ElMessage({ message: message, type: 'error', duration: 5 * 1000 })
     return Promise.reject(error)
   }
 )

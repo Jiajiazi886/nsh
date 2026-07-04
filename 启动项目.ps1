@@ -99,11 +99,11 @@ if (-not $SkipDependencyCheck) {
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 
-if (Test-Port -Port 9099) {
-  $pids = (Get-ListeningPids -Port 9099) -join ', '
-  Write-Host "Backend already listening on 9099. PID: $pids"
+if (Test-Port -Port 9100) {
+  $pids = (Get-ListeningPids -Port 9100) -join ', '
+  Write-Host "Backend already listening on 9100. PID: $pids"
 } else {
-  Write-Host 'Starting backend on 9099...'
+  Write-Host 'Starting backend on 9100...'
   Start-Process `
     -FilePath $PythonExe `
     -ArgumentList 'app.py' `
@@ -128,13 +128,13 @@ if (Test-Port -Port 80) {
 }
 
 Write-Host 'Checking services...'
-$BackendOk = Wait-HttpOk -Url 'http://127.0.0.1:9099/docs' -TimeoutSeconds 75
+$BackendOk = Wait-HttpOk -Url 'http://127.0.0.1:9100/docs' -TimeoutSeconds 75
 $FrontendOk = Wait-HttpOk -Url 'http://127.0.0.1/' -TimeoutSeconds 75
 $AnalysisOk = Wait-HttpOk -Url 'http://127.0.0.1/guild/analysis' -TimeoutSeconds 75
 
 Write-Host ''
 Write-Host 'Startup result:'
-Write-Host "  Backend docs:   http://127.0.0.1:9099/docs        $(Format-Status $BackendOk)"
+Write-Host "  Backend docs:   http://127.0.0.1:9100/docs        $(Format-Status $BackendOk)"
 Write-Host "  Frontend:       http://127.0.0.1/                 $(Format-Status $FrontendOk)"
 Write-Host "  Analysis page:  http://127.0.0.1/guild/analysis  $(Format-Status $AnalysisOk)"
 Write-Host ''
