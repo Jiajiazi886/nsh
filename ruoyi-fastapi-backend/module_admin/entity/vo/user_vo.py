@@ -280,6 +280,29 @@ class VipAiRecognitionCountModel(BaseModel):
     vip_ai_image_recognition_count: int = Field(default=0, ge=0, description='VIP AI识图剩余次数')
 
 
+class DefaultAiRecognitionCountModel(BaseModel):
+    """
+    新用户默认AI识图剩余次数模型
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    ai_image_recognition_count: int = Field(default=0, ge=0, description='新用户默认AI识图剩余次数')
+
+
+class BatchVipModel(BaseModel):
+    """
+    批量修改用户VIP授权模型
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    user_ids: list[int] = Field(default_factory=list, description='用户ID列表')
+    is_vip: Literal['0', '1'] = Field(description='VIP标识（0非VIP 1VIP）')
+    vip_expire_time: datetime | None = Field(default=None, description='VIP到期时间')
+    vip_ai_image_recognition_count: int = Field(default=0, ge=0, description='VIP AI识图剩余次数')
+
+
 class ChangeSponsorModel(BaseModel):
     """
     修改帮会管理赞助开关模型

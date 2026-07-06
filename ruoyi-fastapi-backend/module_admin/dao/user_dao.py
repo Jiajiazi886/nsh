@@ -349,6 +349,18 @@ class UserDao:
         await db.execute(update(SysUser), [cls._only_sys_user_columns(user)])
 
     @classmethod
+    async def batch_update_normal_ai_count(cls, db: AsyncSession, count: int, update_by: str) -> int:
+        """
+        批量覆盖普通用户AI识图次数，跳过超级管理员和已删除用户。
+        """
+        result = await db.execute(
+            update(SysUser)
+            .where(SysUser.del_flag == '0', SysUser.user_id != 1)
+            .values(ai_image_recognition_count=count, update_by=update_by, update_time=_now())
+        )
+        return result.rowcount or 0
+
+    @classmethod
     async def decrement_ai_image_recognition_count(
         cls, db: AsyncSession, user_id: int, count: int, update_by: str
     ) -> bool:

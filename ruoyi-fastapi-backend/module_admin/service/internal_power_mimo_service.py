@@ -41,6 +41,25 @@ class InternalPowerMimoService:
         prompt: str,
         client: AsyncOpenAI | None = None,
     ) -> InternalPowerMimoResult:
+        result = await cls.recognize_image_json(image_bytes, mime_type, prompt, client)
+        if result.parsed is None:
+            return result
+        validation_error = cls.validate_parsed_result(result.parsed)
+        if validation_error:
+            return InternalPowerMimoResult(parsed=None, raw_text=result.raw_text, error=validation_error)
+        return result
+
+    @classmethod
+    async def recognize_image_json(
+        cls,
+        image_bytes: bytes,
+        mime_type: str,
+        prompt: str,
+        client: AsyncOpenAI | None = None,
+    ) -> InternalPowerMimoResult:
+        """
+        调用Mimo并只要求返回可解析JSON，具体业务校验由调用方完成。
+        """
         if not MimoConfig.mimo_api_key:
             raise ServiceException(message='Mimo API Key 未配置，请在后端环境变量 MIMO_API_KEY 中配置')
         if not prompt or not prompt.strip():
@@ -75,9 +94,6 @@ class InternalPowerMimoService:
         parsed = cls.parse_json_response(raw_text)
         if parsed is None:
             return InternalPowerMimoResult(parsed=None, raw_text=raw_text, error='模型未返回可解析JSON')
-        validation_error = cls.validate_parsed_result(parsed)
-        if validation_error:
-            return InternalPowerMimoResult(parsed=None, raw_text=raw_text, error=validation_error)
         return InternalPowerMimoResult(parsed=parsed, raw_text=raw_text)
 
     @classmethod

@@ -84,6 +84,20 @@ export function changeUserVip(userId, isVip, vipExpireTime) {
   })
 }
 
+// 批量修改用户VIP授权和VIP AI识图次数
+export function batchUserVip(userIds, isVip, vipExpireTime, vipAiImageRecognitionCount) {
+  return request({
+    url: '/system/user/batchVip',
+    method: 'put',
+    data: {
+      userIds,
+      isVip,
+      vipExpireTime,
+      vipAiImageRecognitionCount
+    }
+  })
+}
+
 // 帮会管理赞助状态修改
 export function changeUserSponsor(userId, sponsorEnabled) {
   return request({
@@ -128,6 +142,25 @@ export function changeVipAiRecognitionCount(userId, vipAiImageRecognitionCount) 
     data: {
       userId,
       vipAiImageRecognitionCount
+    }
+  })
+}
+
+// 查询新用户默认普通AI识图次数
+export function getDefaultAiRecognitionCount() {
+  return request({
+    url: '/system/user/default-ai-recognition-count',
+    method: 'get'
+  })
+}
+
+// 修改新用户默认普通AI识图次数并同步老用户
+export function updateDefaultAiRecognitionCount(aiImageRecognitionCount) {
+  return request({
+    url: '/system/user/default-ai-recognition-count',
+    method: 'put',
+    data: {
+      aiImageRecognitionCount
     }
   })
 }

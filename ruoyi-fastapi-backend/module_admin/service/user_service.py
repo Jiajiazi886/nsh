@@ -54,6 +54,7 @@ class UserService:
     REGISTER_CLEANUP_JOB_NAME = '注册用户24小时未登录自动清理'
     REGISTER_CLEANUP_JOB_TARGET = 'module_task.user_cleanup.cleanup_inactive_registered_users'
     REGISTER_CLEANUP_CRON = '0 0 * * * ?'
+    DEFAULT_AI_RECOGNITION_CONFIG_KEY = 'sys.user.defaultAiImageRecognitionCount'
 
     @classmethod
     async def get_user_list_services(
@@ -217,6 +218,75 @@ class UserService:
         return RegisterCleanupRuleModel(enabled=rule.enabled, jobId=job_id)
 
     @classmethod
+    async def get_default_ai_recognition_count_services(cls, query_db: AsyncSession) -> int:
+        """
+        获取新用户默认普通AI识图次数，配置不存在或异常时按0处理。
+        """
+        config = await ConfigDao.get_config_detail_by_info(
+            query_db, ConfigModel(configKey=cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY)
+        )
+        if not config:
+            return 0
+        try:
+            return max(0, int(config.config_value or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    @classmethod
+    async def set_default_ai_recognition_count_services(
+        cls, request: Request, query_db: AsyncSession, count: int, update_by: str
+    ) -> CrudResponseModel:
+        """
+        保存新用户默认普通AI识图次数，并同步覆盖现有非超级管理员用户。
+        """
+        if count < 0:
+            raise ServiceException(message='AI识图次数不能小于0')
+
+        now = datetime.now()
+        config = await ConfigDao.get_config_detail_by_info(
+            query_db, ConfigModel(configKey=cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY)
+        )
+        try:
+            if config:
+                await ConfigDao.edit_config_dao(
+                    query_db,
+                    {
+                        'config_id': config.config_id,
+                        'config_name': '用户管理-新用户默认普通AI识图次数',
+                        'config_key': cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY,
+                        'config_value': str(count),
+                        'config_type': CommonConstant.YES,
+                        'update_by': update_by,
+                        'update_time': now,
+                        'remark': '后台新增、注册和导入新增用户时默认发放的普通AI识图次数',
+                    },
+                )
+            else:
+                await ConfigDao.add_config_dao(
+                    query_db,
+                    ConfigModel(
+                        configName='用户管理-新用户默认普通AI识图次数',
+                        configKey=cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY,
+                        configValue=str(count),
+                        configType=CommonConstant.YES,
+                        createBy=update_by,
+                        createTime=now,
+                        updateBy=update_by,
+                        updateTime=now,
+                        remark='后台新增、注册和导入新增用户时默认发放的普通AI识图次数',
+                    ),
+                )
+            affected_count = await UserDao.batch_update_normal_ai_count(query_db, count, update_by)
+            await query_db.commit()
+            await request.app.state.redis.set(
+                f'{RedisInitKeyConfig.SYS_CONFIG.key}:{cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY}', str(count)
+            )
+            return CrudResponseModel(is_success=True, message=f'已设置默认次数，并同步{affected_count}个老用户')
+        except Exception as e:
+            await query_db.rollback()
+            raise e
+
+    @classmethod
     async def __ensure_register_cleanup_rule(cls, query_db: AsyncSession) -> tuple[Any, Any]:
         config = await ConfigDao.get_config_detail_by_info(
             query_db, ConfigModel(configKey=cls.REGISTER_CLEANUP_CONFIG_KEY)
@@ -342,6 +412,8 @@ class UserService:
         :param page_object: 新增用户对象
         :return: 新增用户校验结果
         """
+        if 'ai_image_recognition_count' not in page_object.model_fields_set:
+            page_object.ai_image_recognition_count = await cls.get_default_ai_recognition_count_services(query_db)
         add_user = UserModel(**page_object.model_dump(by_alias=True))
         if not await cls.check_user_name_unique_services(query_db, page_object):
             raise ServiceException(message=f'新增用户{page_object.user_name}失败，登录账号已存在')
@@ -633,6 +705,44 @@ class UserService:
         return CrudResponseModel(is_success=True, message='批量内功上限已更新')
 
     @classmethod
+    async def batch_change_vip_services(
+        cls,
+        query_db: AsyncSession,
+        user_ids: list[int],
+        is_vip: str,
+        vip_expire_time: datetime | None,
+        vip_ai_count: int,
+        update_by: str,
+    ) -> CrudResponseModel:
+        """
+        批量修改用户手动VIP状态和VIP AI识图次数。
+        """
+        if not user_ids:
+            raise ServiceException(message='请选择需要修改的用户')
+        if is_vip not in {'0', '1'}:
+            raise ServiceException(message='VIP状态参数错误')
+        if vip_ai_count < 0:
+            raise ServiceException(message='VIP AI识图次数不能小于0')
+        if is_vip == '1' and (vip_expire_time is None or vip_expire_time <= datetime.now()):
+            raise ServiceException(message='VIP到期时间必须晚于当前时间')
+
+        now = datetime.now()
+        for user_id in user_ids:
+            await UserDao.edit_user_dao(
+                query_db,
+                {
+                    'user_id': user_id,
+                    'is_vip': is_vip,
+                    'vip_expire_time': vip_expire_time if is_vip == '1' else None,
+                    'vip_ai_image_recognition_count': vip_ai_count,
+                    'update_by': update_by,
+                    'update_time': now,
+                },
+            )
+        await query_db.commit()
+        return CrudResponseModel(is_success=True, message='批量VIP设置已更新')
+
+    @classmethod
     async def expire_vip_users_services(cls, query_db: AsyncSession) -> int:
         """
         将已过期VIP实时落库为非VIP。
@@ -709,6 +819,7 @@ class UserService:
         df.rename(columns=header_dict, inplace=True)
         add_error_result = []
         count = 0
+        default_ai_count = await cls.get_default_ai_recognition_count_services(query_db)
         try:
             for _index, row in df.iterrows():
                 count = count + 1
@@ -727,6 +838,7 @@ class UserService:
                     phonenumber=str(row['phonenumber']),
                     sex=row['sex'],
                     status=row['status'],
+                    aiImageRecognitionCount=default_ai_count,
                     createBy=current_user.user.user_name,
                     createTime=datetime.now(),
                     updateBy=current_user.user.user_name,

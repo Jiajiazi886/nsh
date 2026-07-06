@@ -12,6 +12,8 @@ SYSTEM_INTERNAL_POWER_PRESET_TABLE = 'system_internal_power_preset'
 PERSONAL_INTERNAL_POWER_TABLE = 'personal_internal_power'
 SYS_USER_TABLE = 'sys_user'
 DAMAGE_FORMULA_VERSION_TABLE = 'system_damage_formula_version'
+SYSTEM_INTERNAL_POWER_PANEL_TEMPLATE_TABLE = 'system_internal_power_panel_template'
+PERSONAL_INTERNAL_POWER_PANEL_RECOGNITION_HISTORY_TABLE = 'personal_internal_power_panel_recognition_history'
 INTERNAL_POWER_ENTRY_LIMIT_COLUMN_SQL = {
     'mysql': {
         'limit_text': (
@@ -143,6 +145,32 @@ SYS_USER_VIP_SPONSOR_PERMISSION_SQL = [
     """,
 ]
 
+DEFAULT_AI_RECOGNITION_CONFIG_SQL = {
+    'mysql': """
+    INSERT INTO sys_config (
+      config_name, config_key, config_value, config_type,
+      create_by, create_time, update_by, update_time, remark
+    )
+    SELECT '用户管理-新用户默认普通AI识图次数', 'sys.user.defaultAiImageRecognitionCount', '0', 'Y',
+           'system', NOW(), 'system', NOW(), '后台新增、注册和导入新增用户时默认发放的普通AI识图次数'
+    FROM DUAL
+    WHERE NOT EXISTS (
+      SELECT 1 FROM sys_config WHERE config_key = 'sys.user.defaultAiImageRecognitionCount'
+    )
+    """,
+    'postgresql': """
+    INSERT INTO sys_config (
+      config_name, config_key, config_value, config_type,
+      create_by, create_time, update_by, update_time, remark
+    )
+    SELECT '用户管理-新用户默认普通AI识图次数', 'sys.user.defaultAiImageRecognitionCount', '0', 'Y',
+           'system', NOW(), 'system', NOW(), '后台新增、注册和导入新增用户时默认发放的普通AI识图次数'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM sys_config WHERE config_key = 'sys.user.defaultAiImageRecognitionCount'
+    )
+    """,
+}
+
 INTERNAL_POWER_PANEL_SETTING_MENU_SQL = [
     """
     INSERT INTO sys_menu (
@@ -246,6 +274,64 @@ FORMULA_DESIGN_MENU_SQL = [
     """
     INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
       (1, 3140), (1, 3141), (1, 3142), (1, 3143), (1, 3144)
+    """,
+]
+
+INTERNAL_POWER_PANEL_TEMPLATE_MENU_SQL = [
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+      is_frame, is_cache, menu_type, visible, status, perms, icon,
+      create_by, create_time, update_by, update_time, remark
+    ) VALUES (
+      3150, '面板模板设置', 1, 14, 'internalPowerPanelTemplate', 'system/internalPowerPanelTemplate/index', '',
+      'SystemInternalPowerPanelTemplate', 1, 0, 'C', '0', '0',
+      'system:internal-power-panel-template:list', 'chart', 'admin', NOW(), '', NULL,
+      '系统内功PVP收益面板模板设置菜单'
+    )
+    ON DUPLICATE KEY UPDATE
+      menu_name = VALUES(menu_name),
+      parent_id = VALUES(parent_id),
+      order_num = VALUES(order_num),
+      path = VALUES(path),
+      component = VALUES(component),
+      route_name = VALUES(route_name),
+      menu_type = VALUES(menu_type),
+      visible = VALUES(visible),
+      status = VALUES(status),
+      perms = VALUES(perms),
+      icon = VALUES(icon),
+      update_by = 'admin',
+      update_time = NOW(),
+      remark = VALUES(remark)
+    """,
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+      is_frame, is_cache, menu_type, visible, status, perms, icon,
+      create_by, create_time, update_by, update_time, remark
+    ) VALUES
+      (3151, '面板模板查询', 3150, 1, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:internal-power-panel-template:query', '#', 'admin', NOW(), '', NULL, ''),
+      (3152, '面板模板新增', 3150, 2, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:internal-power-panel-template:add', '#', 'admin', NOW(), '', NULL, ''),
+      (3153, '面板模板修改', 3150, 3, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:internal-power-panel-template:edit', '#', 'admin', NOW(), '', NULL, ''),
+      (3154, '面板模板删除', 3150, 4, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:internal-power-panel-template:remove', '#', 'admin', NOW(), '', NULL, ''),
+      (3155, '面板模板启停', 3150, 5, '#', '', '', '', 1, 0, 'F', '0', '0',
+       'system:internal-power-panel-template:status', '#', 'admin', NOW(), '', NULL, '')
+    ON DUPLICATE KEY UPDATE
+      menu_name = VALUES(menu_name),
+      parent_id = VALUES(parent_id),
+      perms = VALUES(perms),
+      update_by = 'admin',
+      update_time = NOW(),
+      remark = VALUES(remark)
+    """,
+    """
+    INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+      (1, 3150), (1, 3151), (1, 3152), (1, 3153), (1, 3154), (1, 3155)
     """,
 ]
 
@@ -424,6 +510,18 @@ async def ensure_sys_user_vip_sponsor_permission_menus() -> None:
             await conn.execute(text(sql))
 
 
+async def ensure_default_ai_recognition_config() -> None:
+    """
+    补齐新用户默认普通AI识图次数配置，兼容已部署库升级。
+    """
+    sql = DEFAULT_AI_RECOGNITION_CONFIG_SQL.get(DataBaseConfig.db_type)
+    if not sql:
+        return
+
+    async with async_engine.begin() as conn:
+        await conn.execute(text(sql))
+
+
 async def ensure_internal_power_panel_setting_menu() -> None:
     """
     补齐个人内功PVP收益面板设置菜单，并迁移旧词条换算菜单入口。
@@ -467,6 +565,15 @@ async def ensure_formula_design_menu() -> None:
             await conn.execute(text(sql))
 
 
+async def ensure_internal_power_panel_template_menu() -> None:
+    """
+    补齐系统管理下的面板模板设置菜单。
+    """
+    async with async_engine.begin() as conn:
+        for sql in INTERNAL_POWER_PANEL_TEMPLATE_MENU_SQL:
+            await conn.execute(text(sql))
+
+
 async def init_create_table() -> None:
     """
     应用启动时初始化数据库连接
@@ -480,9 +587,11 @@ async def init_create_table() -> None:
     await ensure_internal_power_lingyun_columns()
     await ensure_sys_user_vip_sponsor_columns()
     await ensure_sys_user_vip_sponsor_permission_menus()
+    await ensure_default_ai_recognition_config()
     await ensure_internal_power_panel_setting_menu()
     await ensure_damage_formula_version_schema()
     await ensure_formula_design_menu()
+    await ensure_internal_power_panel_template_menu()
     logger.info('✅️ 数据库连接成功')
 
 

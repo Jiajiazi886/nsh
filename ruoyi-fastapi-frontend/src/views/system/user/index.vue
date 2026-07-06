@@ -136,6 +136,25 @@
             <el-button
               type="primary"
               plain
+              icon="Setting"
+              @click="openDefaultAiDialog"
+              v-hasPermi="['system:user:ai:edit']"
+            >新用户设置</el-button>
+          </el-col>
+          <el-col v-if="canManageVip" :span="1.5">
+            <el-button
+              type="warning"
+              plain
+              icon="Medal"
+              :disabled="multiple"
+              @click="openBatchVipDialog"
+              v-hasPermi="['system:user:vip:edit']"
+            >批量设置 VIP</el-button>
+          </el-col>
+          <el-col v-if="canManageVip" :span="1.5">
+            <el-button
+              type="primary"
+              plain
               icon="SetUp"
               :disabled="multiple"
               @click="openBatchLimitDialog"
@@ -594,6 +613,80 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="defaultAiDialog.open" title="新用户设置" width="420px" append-to-body>
+      <el-form label-width="132px">
+        <el-form-item label="普通AI识图次数">
+          <el-input-number
+            v-model="defaultAiDialog.aiImageRecognitionCount"
+            :min="0"
+            :precision="0"
+            controls-position="right"
+            style="width: 180px"
+          />
+        </el-form-item>
+        <el-alert
+          title="保存后会作为未来新用户默认次数，并同步覆盖现有老用户。"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="defaultAiDialog.open = false">取 消</el-button>
+          <el-button type="primary" :loading="defaultAiDialog.loading" @click="submitDefaultAiDialog">确 定</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="batchVipDialog.open" title="批量设置 VIP" width="480px" append-to-body>
+      <el-form label-width="112px">
+        <el-form-item label="目标用户">
+          <span>{{ ids.length }} 个用户</span>
+        </el-form-item>
+        <el-form-item label="操作">
+          <el-radio-group v-model="batchVipDialog.isVip" @change="handleBatchVipStatusChange">
+            <el-radio-button label="1">开通 VIP</el-radio-button>
+            <el-radio-button label="0">取消 VIP</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <template v-if="batchVipDialog.isVip === '1'">
+          <el-form-item label="授权方式">
+            <el-radio-group v-model="batchVipDialog.mode" @change="handleBatchVipModeChange">
+              <el-radio-button label="week">一周</el-radio-button>
+              <el-radio-button label="month">一个月</el-radio-button>
+              <el-radio-button label="quarter">三个月</el-radio-button>
+              <el-radio-button label="custom">自定义</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="到期时间">
+            <el-date-picker
+              v-model="batchVipDialog.expireTime"
+              type="datetime"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              placeholder="请选择到期时间"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </template>
+        <el-form-item label="VIP AI次数">
+          <el-input-number
+            v-model="batchVipDialog.vipAiImageRecognitionCount"
+            :min="0"
+            :precision="0"
+            controls-position="right"
+            style="width: 180px"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="batchVipDialog.open = false">取 消</el-button>
+          <el-button type="primary" :loading="batchVipDialog.loading" @click="submitBatchVipDialog">确 定</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="limitDialog.open" :title="limitDialog.batch ? '批量设置最大内功数' : '设置最大内功数'" width="420px" append-to-body>
       <el-form label-width="108px">
         <el-form-item label="目标用户">
@@ -673,6 +766,7 @@ import { parseTime } from "@/utils/ruoyi";
 import useUserStore from "@/store/modules/user";
 import {
   batchInternalPowerLimit,
+  batchUserVip,
   changeAiRecognitionCount,
   changeInternalPowerLimit,
   changeUserSponsor,
@@ -685,7 +779,9 @@ import {
   getUser,
   updateUser,
   addUser,
+  getDefaultAiRecognitionCount,
   getRegisterCleanupRule,
+  updateDefaultAiRecognitionCount,
   updateRegisterCleanupRule,
 } from "@/api/system/user";
 
@@ -717,6 +813,19 @@ const vipDialog = reactive({
   row: null,
   mode: "month",
   expireTime: "",
+});
+const defaultAiDialog = reactive({
+  open: false,
+  loading: false,
+  aiImageRecognitionCount: 0,
+});
+const batchVipDialog = reactive({
+  open: false,
+  loading: false,
+  isVip: "1",
+  mode: "month",
+  expireTime: "",
+  vipAiImageRecognitionCount: 0,
 });
 const limitDialog = reactive({
   open: false,
@@ -955,6 +1064,73 @@ function cancelVip() {
     getList();
   });
 }
+function openDefaultAiDialog() {
+  defaultAiDialog.loading = true;
+  defaultAiDialog.open = true;
+  getDefaultAiRecognitionCount()
+    .then((response) => {
+      defaultAiDialog.aiImageRecognitionCount = Number(response.data?.aiImageRecognitionCount || 0);
+    })
+    .finally(() => {
+      defaultAiDialog.loading = false;
+    });
+}
+function submitDefaultAiDialog() {
+  const count = Math.max(0, Number(defaultAiDialog.aiImageRecognitionCount || 0));
+  defaultAiDialog.loading = true;
+  updateDefaultAiRecognitionCount(count)
+    .then((response) => {
+      proxy.$modal.msgSuccess(response.msg || "已设置默认次数并同步老用户");
+      defaultAiDialog.open = false;
+      getList();
+    })
+    .finally(() => {
+      defaultAiDialog.loading = false;
+    });
+}
+function openBatchVipDialog() {
+  batchVipDialog.open = true;
+  batchVipDialog.isVip = "1";
+  batchVipDialog.mode = "month";
+  batchVipDialog.expireTime = getFutureTime("month");
+  batchVipDialog.vipAiImageRecognitionCount = 0;
+}
+function handleBatchVipModeChange(mode) {
+  if (mode !== "custom") {
+    batchVipDialog.expireTime = getFutureTime(mode);
+  }
+}
+function handleBatchVipStatusChange(value) {
+  if (value === "1" && !batchVipDialog.expireTime) {
+    batchVipDialog.expireTime = getFutureTime(batchVipDialog.mode || "month");
+  }
+}
+function submitBatchVipDialog() {
+  if (!ids.value.length) {
+    proxy.$modal.msgError("请选择需要修改的用户");
+    return;
+  }
+  if (batchVipDialog.isVip === "1" && !batchVipDialog.expireTime) {
+    proxy.$modal.msgError("请选择VIP到期时间");
+    return;
+  }
+  const vipAiCount = Math.max(0, Number(batchVipDialog.vipAiImageRecognitionCount || 0));
+  batchVipDialog.loading = true;
+  batchUserVip(
+    ids.value,
+    batchVipDialog.isVip,
+    batchVipDialog.isVip === "1" ? batchVipDialog.expireTime : null,
+    vipAiCount
+  )
+    .then(() => {
+      proxy.$modal.msgSuccess("批量VIP设置已更新");
+      batchVipDialog.open = false;
+      getList();
+    })
+    .finally(() => {
+      batchVipDialog.loading = false;
+    });
+}
 function handleSponsorChange(row, value) {
   const previousValue = value === "1" ? "0" : "1";
   row._sponsorSaving = true;
@@ -1183,13 +1359,16 @@ function cancel() {
 }
 function handleAdd() {
   reset();
-  getUser().then((response) => {
+  Promise.all([
+    getUser(),
+    getDefaultAiRecognitionCount().catch(() => ({ data: { aiImageRecognitionCount: 0 } })),
+  ]).then(([response, defaultAiResponse]) => {
     roleOptions.value = response.roles;
     open.value = true;
     title.value = "添加用户";
     form.value.password = initPassword.value;
     form.value.isVip = "0";
-    form.value.aiImageRecognitionCount = 0;
+    form.value.aiImageRecognitionCount = Number(defaultAiResponse.data?.aiImageRecognitionCount || 0);
     form.value.vipAiImageRecognitionCount = 0;
     form.value.maxInternalPowerCount = 20;
   });

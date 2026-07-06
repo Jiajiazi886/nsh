@@ -27,10 +27,12 @@ from module_admin.entity.vo.user_vo import (
     AiRecognitionCountModel,
     AddUserModel,
     AvatarModel,
+    BatchVipModel,
     ChangeSponsorModel,
     ChangeVipModel,
     CrudUserRoleModel,
     CurrentUserModel,
+    DefaultAiRecognitionCountModel,
     DeleteUserModel,
     EditUserModel,
     InternalPowerLimitModel,
@@ -205,6 +207,47 @@ async def change_system_user_vip(
 
 
 @user_controller.put(
+    '/batchVip',
+    summary='批量修改用户VIP状态接口',
+    description='用于批量修改用户VIP状态和VIP AI识图次数',
+    response_model=ResponseBaseModel,
+    dependencies=[
+        UserInterfaceAuthDependency('system:user:vip:edit'),
+        UserInterfaceAuthDependency('system:user:ai:edit'),
+    ],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_PERMISSION_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def batch_change_system_user_vip(
+    request: Request,
+    change_user: BatchVipModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改用户VIP状态')
+    if change_user.is_vip == '1' and (
+        change_user.vip_expire_time is None or change_user.vip_expire_time <= datetime.now()
+    ):
+        return ResponseUtil.failure(msg='VIP到期时间必须晚于当前时间')
+    if not change_user.user_ids:
+        return ResponseUtil.failure(msg='请选择需要修改的用户')
+    for user_id in change_user.user_ids:
+        await UserService.check_user_allowed_services(UserModel(userId=user_id))
+    result = await UserService.batch_change_vip_services(
+        query_db,
+        change_user.user_ids,
+        change_user.is_vip,
+        change_user.vip_expire_time,
+        change_user.vip_ai_image_recognition_count,
+        current_user.user.user_name,
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
+@user_controller.put(
     '/changeInternalPowerLimit',
     summary='修改用户最大内功数接口',
     description='用于修改单个用户最大内功数',
@@ -290,6 +333,50 @@ async def change_system_user_vip_ai_recognition_count(
         query_db,
         change_user.user_id,
         change_user.vip_ai_image_recognition_count,
+        current_user.user.user_name,
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
+@user_controller.get(
+    '/default-ai-recognition-count',
+    summary='查询新用户默认AI识图次数接口',
+    description='用于查询新用户默认普通AI识图次数',
+    response_model=DataResponseModel[dict],
+    dependencies=[UserInterfaceAuthDependency('system:user:ai:edit')],
+)
+async def get_system_user_default_ai_recognition_count(
+    request: Request,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+) -> Response:
+    count = await UserService.get_default_ai_recognition_count_services(query_db)
+
+    return ResponseUtil.success(model_content={'aiImageRecognitionCount': count})
+
+
+@user_controller.put(
+    '/default-ai-recognition-count',
+    summary='修改新用户默认AI识图次数接口',
+    description='用于修改新用户默认普通AI识图次数并同步老用户',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:user:ai:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_INFO_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def update_system_user_default_ai_recognition_count(
+    request: Request,
+    change_count: DefaultAiRecognitionCountModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改AI识图次数')
+    result = await UserService.set_default_ai_recognition_count_services(
+        request,
+        query_db,
+        change_count.ai_image_recognition_count,
         current_user.user.user_name,
     )
     logger.info(result.message)

@@ -7,6 +7,14 @@
         <p>先把内功、词条和五行配比管理起来；随机数值与后端同步留给下一轮。</p>
       </div>
       <div class="hero-actions">
+        <el-select v-model="benefitMode" class="benefit-mode-select" placeholder="收益类型">
+          <el-option
+            v-for="item in benefitModeOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
         <el-tag effect="plain" type="info">AI识图 {{ aiRecognitionQuotaLabel }}</el-tag>
         <el-tag v-if="backgroundRecognitionRunning" effect="plain" type="warning">后台识别中</el-tag>
         <el-badge :value="recognitionRecordBadge" :hidden="!recognitionItems.length" class="recognition-record-badge">
@@ -26,9 +34,9 @@
         <small>{{ quotaSummaryText }}</small>
       </article>
       <article class="summary-card">
-        <span>平均收益</span>
+        <span>平均{{ benefitModeLabel }}</span>
         <strong>{{ averageBonus }}</strong>
-        <small>按当前面板动态计算</small>
+        <small>{{ benefitModeHelpText }}</small>
       </article>
       <article class="summary-card">
         <span>词条总数</span>
@@ -112,7 +120,7 @@
             @change="togglePowerSelection(item.id)"
           />
           <button class="delete-card" type="button" @click.stop="deletePower(item)">×</button>
-          <div class="score-badge">
+          <div class="score-badge" :title="getPowerBenefitTitle(item)">
             <strong>{{ formatBenefit(getPowerBenefit(item).totalGain) }}</strong>
             <span>基础：{{ formatBenefit(getPowerBenefit(item).baseGain) }}</span>
             <span>词条：{{ formatBenefit(getPowerBenefit(item).entryGain) }}</span>
@@ -590,10 +598,6 @@
                   </el-popover>
                 </el-form-item>
 
-                <el-form-item label="种类特性" prop="categoryTrait">
-                  <el-input v-model.trim="draft.categoryTrait" maxlength="40" placeholder="例如：偏爆发 / 偏承伤 / 偏恢复" />
-                </el-form-item>
-
                 <el-form-item label="基础百分比增伤" prop="bonusPercent">
                   <div class="bonus-editor">
                     <el-slider v-model="draft.bonusPercent" :min="0" :max="100" :step="0.1" />
@@ -639,10 +643,19 @@
 
             <section class="editor-section">
               <div class="section-heading">
-                <strong>内功词条</strong>
-                <span>{{ draft.entries.length || 0 }} 条</span>
+                <div>
+                  <strong>内功词条</strong>
+                  <span>{{ draft.entries.length || 0 }} 条 · 行内显示当前收益</span>
+                </div>
+                <el-button size="small" plain :disabled="!entryOptions.length" @click="addEntry">添加词条</el-button>
               </div>
               <div class="entries-editor">
+                <div v-if="draft.entries.length" class="entry-table-head">
+                  <span>词条</span>
+                  <span>数值</span>
+                  <span>收益</span>
+                  <span>操作</span>
+                </div>
                 <div
                   v-for="(entry, index) in draft.entries"
                   :key="entry.id"
@@ -666,12 +679,12 @@
                       placeholder="词条数值"
                     />
                     <span v-if="isPercentEntry(entry.name)" class="entry-value-suffix">%</span>
-                    <small v-if="entry.name">最大数值 {{ getEntryMaxValueText(entry.name) }}</small>
-                    <small v-if="entry.name" class="entry-benefit-text">{{ getEntryBenefitTitle(entry) }}</small>
                   </div>
+                  <span class="entry-row-benefit" :title="getEntryLimitHint(entry)">
+                    {{ formatBenefit(getSingleEntryBenefit(entry)) }}
+                  </span>
                   <el-button text type="danger" @click="removeEntry(index)">删除</el-button>
                 </div>
-                <el-button plain :disabled="!entryOptions.length" @click="addEntry">添加词条占位</el-button>
                 <p v-if="!draft.entries.length" class="placeholder-note">暂无词条，等待后期随机开发。</p>
                 <p v-if="!entryOptions.length" class="placeholder-note">暂无启用词条，请联系管理员检查内置词条配置。</p>
               </div>
@@ -692,39 +705,92 @@
           </el-form>
 
           <aside class="preview-panel">
-            <div class="preview-card">
-              <div class="preview-image" :class="{ empty: !resolvePowerImage(draft) }">
-                <img v-if="resolvePowerImage(draft)" :src="resolvePowerImage(draft)" :alt="`${draft.name || '内功'}图片`" />
-                <span v-else>内功图片</span>
+            <div class="preview-card game-detail-card">
+              <div class="game-card-bg" />
+              <header class="game-card-head">
+                <div class="preview-image game-card-icon" :class="{ empty: !resolvePowerImage(draft) }">
+                  <img v-if="resolvePowerImage(draft)" :src="resolvePowerImage(draft)" :alt="`${draft.name || '内功'}图片`" />
+                  <span v-else>内功</span>
+                </div>
+                <div class="game-card-title">
+                  <h2>{{ draft.name || '未命名内功' }}</h2>
+                  <p>
+                    <span>评分 +{{ getPreviewScore(draft) }}</span>
+                    <b>+{{ Math.round(getBaseBonus(draft) * 5) }}</b>
+                  </p>
+                </div>
+                <span class="game-card-equip">装配</span>
+              </header>
+
+              <div class="game-card-tags">
+                <span>{{ selectedCategoryCatalog?.rarity === 'rare' ? '稀有' : '通用' }}</span>
+                <span>{{ getPrimaryEntryTag(draft) }}</span>
+                <div class="game-card-marks">
+                  <i
+                    v-for="item in previewElementMarks(draft.elements)"
+                    :key="item.key"
+                    :style="{ '--element-color': item.color }"
+                  />
+                </div>
               </div>
-              <div class="seal">内</div>
-              <h2>{{ draft.name || '未命名' }}</h2>
-              <p>{{ draft.category }} · {{ draft.categoryTrait || '未设特性' }}</p>
-              <strong>{{ formatBenefit(getPowerBenefit(draft).totalGain) }}</strong>
-              <div class="preview-bonus-breakdown">
-                <span>基础 {{ formatBenefit(getPowerBenefit(draft).baseGain) }}</span>
-                <span>词条 {{ formatBenefit(getPowerBenefit(draft).entryGain) }}</span>
-              </div>
-              <div class="full-elements preview-elements">
+
+              <div class="game-card-divider" />
+
+              <section class="game-benefit-row">
+                <span>◆ {{ benefitModeLabel }}</span>
+                <strong>{{ formatBenefit(getPowerBenefit(draft).totalGain) }}</strong>
+              </section>
+
+              <section class="game-collapse">
+                <button type="button" class="game-collapse-head" @click="previewTraitExpanded = !previewTraitExpanded">
+                  <span>
+                    <el-icon :class="{ expanded: previewTraitExpanded }"><ArrowRightBold /></el-icon>
+                    特性
+                    <b>{{ selectedCategoryCatalog?.rarity === 'rare' ? '稀' : '普' }}</b>
+                  </span>
+                </button>
+                <div v-show="previewTraitExpanded" class="game-trait-body">
+                  {{ getPowerTraitText(draft) }}
+                </div>
+              </section>
+
+              <section class="game-collapse">
+                <button type="button" class="game-collapse-head" @click="previewEntriesExpanded = !previewEntriesExpanded">
+                  <span>
+                    <el-icon :class="{ expanded: previewEntriesExpanded }"><ArrowRightBold /></el-icon>
+                    属性加成
+                  </span>
+                  <strong>{{ draft.entries.length || 0 }} 条</strong>
+                </button>
+                <div v-show="previewEntriesExpanded" class="game-entry-list">
+                  <div
+                    v-for="row in getEntryPreviewRows(draft)"
+                    :key="row.key"
+                    class="game-entry-row"
+                    :class="{ base: row.type === 'base' }"
+                    :title="row.note"
+                  >
+                    <span>{{ row.name }}</span>
+                    <em>{{ row.value }}</em>
+                    <strong>{{ row.benefit }}</strong>
+                  </div>
+                  <div v-if="!draft.entries.length" class="game-entry-empty">词条等待后期随机开发</div>
+                </div>
+              </section>
+
+              <div class="game-element-strip">
                 <span
                   v-for="item in elementOptions"
                   :key="item.key"
-                  :style="{ '--element-color': item.color, '--element-bg': item.bg }"
+                  :style="{ '--element-color': item.color }"
                 >
-                  <b>{{ item.label }}</b>
-                  <strong>{{ draft.elements[item.key] || 0 }}</strong>
+                  {{ item.label }}{{ draft.elements[item.key] || 0 }}
                 </span>
-              </div>
-              <div class="full-entries preview-entries">
-                <span v-for="entry in draft.entries" :key="entry.id" :title="getEntryBenefitTitle(entry)">
-                  {{ getEntryLabel(entry, draft) }}
-                </span>
-                <span v-if="!draft.entries.length" class="muted">词条等待后期随机开发</span>
               </div>
             </div>
             <div class="editor-note-card">
               <strong>卡片预览</strong>
-              <span>保存后会同步到内功库卡片墙。五行数量跟随所选预设，词条先保留空数据。</span>
+              <span>点击特性或属性加成可展开/隐藏详情，保存后同步到内功库卡片墙。</span>
             </div>
           </aside>
         </div>
@@ -847,6 +913,7 @@ import {
   normalizePanelSetting,
   setActiveFormulaPackage
 } from '@/utils/internalPowerBenefit'
+import { getInternalPowerTraitEffect } from '@/utils/internalPowerTraits'
 
 const userStore = useUserStore()
 const route = useRoute()
@@ -863,12 +930,15 @@ const savedDraftSignature = ref('')
 const editingVisible = ref(false)
 const valueEditorVisible = ref(false)
 const categoryPickerVisible = ref(false)
+const previewTraitExpanded = ref(false)
+const previewEntriesExpanded = ref(true)
 const collapsedElementFolders = ref(new Set())
 const powerCatalog = ref([])
 const internalPowerImageVisible = ref(true)
 const entryOptions = ref([])
 const entryConversion = ref({ unitPercent: 0, entries: [] })
 const panelSetting = ref(createDefaultPanelSetting())
+const benefitMode = ref('defense')
 const catalogDraft = ref([])
 const baseApi = import.meta.env.VITE_APP_BASE_API
 const deleteConfirmVisible = ref(false)
@@ -905,6 +975,11 @@ const filters = reactive({
   category: '',
   element: ''
 })
+
+const benefitModeOptions = [
+  { value: 'defense', label: '数值收益', help: '按当前面板动态计算' },
+  { value: 'tower', label: '拆塔收益', help: '暂未接入拆塔计算逻辑' }
+]
 
 const elementOptions = [
   { key: 'metal', label: '金', color: '#c7922e', bg: 'rgba(199, 146, 46, 0.14)' },
@@ -1091,6 +1166,11 @@ const footerStatusText = computed(() => {
   if (!canSave.value) return `五行数量未满足 ${expectedElementTotal.value} 个`
   return selectedPower.value ? '可以保存当前改动' : '保存后新增到内功库'
 })
+const activeBenefitModeOption = computed(() => {
+  return benefitModeOptions.find(item => item.value === benefitMode.value) || benefitModeOptions[0]
+})
+const benefitModeLabel = computed(() => activeBenefitModeOption.value.label)
+const benefitModeHelpText = computed(() => activeBenefitModeOption.value.help)
 const emptySlots = computed(() => {
   const visibleSlots = quota.value.unlimited ? Math.max(20, filteredPowers.value.length + 1) : Math.max(20, quota.value.maxCount || 20)
   const slotCount = Math.max(0, visibleSlots - filteredPowers.value.length)
@@ -2189,7 +2269,7 @@ function buildRecognizedPowerDraft(item, options = {}) {
     id: createId(),
     name: item.parsed?.内功名 || candidate.name,
     category: candidate.value,
-    categoryTrait: candidate.trait,
+    categoryTrait: getCatalogTrait(candidate),
     bonusPercent: candidate.baseBonus,
     lingyunEnabled: lingyunDetected,
     lingyunBonusPercent: candidate.lingyunBonusPercent,
@@ -2322,7 +2402,7 @@ function createPower() {
     id: createId(),
     name: firstCatalog?.name || '新内功',
     category: firstCatalog?.value || '通用',
-    categoryTrait: firstCatalog?.trait || '等待定位',
+    categoryTrait: firstCatalog ? getCatalogTrait(firstCatalog) : '等待定位',
     bonusPercent: firstCatalog?.baseBonus || 0,
     lingyunEnabled: false,
     lingyunBonusPercent: firstCatalog?.lingyunBonusPercent || 0,
@@ -2572,7 +2652,7 @@ function handleCategoryChange(value) {
   if (!draft.value.name || draft.value.name === '新内功' || powerCatalog.value.some(item => item.name === draft.value.name)) {
     draft.value.name = catalog.name
   }
-  draft.value.categoryTrait = catalog.trait
+  draft.value.categoryTrait = getCatalogTrait(catalog)
   draft.value.bonusPercent = catalog.baseBonus
   draft.value.lingyunBonusPercent = catalog.lingyunBonusPercent || 0
   draft.value.imageUrl = catalog.imageUrl || ''
@@ -2631,7 +2711,7 @@ function saveCatalogDraft() {
     return normalizePower({
       ...power,
       name: power.name || catalog.name,
-      categoryTrait: catalog.trait,
+      categoryTrait: getCatalogTrait(catalog),
       bonusPercent: catalog.baseBonus,
       lingyunBonusPercent: catalog.lingyunBonusPercent
     })
@@ -2698,17 +2778,72 @@ function calculateEntryAttackPercent(entry = {}) {
 }
 
 function getPowerBenefit(power = {}) {
+  if (benefitMode.value === 'tower') {
+    return {
+      totalGain: 0,
+      baseGain: 0,
+      entryGain: 0,
+      note: '拆塔收益暂未接入计算逻辑'
+    }
+  }
   return calculatePowerBenefit(power, panelSetting.value)
 }
 
+function getPowerBenefitTitle(power = {}) {
+  const benefit = getPowerBenefit(power)
+  const note = benefit.note ? ` · ${benefit.note}` : ''
+  return `${benefitModeLabel.value} ${formatBenefit(benefit.totalGain)}${note}`
+}
+
 function getSingleEntryBenefit(entry = {}) {
-  return calculateEntryBenefit(entry, panelSetting.value).gain
+  return getEntryBenefitResult(entry).gain
+}
+
+function getEntryBenefitResult(entry = {}) {
+  if (benefitMode.value === 'tower') {
+    return {
+      gain: 0,
+      note: '拆塔收益暂未接入计算逻辑'
+    }
+  }
+  return calculateEntryBenefit(entry, panelSetting.value)
 }
 
 function getEntryBenefitTitle(entry = {}) {
-  const benefit = calculateEntryBenefit(entry, panelSetting.value)
+  const benefit = getEntryBenefitResult(entry)
   const note = benefit.note ? ` · ${benefit.note}` : ''
-  return `收益 ${formatBenefit(benefit.gain)}${note}`
+  return `${benefitModeLabel.value} ${formatBenefit(benefit.gain)}${note}`
+}
+
+function getEntryLimitHint(entry = {}) {
+  if (!entry?.name) return '请选择词条'
+  return `最大数值 ${getEntryMaxValueText(entry.name)} · ${getEntryBenefitTitle(entry)}`
+}
+
+function getEntryPreviewRows(power = {}) {
+  const rows = [{
+    key: 'base-benefit',
+    type: 'base',
+    name: `基础${benefitModeLabel.value}`,
+    value: formatBonus(getBaseBonus(power)),
+    benefit: formatBenefit(getPowerBenefit(power).baseGain),
+    note: `基础百分比增伤 ${formatBonus(getBaseBonus(power))}`
+  }]
+
+  for (const entry of power.entries || []) {
+    const name = String(entry.name || '').trim() || '未选择词条'
+    const benefit = getEntryBenefitResult(entry)
+    rows.push({
+      key: entry.id || `${name}-${rows.length}`,
+      type: 'entry',
+      name,
+      value: formatEntryValue(entry.value, getEntryOption(name) || {}),
+      benefit: formatBenefit(benefit.gain),
+      note: `${name} ${formatEntryValue(entry.value, getEntryOption(name) || {})} · ${benefitModeLabel.value} ${formatBenefit(benefit.gain)}${benefit.note ? ` · ${benefit.note}` : ''}`
+    })
+  }
+
+  return rows
 }
 
 function getEntryOption(name) {
@@ -2808,7 +2943,27 @@ function formatCategoryMeta(catalog = {}) {
   const elementText = catalog.elementKey === 'mixed'
     ? '五行各 1'
     : `${getElementLabel(catalog.elementKey)} × ${Number(catalog.elements?.[catalog.elementKey] || 0)}`
-  return `${elementText} · ${catalog.trait || '待配置'}`
+  return `${elementText} · ${formatTraitSummary(getCatalogTrait(catalog))}`
+}
+
+function getCatalogTrait(catalog = {}) {
+  const name = catalog.name || catalog.displayName || catalog.value
+  return getInternalPowerTraitEffect(name) || String(catalog.trait || '').trim() || '待配置'
+}
+
+function getPowerTraitText(power = {}) {
+  const currentTrait = String(power.categoryTrait || '').trim()
+  if (currentTrait && currentTrait !== '待配置') return currentTrait
+  return String(
+    getInternalPowerTraitEffect(power.name) ||
+    getInternalPowerTraitEffect(power.category) ||
+    '未配置满级强化效果'
+  ).trim()
+}
+
+function formatTraitSummary(value = '') {
+  const text = String(value || '待配置').trim()
+  return text.length > 28 ? `${text.slice(0, 28)}...` : text
 }
 
 function formatElementSequence(elements = {}) {
@@ -2824,6 +2979,29 @@ function formatElementCounts(elements = {}) {
 
 function getPowerScore(power = {}) {
   return roundTo(getPowerBenefit(power).totalGain * 100, 5)
+}
+
+function getPreviewScore(power = {}) {
+  const base = Number(getBaseBonus(power) || 0) * 100
+  const entryScore = Number(getPowerBenefit(power).entryGain || 0) * 100000
+  return Math.max(0, Math.round(base + entryScore))
+}
+
+function getPrimaryEntryTag(power = {}) {
+  const firstEntry = (power.entries || []).find(entry => String(entry.name || '').trim())
+  if (firstEntry?.name) return firstEntry.name
+  const catalog = getCatalogByName(power.category)
+  return getElementLabel(catalog?.elementKey) || '内功'
+}
+
+function previewElementMarks(elements = {}) {
+  return elementOptions.flatMap(item => {
+    const count = Math.min(4, Number(elements?.[item.key] || 0))
+    return Array.from({ length: count }, (_, index) => ({
+      key: `${item.key}-${index}`,
+      color: item.color
+    }))
+  }).slice(0, 4)
 }
 
 function getCatalogByName(name) {
@@ -2846,12 +3024,15 @@ function isTruthyFlag(value) {
 
 function normalizePower(value) {
   const catalog = getCatalogByName(value.category)
+  const currentTrait = String(value.categoryTrait || '').trim()
   return {
     id: String(value.id || value.powerId || createId()),
     powerId: value.powerId || value.power_id || undefined,
     name: String(value.name || ''),
     category: String(value.category || '通用'),
-    categoryTrait: String(value.categoryTrait || ''),
+    categoryTrait: currentTrait && currentTrait !== '待配置'
+      ? currentTrait
+      : getInternalPowerTraitEffect(value.name) || getInternalPowerTraitEffect(value.category) || getCatalogTrait(catalog || {}) || currentTrait,
     bonusPercent: clampBonus(value.bonusPercent),
     lingyunEnabled: isTruthyFlag(value.lingyunEnabled ?? value.lingyun_enabled),
     lingyunBonusPercent: clampBonus(value.lingyunBonusPercent ?? value.lingyun_bonus_percent ?? catalog?.lingyunBonusPercent ?? 0),
@@ -2975,6 +3156,9 @@ function normalizeCatalogItem(value = {}) {
     : (['metal', 'wood', 'water', 'fire', 'earth', 'mixed'].includes(value.primaryElement) ? value.primaryElement : 'mixed')
   const elements = normalizeElements(Object.keys(value.elements || {}).length ? value.elements : createElementsFromPrimary(elementKey))
   const displayName = value.displayName || buildPresetDisplayName(value.name, elementKey)
+  const trait = getInternalPowerTraitEffect(value.name || displayName || value.value) ||
+    String(value.trait || value.bonusDesc || value.bonusType || '').trim() ||
+    '待配置'
   return {
     id: String(value.id || value.presetId || createId()),
     presetId: value.presetId,
@@ -2990,7 +3174,7 @@ function normalizeCatalogItem(value = {}) {
     lingyunBonusPercent: clampBonus(value.lingyunBonusPercent ?? value.lingyun_bonus_percent),
     imageUrl: String(value.imageUrl || '').trim(),
     entries: normalizeEntries(value.entries),
-    trait: String(value.trait || value.bonusDesc || value.bonusType || '').trim() || '待配置'
+    trait
   }
 }
 
@@ -3029,7 +3213,7 @@ function createSamplePowers() {
     id: `sample-${item.id}`,
     name: item.name,
     category: item.value,
-    categoryTrait: item.trait,
+    categoryTrait: getCatalogTrait(item),
     bonusPercent: item.baseBonus,
     lingyunEnabled: false,
     lingyunBonusPercent: item.lingyunBonusPercent,
@@ -3118,9 +3302,15 @@ function getSamplePowersForQuota() {
 
 .hero-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+  justify-content: flex-end;
   position: relative;
   z-index: 1;
+}
+
+.benefit-mode-select {
+  width: 136px;
 }
 
 .recognition-record-badge {
@@ -3589,14 +3779,21 @@ function getSamplePowersForQuota() {
 }
 
 .editor-section {
-  padding: 16px;
+  padding: 14px 16px;
 }
 
 .section-heading {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+}
+
+.section-heading > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
 }
 
 .section-heading strong {
@@ -3614,7 +3811,7 @@ function getSamplePowersForQuota() {
 .basic-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 14px;
+  gap: 10px 14px;
 }
 
 .power-form :deep(.el-form-item) {
@@ -3622,8 +3819,10 @@ function getSamplePowersForQuota() {
 }
 
 .power-form :deep(.el-form-item__label) {
+  margin-bottom: 4px;
   color: #334155;
   font-weight: 900;
+  line-height: 1.25;
 }
 
 .power-form :deep(.el-input__wrapper),
@@ -3860,21 +4059,21 @@ function getSamplePowersForQuota() {
 .bonus-editor {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 138px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 124px;
+  gap: 10px;
   align-items: center;
 }
 
 .lingyun-editor {
   width: 100%;
-  min-height: 40px;
+  min-height: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   border: 1px solid rgba(124, 58, 237, 0.2);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: rgba(124, 58, 237, 0.06);
 }
 
@@ -3941,11 +4140,31 @@ function getSamplePowersForQuota() {
   text-align: center;
 }
 
+.entry-table-head,
 .entry-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(170px, 220px) auto;
+  grid-template-columns: minmax(160px, 1.35fr) minmax(132px, 0.9fr) 96px 54px;
+  align-items: center;
   gap: 8px;
+}
+
+.entry-table-head {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
+  color: #746654;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.entry-row {
+  min-height: 46px;
   margin-bottom: 8px;
+  padding: 5px 8px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .entry-row :deep(.el-select) {
@@ -3954,8 +4173,8 @@ function getSamplePowersForQuota() {
 
 .entry-value-control {
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) auto;
-  gap: 4px 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
   align-items: center;
 }
 
@@ -3963,21 +4182,23 @@ function getSamplePowersForQuota() {
   width: 100%;
 }
 
-.entry-value-control small {
-  grid-column: 1 / -1;
-  color: #8a7862;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.entry-value-control .entry-benefit-text {
-  color: #256f4a;
-}
-
 .entry-value-suffix {
   color: #64748b;
   font-size: 12px;
   font-weight: 800;
+}
+
+.entry-row-benefit {
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(22, 101, 52, 0.08);
+  color: #166534;
+  font-size: 12px;
+  font-weight: 950;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .placeholder-note {
@@ -3999,6 +4220,319 @@ function getSamplePowersForQuota() {
   background:
     linear-gradient(145deg, rgba(25, 34, 48, 0.98), rgba(48, 62, 58, 0.96));
   color: #fff8e8;
+}
+
+.game-detail-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 520px;
+  padding: 22px 20px 18px;
+  border-color: rgba(139, 202, 255, 0.16);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 82% 6%, rgba(154, 207, 255, 0.16), transparent 26%),
+    radial-gradient(circle at 18% 0%, rgba(246, 203, 112, 0.12), transparent 28%),
+    linear-gradient(180deg, #0d1a22 0%, #182a33 48%, #24333a 100%);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.game-card-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0 22%, rgba(255, 255, 255, 0.06) 22% 22.4%, transparent 22.4% 100%),
+    linear-gradient(180deg, rgba(114, 168, 205, 0.08), transparent 44%),
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.34) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 68% 78%, rgba(255, 255, 255, 0.24) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 35% 92%, rgba(255, 255, 255, 0.2) 0 1px, transparent 1.5px);
+  opacity: 0.9;
+}
+
+.game-card-head,
+.game-card-tags,
+.game-benefit-row,
+.game-collapse,
+.game-element-strip {
+  position: relative;
+  z-index: 1;
+}
+
+.game-card-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding-right: 62px;
+}
+
+.game-card-icon.preview-image {
+  width: 76px;
+  margin: 0;
+  border-radius: 14px;
+  border-color: rgba(246, 220, 148, 0.28);
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.16), rgba(254, 243, 199, 0.16)),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.12) 0 8px, transparent 8px 16px);
+}
+
+.game-card-title {
+  min-width: 0;
+}
+
+.game-card-title h2 {
+  margin: 0 0 6px;
+  color: #f9fbff;
+  font-size: clamp(20px, 2.1vw, 26px);
+  font-weight: 950;
+  line-height: 1.18;
+  word-break: break-word;
+  writing-mode: horizontal-tb;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.game-card-title p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: rgba(234, 242, 252, 0.72);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.game-card-title b {
+  border: 1px solid rgba(244, 211, 119, 0.34);
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: rgba(22, 29, 38, 0.72);
+  color: #f2d06d;
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.2;
+  box-shadow: inset 0 0 14px rgba(242, 208, 109, 0.08);
+}
+
+.game-card-equip {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  width: 54px;
+  height: 54px;
+  border: 2px solid rgba(190, 230, 255, 0.9);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #dff5ff;
+  font-size: 18px;
+  font-weight: 950;
+  text-shadow: 0 0 12px rgba(125, 211, 252, 0.65);
+}
+
+.game-card-tags {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.game-card-tags span {
+  border-radius: 4px;
+  padding: 5px 8px 4px;
+  background: #8cc29a;
+  color: #193726;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.game-card-tags span:nth-child(2) {
+  background: #f2ca75;
+  color: #593f12;
+}
+
+.game-card-marks {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.game-card-marks i {
+  width: 17px;
+  height: 22px;
+  display: inline-block;
+  background: linear-gradient(180deg, #fff7b7, var(--element-color));
+  clip-path: polygon(50% 0, 100% 100%, 50% 76%, 0 100%);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--element-color), transparent 24%));
+}
+
+.game-card-divider {
+  position: relative;
+  z-index: 1;
+  height: 2px;
+  margin: 15px 0 10px;
+  background: linear-gradient(90deg, transparent, rgba(155, 205, 235, 0.72), transparent);
+}
+
+.game-benefit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  background: linear-gradient(90deg, rgba(23, 68, 105, 0.82), rgba(23, 68, 105, 0.48));
+  color: #d7efff;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.game-benefit-row strong {
+  color: #f4f7ff;
+  font-size: 20px;
+}
+
+.game-collapse {
+  margin-top: 8px;
+}
+
+.game-collapse-head {
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  padding: 0 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(90deg, rgba(20, 61, 95, 0.84), rgba(24, 70, 108, 0.54));
+  color: #cdefff;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 950;
+  text-align: left;
+  transition: filter 0.16s ease, transform 0.16s ease;
+}
+
+.game-collapse-head:hover {
+  filter: brightness(1.12);
+  transform: translateX(2px);
+}
+
+.game-collapse-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.game-collapse-head .el-icon {
+  color: #e7f8ff;
+  font-size: 16px;
+  transition: transform 0.18s ease;
+}
+
+.game-collapse-head .el-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.game-collapse-head b {
+  min-width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: radial-gradient(circle, #ffe5a0, #8f5d1e);
+  color: #fff8dc;
+  font-size: 16px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.game-collapse-head strong {
+  color: rgba(224, 242, 254, 0.78);
+  font-size: 14px;
+}
+
+.game-trait-body {
+  padding: 10px 13px 12px 33px;
+  background: rgba(7, 17, 25, 0.34);
+  color: rgba(232, 246, 255, 0.86);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.65;
+}
+
+.game-entry-list {
+  display: grid;
+  gap: 2px;
+  padding-top: 2px;
+}
+
+.game-entry-row {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(74px, auto) minmax(92px, auto);
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 18px;
+  background: linear-gradient(90deg, rgba(15, 27, 36, 0.76), rgba(21, 35, 44, 0.46));
+  color: rgba(238, 248, 255, 0.86);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.game-entry-row.base {
+  background: linear-gradient(90deg, rgba(31, 70, 94, 0.82), rgba(31, 70, 94, 0.46));
+}
+
+.game-entry-row:nth-child(2n) {
+  background: linear-gradient(90deg, rgba(31, 43, 51, 0.72), rgba(31, 43, 51, 0.42));
+}
+
+.game-entry-row span,
+.game-entry-row em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-entry-row em {
+  color: rgba(238, 248, 255, 0.9);
+  font-style: normal;
+  text-align: right;
+}
+
+.game-entry-row strong {
+  color: #f3fbff;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.game-entry-empty {
+  padding: 12px 16px;
+  background: rgba(7, 17, 25, 0.34);
+  color: rgba(232, 246, 255, 0.68);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.game-element-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.game-element-strip span {
+  border: 1px solid color-mix(in srgb, var(--element-color), transparent 56%);
+  border-radius: 4px;
+  padding: 4px 7px;
+  background: color-mix(in srgb, var(--element-color), transparent 84%);
+  color: #f4fbff;
+  font-size: 12px;
+  font-weight: 950;
 }
 
 .preview-image {
@@ -4052,6 +4586,15 @@ function getSamplePowersForQuota() {
   margin: 0;
   color: rgba(255, 248, 232, 0.72);
   font-weight: 800;
+}
+
+.trait-description {
+  width: 100%;
+  color: rgba(255, 248, 232, 0.76);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+  text-align: left;
 }
 
 .preview-card > strong {
@@ -4748,6 +5291,10 @@ function getSamplePowersForQuota() {
     width: 100%;
   }
 
+  .benefit-mode-select {
+    width: 100%;
+  }
+
   .filters > .el-button,
   .hero-actions > .el-button {
     flex: 1;
@@ -4794,9 +5341,25 @@ function getSamplePowersForQuota() {
   }
 
   .basic-grid,
-  .bonus-editor,
-  .entry-row {
+  .bonus-editor {
     grid-template-columns: 1fr;
+  }
+
+  .entry-table-head {
+    display: none;
+  }
+
+  .entry-row {
+    grid-template-columns: minmax(0, 1fr) 118px;
+    gap: 7px;
+  }
+
+  .entry-row-benefit {
+    text-align: left;
+  }
+
+  .entry-row > .el-button {
+    justify-self: end;
   }
 
   .element-controls {
@@ -4809,6 +5372,47 @@ function getSamplePowersForQuota() {
 
   .preview-card {
     padding: 20px;
+  }
+
+  .game-card-head {
+    grid-template-columns: 64px minmax(0, 1fr);
+    padding-right: 54px;
+  }
+
+  .game-card-icon.preview-image {
+    width: 64px;
+  }
+
+  .game-card-title h2 {
+    font-size: 22px;
+  }
+
+  .game-card-equip {
+    width: 48px;
+    height: 48px;
+    font-size: 15px;
+  }
+
+  .game-card-tags {
+    grid-template-columns: auto auto;
+  }
+
+  .game-card-marks {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .game-entry-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .game-entry-row em {
+    text-align: right;
+  }
+
+  .game-entry-row strong {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 
   .preview-card > strong {

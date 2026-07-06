@@ -17,3 +17,37 @@ export function saveInternalPowerPanelSetting(data) {
     data
   })
 }
+
+export function recognizeInternalPowerPanelImage(file) {
+  const data = new FormData()
+  data.append('file', file)
+  return request({
+    url: '/personal/internal-power-panel-setting/recognize-image',
+    method: 'post',
+    data,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+export function getInternalPowerPanelRecognitionHistory() {
+  return request({
+    url: '/personal/internal-power-panel-setting/recognition-history',
+    method: 'get'
+  })
+}
+
+export function clearInternalPowerPanelRecognitionHistory() {
+  return request({
+    url: '/personal/internal-power-panel-setting/recognition-history',
+    method: 'delete'
+  })
+}
+
+export function getInternalPowerPanelTemplates() {
+  return request({
+    url: '/personal/internal-power-panel-setting/templates',
+    method: 'get'
+  })
+}

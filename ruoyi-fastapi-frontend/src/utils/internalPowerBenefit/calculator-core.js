@@ -23,7 +23,7 @@ export const DEFAULT_ATTACK = {
   restraintValue: 285,
   crit: 1100,
   critDmg: 0.575,
-  extraCritRate: 0.10,
+  extraCritRate: 0,
   restraintPct: 0,
   skillBonusPct: 0,
   skillBonus: 0,
