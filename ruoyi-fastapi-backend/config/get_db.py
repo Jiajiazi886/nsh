@@ -171,6 +171,62 @@ DEFAULT_AI_RECOGNITION_CONFIG_SQL = {
     """,
 }
 
+PERSONAL_DEFENSE_CALCULATOR_MENU_SQL = [
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+      is_frame, is_cache, menu_type, visible, status, perms, icon,
+      create_by, create_time, update_by, update_time, remark
+    ) VALUES (
+      3000, '个人管理', 0, 5, 'personal', 'Layout', '', '',
+      1, 0, 'M', '0', '0', '', 'user',
+      'admin', NOW(), '', NULL, '个人管理目录'
+    )
+    ON DUPLICATE KEY UPDATE
+      menu_name = VALUES(menu_name),
+      path = VALUES(path),
+      component = VALUES(component),
+      menu_type = VALUES(menu_type),
+      visible = VALUES(visible),
+      status = VALUES(status),
+      icon = VALUES(icon),
+      update_by = 'admin',
+      update_time = NOW(),
+      remark = VALUES(remark)
+    """,
+    """
+    INSERT INTO sys_menu (
+      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+      is_frame, is_cache, menu_type, visible, status, perms, icon,
+      create_by, create_time, update_by, update_time, remark
+    ) VALUES (
+      3005, '防守计算器', 3000, 4, 'defense-calculator', 'personal/calculator/index', '',
+      'PersonalDefenseCalculator', 1, 0, 'C', '0', '0', 'personal:defense-calculator:list',
+      'shield', 'admin', NOW(), '', NULL, '防守计算器菜单'
+    )
+    ON DUPLICATE KEY UPDATE
+      menu_name = VALUES(menu_name),
+      parent_id = VALUES(parent_id),
+      order_num = VALUES(order_num),
+      path = VALUES(path),
+      component = VALUES(component),
+      route_name = VALUES(route_name),
+      menu_type = VALUES(menu_type),
+      visible = VALUES(visible),
+      status = VALUES(status),
+      perms = VALUES(perms),
+      icon = VALUES(icon),
+      update_by = 'admin',
+      update_time = NOW(),
+      remark = VALUES(remark)
+    """,
+    """
+    INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+      (1, 3000), (1, 3005),
+      (2, 3000), (2, 3005)
+    """,
+]
+
 INTERNAL_POWER_PANEL_SETTING_MENU_SQL = [
     """
     INSERT INTO sys_menu (
@@ -522,6 +578,15 @@ async def ensure_default_ai_recognition_config() -> None:
         await conn.execute(text(sql))
 
 
+async def ensure_personal_defense_calculator_menu() -> None:
+    """
+    补齐个人管理下的防守计算器菜单。
+    """
+    async with async_engine.begin() as conn:
+        for sql in PERSONAL_DEFENSE_CALCULATOR_MENU_SQL:
+            await conn.execute(text(sql))
+
+
 async def ensure_internal_power_panel_setting_menu() -> None:
     """
     补齐个人内功PVP收益面板设置菜单，并迁移旧词条换算菜单入口。
@@ -588,6 +653,7 @@ async def init_create_table() -> None:
     await ensure_sys_user_vip_sponsor_columns()
     await ensure_sys_user_vip_sponsor_permission_menus()
     await ensure_default_ai_recognition_config()
+    await ensure_personal_defense_calculator_menu()
     await ensure_internal_power_panel_setting_menu()
     await ensure_damage_formula_version_schema()
     await ensure_formula_design_menu()
