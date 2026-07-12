@@ -56,7 +56,7 @@
               </div>
             </div>
           </el-tab-pane>
-          <el-tab-pane label="特性" name="traits">
+          <el-tab-pane label="穿戴内功" name="traits">
             <div class="trait-list">
               <div v-for="field in TRAIT_FIELDS" :key="field.name" class="trait-row">
                 <span>{{ field.name }}</span>

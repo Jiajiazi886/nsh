@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7.8日新世界防守团内功计算器</title>
+<style>
+  :root {
+    --grid-border:#000;
+    --sheet-bg:#fff;
+    --page-bg:#f3f3f3;
+    --text:#111;
+    --yellow:#ffff00;
+    --red:#ff0000;
+    --blue:#4472c4;
+    --purple:#7030a0;
+    --green:#70ad47;
+    --credit:#8a6d3b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0;
+    background:var(--page-bg);
+    color:var(--text);
+    font-family: "DengXian", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+    font-size:14.5px;
+  }
+  .workbook {
+    padding: 18px 22px 30px;
+    overflow:auto;
+  }
+  .sheet {
+    display:inline-block;
+    background:var(--sheet-bg);
+    padding:0;
+    box-shadow: 0 2px 14px rgba(0,0,0,.08);
+  }
+  table.excel {
+    border-collapse: collapse;
+    table-layout: fixed;
+    background:#fff;
+  }
+  .excel td {
+    height: 29.6px;
+    min-height:29.6px;
+    padding: 0 5px;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: visible;
+    position: relative;
+    line-height: 1.15;
+    font-weight: 400;
+  }
+  .excel .bordered { border:1px solid var(--grid-border); text-align:center; }
+  .excel .head { text-align:center; }
+  .excel .blank-head { color:var(--red); font-weight:700; }
+  .excel .label { text-align:center; }
+  .excel .score, .excel .score-head { text-align:center; }
+  .excel .heaven-head { background:var(--yellow); font-weight:700; text-align:center; }
+  .excel .input-cell, .excel .select-cell { padding:0; }
+  input, select {
+    width:100%; height:100%; border:0; outline:0; margin:0; padding:0 4px;
+    background:transparent; color:#111; font:inherit; text-align:center;
+    appearance:auto;
+  }
+  input { text-align:center; -moz-appearance:textfield; }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  select { text-align-last:center; cursor:pointer; }
+  .output span { display:inline-block; min-width: 100%; }
+  .empty { border:0; }
+  .credit, .note {
+    font-weight:700;
+    text-align:left;
+    z-index:2;
+  }
+  .credit-title { color:var(--red); }
+  .credit-body { color:var(--credit); }
+  .note-27 { color:var(--blue); }
+  .note-28 { color:var(--purple); }
+  .note-29 { color:var(--green); }
+  .note-30 { color:var(--red); }
+  .r4 td { height:26.6px; }
+  .r10 td, .r34 td, .r35 td { height:28px; }
+  .r31 td { height:30.6px; }
+  .r32 td { height:33.6px; }
+  .changed { background: #fff8dc; transition: background .18s ease; }
+  @media (max-width: 760px) {
+    .workbook { padding:10px; }
+    body { font-size:13px; }
+  }
+</style>
+</head>
+<body>
+  <div class="workbook">
+    <div class="sheet" role="region" aria-label="7.8日新世界防守团内功计算器">
+      <table class="excel" aria-label="7.8日新世界防守团内功计算器">
+        <colgroup><col class="col-B" style="width:152px"><col class="col-C" style="width:72px"><col class="col-D" style="width:72px"><col class="col-E" style="width:72px"><col class="col-F" style="width:97px"><col class="col-G" style="width:72px"><col class="col-H" style="width:96px"><col class="col-I" style="width:96px"><col class="col-J" style="width:96px"><col class="col-K" style="width:96px"><col class="col-L" style="width:96px"></colgroup>
+        <tbody>
+          <tr class="r2"><td class="cell c-B r-2 coord-B2 bordered blank-head"></td><td class="cell c-C r-2 coord-C2 bordered head">数值</td><td class="cell c-D r-2 coord-D2 bordered head score-head">评分</td><td class="cell c-E r-2 coord-E2 empty"></td><td class="cell c-F r-2 coord-F2 bordered head">内功</td><td class="cell c-G r-2 coord-G2 bordered head">是/否携带</td><td class="cell c-H r-2 coord-H2 bordered head score-head">收益</td><td class="cell c-I r-2 coord-I2 bordered head"></td><td class="cell c-J r-2 coord-J2 empty"></td><td class="cell c-K r-2 coord-K2 bordered heaven-head">周天</td><td class="cell c-L r-2 coord-L2 bordered select-cell"><select id="L2" data-cell="L2" aria-label="周天"><option value="金火">金火</option><option value="火木" selected>火木</option><option value="金木">金木</option></select></td></tr><tr class="r3"><td class="cell c-B r-3 coord-B3 bordered label">赛年（填百分号前）</td><td class="cell c-C r-3 coord-C3 bordered input-cell"><input id="C3" data-cell="C3" type="number" step="any" value="0" autocomplete="off" aria-label="赛年（填百分号前）"></td><td class="cell c-D r-3 coord-D3 bordered output score" title="=0.88*C3"><span id="D3">0.00</span></td><td class="cell c-E r-3 coord-E3 empty"></td><td class="cell c-F r-3 coord-F3 bordered label">灼星贯日</td><td class="cell c-G r-3 coord-G3 bordered select-cell"><select id="G3" data-cell="G3" aria-label="灼星贯日 是否携带"><option value="是" selected>是</option><option value="否" >否</option></select></td><td class="cell c-H r-3 coord-H3 bordered output score" title="=3+0.2*(5.5+IF(C19=1,7,IF(G8=&quot;是&quot;,5.25,0))+IF(C16=1,8,IF(G5=&quot;是&quot;,5.5,0)))"><span id="H3">0.00</span></td><td class="cell c-I r-3 coord-I3 bordered output count"><span id="I3">0</span></td><td class="cell c-J r-3 coord-J3 empty"></td><td class="cell c-K r-3 coord-K3 empty"></td><td class="cell c-L r-3 coord-L3 empty"></td></tr><tr class="r4"><td class="cell c-B r-4 coord-B4 bordered label">力量/气海</td><td class="cell c-C r-4 coord-C4 bordered input-cell"><input id="C4" data-cell="C4" type="number" step="any" value="" autocomplete="off" aria-label="力量/气海"></td><td class="cell c-D r-4 coord-D4 bordered output score" title="=(2.5*C4*0.0455+C4*0.0425)"><span id="D4">0.00</span></td><td class="cell c-E r-4 coord-E4 empty"></td><td class="cell c-F r-4 coord-F4 bordered label">承影锋镝</td><td class="cell c-G r-4 coord-G4 bordered select-cell"><select id="G4" data-cell="G4" aria-label="承影锋镝 是否携带"><option value="是" selected>是</option><option value="否" >否</option></select></td><td class="cell c-H r-4 coord-H4 bordered output score"><span id="H4">6</span></td><td class="cell c-I r-4 coord-I4 bordered output count"><span id="I4">0</span></td><td class="cell c-J r-4 coord-J4 empty"></td><td class="cell c-K r-4 coord-K4 empty"></td><td class="cell c-L r-4 coord-L4 empty"></td></tr><tr class="r5"><td class="cell c-B r-5 coord-B5 bordered label">攻击</td><td class="cell c-C r-5 coord-C5 bordered input-cell"><input id="C5" data-cell="C5" type="number" step="any" value="" autocomplete="off" aria-label="攻击"></td><td class="cell c-D r-5 coord-D5 bordered output score" title="=0.0455*C5"><span id="D5">0.00</span></td><td class="cell c-E r-5 coord-E5 empty"></td><td class="cell c-F r-5 coord-F5 bordered label">绝电惊沙</td><td class="cell c-G r-5 coord-G5 bordered select-cell"><select id="G5" data-cell="G5" aria-label="绝电惊沙 是否携带"><option value="是" selected>是</option><option value="否" >否</option></select></td><td class="cell c-H r-5 coord-H5 bordered output score"><span id="H5">5.5</span></td><td class="cell c-I r-5 coord-I5 bordered output count"><span id="I5">0</span></td><td class="cell c-J r-5 coord-J5 empty"></td><td class="cell c-K r-5 coord-K5 empty"></td><td class="cell c-L r-5 coord-L5 empty"></td></tr><tr class="r6"><td class="cell c-B r-6 coord-B6 bordered label">破防</td><td class="cell c-C r-6 coord-C6 bordered input-cell"><input id="C6" data-cell="C6" type="number" step="any" value="" autocomplete="off" aria-label="破防"></td><td class="cell c-D r-6 coord-D6 bordered output score" title="=(C6*0.0425)"><span id="D6">0.00</span></td><td class="cell c-E r-6 coord-E6 empty"></td><td class="cell c-F r-6 coord-F6 bordered label">日月两仪</td><td class="cell c-G r-6 coord-G6 bordered select-cell"><select id="G6" data-cell="G6" aria-label="日月两仪 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-6 coord-H6 bordered output score"><span id="H6">4.9</span></td><td class="cell c-I r-6 coord-I6 bordered output count"><span id="I6">0</span></td><td class="cell c-J r-6 coord-J6 empty"></td><td class="cell c-K r-6 coord-K6 empty"></td><td class="cell c-L r-6 coord-L6 empty"></td></tr><tr class="r7"><td class="cell c-B r-7 coord-B7 bordered label">流派克制（填百分号前）</td><td class="cell c-C r-7 coord-C7 bordered input-cell"><input id="C7" data-cell="C7" type="number" step="any" value="" autocomplete="off" aria-label="流派克制（填百分号前）"></td><td class="cell c-D r-7 coord-D7 bordered output score" title="=C7"><span id="D7">0.00</span></td><td class="cell c-E r-7 coord-E7 empty"></td><td class="cell c-F r-7 coord-F7 bordered label">楚狂歌</td><td class="cell c-G r-7 coord-G7 bordered select-cell"><select id="G7" data-cell="G7" aria-label="楚狂歌 是否携带"><option value="是" selected>是</option><option value="否" >否</option></select></td><td class="cell c-H r-7 coord-H7 bordered output score"><span id="H7">5.4</span></td><td class="cell c-I r-7 coord-I7 bordered output count"><span id="I7">0</span></td><td class="cell c-J r-7 coord-J7 empty"></td><td class="cell c-K r-7 coord-K7 empty"></td><td class="cell c-L r-7 coord-L7 empty"></td></tr><tr class="r8"><td class="cell c-B r-8 coord-B8 bordered label">会心</td><td class="cell c-C r-8 coord-C8 bordered input-cell"><input id="C8" data-cell="C8" type="number" step="any" value="" autocomplete="off" aria-label="会心"></td><td class="cell c-D r-8 coord-D8 bordered output score" title="=C8*0.0182"><span id="D8">0.00</span></td><td class="cell c-E r-8 coord-E8 empty"></td><td class="cell c-F r-8 coord-F8 bordered label">众妙</td><td class="cell c-G r-8 coord-G8 bordered select-cell"><select id="G8" data-cell="G8" aria-label="众妙 是否携带"><option value="是" selected>是</option><option value="否" >否</option></select></td><td class="cell c-H r-8 coord-H8 bordered output score"><span id="H8">5.25</span></td><td class="cell c-I r-8 coord-I8 bordered output count"><span id="I8">0</span></td><td class="cell c-J r-8 coord-J8 empty"></td><td class="cell c-K r-8 coord-K8 empty"></td><td class="cell c-L r-8 coord-L8 empty"></td></tr><tr class="r9"><td class="cell c-B r-9 coord-B9 bordered label">最大攻击</td><td class="cell c-C r-9 coord-C9 bordered input-cell"><input id="C9" data-cell="C9" type="number" step="any" value="" autocomplete="off" aria-label="最大攻击"></td><td class="cell c-D r-9 coord-D9 bordered output score" title="=0.0455*C9/2"><span id="D9">0.00</span></td><td class="cell c-E r-9 coord-E9 empty"></td><td class="cell c-F r-9 coord-F9 bordered label">焚刃</td><td class="cell c-G r-9 coord-G9 bordered select-cell"><select id="G9" data-cell="G9" aria-label="焚刃 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-9 coord-H9 bordered output score"><span id="H9">5</span></td><td class="cell c-I r-9 coord-I9 bordered output count"><span id="I9">0</span></td><td class="cell c-J r-9 coord-J9 empty"></td><td class="cell c-K r-9 coord-K9 empty"></td><td class="cell c-L r-9 coord-L9 empty"></td></tr><tr class="r10"><td class="cell c-B r-10 coord-B10 bordered label">最小攻击</td><td class="cell c-C r-10 coord-C10 bordered input-cell"><input id="C10" data-cell="C10" type="number" step="any" value="" autocomplete="off" aria-label="最小攻击"></td><td class="cell c-D r-10 coord-D10 bordered output score" title="=0.0455*C10/2"><span id="D10">0.00</span></td><td class="cell c-E r-10 coord-E10 empty"></td><td class="cell c-F r-10 coord-F10 bordered label">斩精</td><td class="cell c-G r-10 coord-G10 bordered select-cell"><select id="G10" data-cell="G10" aria-label="斩精 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-10 coord-H10 bordered output score"><span id="H10">4.8</span></td><td class="cell c-I r-10 coord-I10 bordered output count"><span id="I10">0</span></td><td class="cell c-J r-10 coord-J10 empty"></td><td class="cell c-K r-10 coord-K10 empty"></td><td class="cell c-L r-10 coord-L10 empty"></td></tr><tr class="r11"><td class="cell c-B r-11 coord-B11 bordered label">身法</td><td class="cell c-C r-11 coord-C11 bordered input-cell"><input id="C11" data-cell="C11" type="number" step="any" value="" autocomplete="off" aria-label="身法"></td><td class="cell c-D r-11 coord-D11 bordered output score" title="=C11*0.0182*6"><span id="D11">0.00</span></td><td class="cell c-E r-11 coord-E11 empty"></td><td class="cell c-F r-11 coord-F11 bordered label">破釜</td><td class="cell c-G r-11 coord-G11 bordered select-cell"><select id="G11" data-cell="G11" aria-label="破釜 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-11 coord-H11 bordered output score"><span id="H11">4.8</span></td><td class="cell c-I r-11 coord-I11 bordered output count"><span id="I11">0</span></td><td class="cell c-J r-11 coord-J11 empty"></td><td class="cell c-K r-11 coord-K11 empty"></td><td class="cell c-L r-11 coord-L11 empty"></td></tr><tr class="r12"><td class="cell c-B r-12 coord-B12 bordered label">耐力</td><td class="cell c-C r-12 coord-C12 bordered input-cell"><input id="C12" data-cell="C12" type="number" step="any" value="" autocomplete="off" aria-label="耐力"></td><td class="cell c-D r-12 coord-D12 bordered output score" title="=C12*0.0455"><span id="D12">0.00</span></td><td class="cell c-E r-12 coord-E12 empty"></td><td class="cell c-F r-12 coord-F12 bordered label">贯山月(卡轴)</td><td class="cell c-G r-12 coord-G12 bordered select-cell"><select id="G12" data-cell="G12" aria-label="贯山月(卡轴) 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-12 coord-H12 bordered output score"><span id="H12">4.9</span></td><td class="cell c-I r-12 coord-I12 bordered output count"><span id="I12">0</span></td><td class="cell c-J r-12 coord-J12 empty"></td><td class="cell c-K r-12 coord-K12 empty"></td><td class="cell c-L r-12 coord-L12 empty"></td></tr><tr class="r13"><td class="cell c-B r-13 coord-B13 bordered label">根骨</td><td class="cell c-C r-13 coord-C13 bordered input-cell"><input id="C13" data-cell="C13" type="number" step="any" value="" autocomplete="off" aria-label="根骨"></td><td class="cell c-D r-13 coord-D13 bordered output score" title="=C13*0.0455"><span id="D13">0.00</span></td><td class="cell c-E r-13 coord-E13 empty"></td><td class="cell c-F r-13 coord-F13 bordered label">锻寒芒</td><td class="cell c-G r-13 coord-G13 bordered select-cell"><select id="G13" data-cell="G13" aria-label="锻寒芒 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-13 coord-H13 bordered output score"><span id="H13">4.8</span></td><td class="cell c-I r-13 coord-I13 bordered output count"><span id="I13">0</span></td><td class="cell c-J r-13 coord-J13 empty"></td><td class="cell c-K r-13 coord-K13 empty"></td><td class="cell c-L r-13 coord-L13 empty"></td></tr><tr class="r14"><td class="cell c-B r-14 coord-B14 bordered label">灼星贯日-灵</td><td class="cell c-C r-14 coord-C14 bordered input-cell"><input id="C14" data-cell="C14" type="number" step="any" value="0" autocomplete="off" aria-label="灼星贯日-灵"></td><td class="cell c-D r-14 coord-D14 bordered output score" title="=C14*(1.875+0.1*(5.5+IF(C19=1,7,IF(G8=&quot;是&quot;,5.25,0))+IF(C16=1,8,IF(G5=&quot;是&quot;,5.5,0))))"><span id="D14">0.00</span></td><td class="cell c-E r-14 coord-E14 empty"></td><td class="cell c-F r-14 coord-F14 bordered label">击衰</td><td class="cell c-G r-14 coord-G14 bordered select-cell"><select id="G14" data-cell="G14" aria-label="击衰 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-14 coord-H14 bordered output score"><span id="H14">4.2</span></td><td class="cell c-I r-14 coord-I14 bordered output count"><span id="I14">0</span></td><td class="cell c-J r-14 coord-J14 empty"></td><td class="cell c-K r-14 coord-K14 empty"></td><td class="cell c-L r-14 coord-L14 empty"></td></tr><tr class="r15"><td class="cell c-B r-15 coord-B15 bordered label">承影锋镝-灵</td><td class="cell c-C r-15 coord-C15 bordered input-cell"><input id="C15" data-cell="C15" type="number" step="any" value="" autocomplete="off" aria-label="承影锋镝-灵"></td><td class="cell c-D r-15 coord-D15 bordered output score" title="=C15*3"><span id="D15">0.00</span></td><td class="cell c-E r-15 coord-E15 empty"></td><td class="cell c-F r-15 coord-F15 bordered label">惊羽</td><td class="cell c-G r-15 coord-G15 bordered select-cell"><select id="G15" data-cell="G15" aria-label="惊羽 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-15 coord-H15 bordered output score"><span id="H15">4.8</span></td><td class="cell c-I r-15 coord-I15 bordered output count"><span id="I15">0</span></td><td class="cell c-J r-15 coord-J15 empty"></td><td class="cell c-K r-15 coord-K15 empty"></td><td class="cell c-L r-15 coord-L15 empty"></td></tr><tr class="r16"><td class="cell c-B r-16 coord-B16 bordered label">绝电惊沙-灵</td><td class="cell c-C r-16 coord-C16 bordered input-cell"><input id="C16" data-cell="C16" type="number" step="any" value="" autocomplete="off" aria-label="绝电惊沙-灵"></td><td class="cell c-D r-16 coord-D16 bordered output score" title="=C16*2.46"><span id="D16">0.00</span></td><td class="cell c-E r-16 coord-E16 empty"></td><td class="cell c-F r-16 coord-F16 bordered label">裁锋</td><td class="cell c-G r-16 coord-G16 bordered select-cell"><select id="G16" data-cell="G16" aria-label="裁锋 是否携带"><option value="是" selected>是</option><option value="否" >否</option></select></td><td class="cell c-H r-16 coord-H16 bordered output score"><span id="H16">5</span></td><td class="cell c-I r-16 coord-I16 bordered output count"><span id="I16">0</span></td><td class="cell c-J r-16 coord-J16 empty"></td><td class="cell c-K r-16 coord-K16 empty"></td><td class="cell c-L r-16 coord-L16 empty"></td></tr><tr class="r17"><td class="cell c-B r-17 coord-B17 bordered label">日月两仪-灵</td><td class="cell c-C r-17 coord-C17 bordered input-cell"><input id="C17" data-cell="C17" type="number" step="any" value="0" autocomplete="off" aria-label="日月两仪-灵"></td><td class="cell c-D r-17 coord-D17 bordered output score" title="=C17*2.2"><span id="D17">0.00</span></td><td class="cell c-E r-17 coord-E17 empty"></td><td class="cell c-F r-17 coord-F17 bordered label">五韵谣</td><td class="cell c-G r-17 coord-G17 bordered select-cell"><select id="G17" data-cell="G17" aria-label="五韵谣 是否携带"><option value="是" >是</option><option value="否" selected>否</option></select></td><td class="cell c-H r-17 coord-H17 bordered output score"><span id="H17">1.75</span></td><td class="cell c-I r-17 coord-I17 bordered output count"><span id="I17">0</span></td><td class="cell c-J r-17 coord-J17 empty"></td><td class="cell c-K r-17 coord-K17 empty"></td><td class="cell c-L r-17 coord-L17 empty"></td></tr><tr class="r18"><td class="cell c-B r-18 coord-B18 bordered label">楚狂歌-灵</td><td class="cell c-C r-18 coord-C18 bordered input-cell"><input id="C18" data-cell="C18" type="number" step="any" value="" autocomplete="off" aria-label="楚狂歌-灵"></td><td class="cell c-D r-18 coord-D18 bordered output score" title="=C18*1.78"><span id="D18">0.00</span></td><td class="cell c-E r-18 coord-E18 empty"></td><td class="cell c-F r-18 coord-F18 empty"></td><td class="cell c-G r-18 coord-G18 empty"></td><td class="cell c-H r-18 coord-H18 empty"></td><td class="cell c-I r-18 coord-I18 empty"></td><td class="cell c-J r-18 coord-J18 empty"></td><td class="cell c-K r-18 coord-K18 empty"></td><td class="cell c-L r-18 coord-L18 empty"></td></tr><tr class="r19"><td class="cell c-B r-19 coord-B19 bordered label">众妙-灵</td><td class="cell c-C r-19 coord-C19 bordered input-cell"><input id="C19" data-cell="C19" type="number" step="any" value="" autocomplete="off" aria-label="众妙-灵"></td><td class="cell c-D r-19 coord-D19 bordered output score" title="=C19*1.75"><span id="D19">0.00</span></td><td class="cell c-E r-19 coord-E19 empty"></td><td class="cell c-F r-19 coord-F19 credit credit-title">7.8日新世界防守团内功计算器</td><td class="cell c-G r-19 coord-G19 empty"></td><td class="cell c-H r-19 coord-H19 empty"></td><td class="cell c-I r-19 coord-I19 empty"></td><td class="cell c-J r-19 coord-J19 empty"></td><td class="cell c-K r-19 coord-K19 empty"></td><td class="cell c-L r-19 coord-L19 empty"></td></tr><tr class="r20"><td class="cell c-B r-20 coord-B20 bordered label">焚刃-灵</td><td class="cell c-C r-20 coord-C20 bordered input-cell"><input id="C20" data-cell="C20" type="number" step="any" value="0" autocomplete="off" aria-label="焚刃-灵"></td><td class="cell c-D r-20 coord-D20 bordered output score" title="=C20*1.65"><span id="D20">0.00</span></td><td class="cell c-E r-20 coord-E20 empty"></td><td class="cell c-F r-20 coord-F20 credit credit-body">由月望舒（逆水寒手游）制作    无偿分享</td><td class="cell c-G r-20 coord-G20 empty"></td><td class="cell c-H r-20 coord-H20 empty"></td><td class="cell c-I r-20 coord-I20 empty"></td><td class="cell c-J r-20 coord-J20 empty"></td><td class="cell c-K r-20 coord-K20 empty"></td><td class="cell c-L r-20 coord-L20 empty"></td></tr><tr class="r21"><td class="cell c-B r-21 coord-B21 bordered label">斩精-灵</td><td class="cell c-C r-21 coord-C21 bordered input-cell"><input id="C21" data-cell="C21" type="number" step="any" value="0" autocomplete="off" aria-label="斩精-灵"></td><td class="cell c-D r-21 coord-D21 bordered output score" title="=C21*1.6"><span id="D21">0.00</span></td><td class="cell c-E r-21 coord-E21 empty"></td><td class="cell c-F r-21 coord-F21 credit credit-body">感谢 杰少、 满天星河 智齿提供帮助   </td><td class="cell c-G r-21 coord-G21 empty"></td><td class="cell c-H r-21 coord-H21 empty"></td><td class="cell c-I r-21 coord-I21 empty"></td><td class="cell c-J r-21 coord-J21 empty"></td><td class="cell c-K r-21 coord-K21 empty"></td><td class="cell c-L r-21 coord-L21 empty"></td></tr><tr class="r22"><td class="cell c-B r-22 coord-B22 bordered label">破釜-灵</td><td class="cell c-C r-22 coord-C22 bordered input-cell"><input id="C22" data-cell="C22" type="number" step="any" value="0" autocomplete="off" aria-label="破釜-灵"></td><td class="cell c-D r-22 coord-D22 bordered output score" title="=C22*1.6"><span id="D22">0.00</span></td><td class="cell c-E r-22 coord-E22 empty"></td><td class="cell c-F r-22 coord-F22 credit credit-body">计算公式来源于   折字愿为安</td><td class="cell c-G r-22 coord-G22 empty"></td><td class="cell c-H r-22 coord-H22 empty"></td><td class="cell c-I r-22 coord-I22 empty"></td><td class="cell c-J r-22 coord-J22 empty"></td><td class="cell c-K r-22 coord-K22 empty"></td><td class="cell c-L r-22 coord-L22 empty"></td></tr><tr class="r23"><td class="cell c-B r-23 coord-B23 bordered label">贯山月(卡轴)-灵</td><td class="cell c-C r-23 coord-C23 bordered input-cell"><input id="C23" data-cell="C23" type="number" step="any" value="0" autocomplete="off" aria-label="贯山月(卡轴)-灵"></td><td class="cell c-D r-23 coord-D23 bordered output score" title="=C23*1.63"><span id="D23">0.00</span></td><td class="cell c-E r-23 coord-E23 empty"></td><td class="cell c-F r-23 coord-F23 empty"></td><td class="cell c-G r-23 coord-G23 empty"></td><td class="cell c-H r-23 coord-H23 empty"></td><td class="cell c-I r-23 coord-I23 empty"></td><td class="cell c-J r-23 coord-J23 empty"></td><td class="cell c-K r-23 coord-K23 empty"></td><td class="cell c-L r-23 coord-L23 empty"></td></tr><tr class="r24"><td class="cell c-B r-24 coord-B24 bordered label">锻寒芒-灵</td><td class="cell c-C r-24 coord-C24 bordered input-cell"><input id="C24" data-cell="C24" type="number" step="any" value="0" autocomplete="off" aria-label="锻寒芒-灵"></td><td class="cell c-D r-24 coord-D24 bordered output score" title="=C24*1.65"><span id="D24">0.00</span></td><td class="cell c-E r-24 coord-E24 empty"></td><td class="cell c-F r-24 coord-F24 empty"></td><td class="cell c-G r-24 coord-G24 empty"></td><td class="cell c-H r-24 coord-H24 empty"></td><td class="cell c-I r-24 coord-I24 empty"></td><td class="cell c-J r-24 coord-J24 empty"></td><td class="cell c-K r-24 coord-K24 empty"></td><td class="cell c-L r-24 coord-L24 empty"></td></tr><tr class="r25"><td class="cell c-B r-25 coord-B25 bordered label">击衰-灵</td><td class="cell c-C r-25 coord-C25 bordered input-cell"><input id="C25" data-cell="C25" type="number" step="any" value="0" autocomplete="off" aria-label="击衰-灵"></td><td class="cell c-D r-25 coord-D25 bordered output score" title="=C25*1.4"><span id="D25">0.00</span></td><td class="cell c-E r-25 coord-E25 empty"></td><td class="cell c-F r-25 coord-F25 empty"></td><td class="cell c-G r-25 coord-G25 empty"></td><td class="cell c-H r-25 coord-H25 empty"></td><td class="cell c-I r-25 coord-I25 empty"></td><td class="cell c-J r-25 coord-J25 empty"></td><td class="cell c-K r-25 coord-K25 empty"></td><td class="cell c-L r-25 coord-L25 empty"></td></tr><tr class="r26"><td class="cell c-B r-26 coord-B26 bordered label">惊羽-灵</td><td class="cell c-C r-26 coord-C26 bordered input-cell"><input id="C26" data-cell="C26" type="number" step="any" value="0" autocomplete="off" aria-label="惊羽-灵"></td><td class="cell c-D r-26 coord-D26 bordered output score" title="=C26*1.6"><span id="D26">0.00</span></td><td class="cell c-E r-26 coord-E26 empty"></td><td class="cell c-F r-26 coord-F26 empty"></td><td class="cell c-G r-26 coord-G26 empty"></td><td class="cell c-H r-26 coord-H26 empty"></td><td class="cell c-I r-26 coord-I26 empty"></td><td class="cell c-J r-26 coord-J26 empty"></td><td class="cell c-K r-26 coord-K26 empty"></td><td class="cell c-L r-26 coord-L26 empty"></td></tr><tr class="r27"><td class="cell c-B r-27 coord-B27 bordered label">裁锋-灵</td><td class="cell c-C r-27 coord-C27 bordered input-cell"><input id="C27" data-cell="C27" type="number" step="any" value="0" autocomplete="off" aria-label="裁锋-灵"></td><td class="cell c-D r-27 coord-D27 bordered output score" title="=C27*1.65"><span id="D27">0.00</span></td><td class="cell c-E r-27 coord-E27 empty"></td><td class="cell c-F r-27 coord-F27 empty"></td><td class="cell c-G r-27 coord-G27 empty"></td><td class="cell c-H r-27 coord-H27 note note-27">63%以下 建议转生</td><td class="cell c-I r-27 coord-I27 empty"></td><td class="cell c-J r-27 coord-J27 empty"></td><td class="cell c-K r-27 coord-K27 empty"></td><td class="cell c-L r-27 coord-L27 empty"></td></tr><tr class="r28"><td class="cell c-B r-28 coord-B28 bordered label">五韵谣-灵</td><td class="cell c-C r-28 coord-C28 bordered input-cell"><input id="C28" data-cell="C28" type="number" step="any" value="0" autocomplete="off" aria-label="五韵谣-灵"></td><td class="cell c-D r-28 coord-D28 bordered output score" title="=C28*1.3"><span id="D28">0.00</span></td><td class="cell c-E r-28 coord-E28 empty"></td><td class="cell c-F r-28 coord-F28 empty"></td><td class="cell c-G r-28 coord-G28 empty"></td><td class="cell c-H r-28 coord-H28 note note-28">63%~66%小哥布林     66%~69%大哥布林</td><td class="cell c-I r-28 coord-I28 empty"></td><td class="cell c-J r-28 coord-J28 empty"></td><td class="cell c-K r-28 coord-K28 empty"></td><td class="cell c-L r-28 coord-L28 empty"></td></tr><tr class="r29"><td class="cell c-B r-29 coord-B29 bordered merged label" colspan="2">词条分</td><td class="cell c-D r-29 coord-D29 bordered output score" title="=SUM(D3:D28)"><span id="D29">0.00</span></td><td class="cell c-E r-29 coord-E29 empty"></td><td class="cell c-F r-29 coord-F29 empty"></td><td class="cell c-G r-29 coord-G29 empty"></td><td class="cell c-H r-29 coord-H29 note note-29">69%~72%哥布林精英     72%~75%哥布林将军</td><td class="cell c-I r-29 coord-I29 empty"></td><td class="cell c-J r-29 coord-J29 empty"></td><td class="cell c-K r-29 coord-K29 empty"></td><td class="cell c-L r-29 coord-L29 empty"></td></tr><tr class="r30"><td class="cell c-B r-30 coord-B30 bordered merged label" colspan="2">特性分</td><td class="cell c-D r-30 coord-D30 bordered output score" title="=(I3*H3+I4*H4+I5*H5+I6*H6+I7*H7+I8*H8+I9*H9+I10*H10+I11*H11+I12*H12+I13*H13+I14*H14+I15*H15+I16*H16+I17*H17)+SWITCH(L2,&quot;金火&quot;,0,&quot;火木&quot;,2.7,&quot;金木&quot;,2.8,&quot;&quot;)"><span id="D30">0.00</span></td><td class="cell c-E r-30 coord-E30 empty"></td><td class="cell c-F r-30 coord-F30 empty"></td><td class="cell c-G r-30 coord-G30 empty"></td><td class="cell c-H r-30 coord-H30 note note-30">75%+哥布林国王</td><td class="cell c-I r-30 coord-I30 empty"></td><td class="cell c-J r-30 coord-J30 empty"></td><td class="cell c-K r-30 coord-K30 empty"></td><td class="cell c-L r-30 coord-L30 empty"></td></tr><tr class="r31"><td class="cell c-B r-31 coord-B31 bordered merged label" colspan="2">总分</td><td class="cell c-D r-31 coord-D31 bordered output score" title="=D30+D29"><span id="D31">0.00</span></td><td class="cell c-E r-31 coord-E31 empty"></td><td class="cell c-F r-31 coord-F31 empty"></td><td class="cell c-G r-31 coord-G31 empty"></td><td class="cell c-H r-31 coord-H31 empty"></td><td class="cell c-I r-31 coord-I31 empty"></td><td class="cell c-J r-31 coord-J31 empty"></td><td class="cell c-K r-31 coord-K31 empty"></td><td class="cell c-L r-31 coord-L31 empty"></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<script>
+(function() {
+  'use strict';
+  const cRows = Array.from({length: 26}, (_, i) => i + 3);
+  const gRows = Array.from({length: 15}, (_, i) => i + 3);
+  const hConst = {4:6, 5:5.5, 6:4.9, 7:5.4, 8:5.25, 9:5, 10:4.8, 11:4.8, 12:4.9, 13:4.8, 14:4.2, 15:4.8, 16:5, 17:1.75};
+  const fmt2 = (v) => (Number.isFinite(v) ? v : 0).toFixed(2);
+  const fmtGeneral = (v) => {
+    if (!Number.isFinite(v)) return '0';
+    return Number.isInteger(v) ? String(v) : String(v).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  };
+  const el = (id) => document.getElementById(id);
+  const num = (id) => {
+    const node = el(id);
+    if (!node) return 0;
+    const raw = String(node.value ?? '').trim();
+    if (raw === '') return 0;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const isYes = (row) => el('G' + row)?.value === '是';
+  const setText = (id, val, decimals = true) => {
+    const node = el(id);
+    if (!node) return;
+    node.textContent = decimals ? fmt2(val) : fmtGeneral(val);
+  };
+  function recalc() {
+    const C = {};
+    for (const r of cRows) C[r] = num('C' + r);
+
+    // H3：灼星贯日动态收益，完全对应 Excel 公式 H3。
+    const helperZhongMiao = (C[19] === 1) ? 7 : (isYes(8) ? 5.25 : 0);
+    const helperJueDian = (C[16] === 1) ? 8 : (isYes(5) ? 5.5 : 0);
+    const H = {...hConst};
+    H[3] = 3 + 0.2 * (5.5 + helperZhongMiao + helperJueDian);
+
+    const D = {};
+    D[3] = 0.88 * C[3];
+    D[4] = 2.5 * C[4] * 0.0455 + C[4] * 0.0425;
+    D[5] = 0.0455 * C[5];
+    D[6] = C[6] * 0.0425;
+    D[7] = C[7];
+    D[8] = C[8] * 0.0182;
+    D[9] = 0.0455 * C[9] / 2;
+    D[10] = 0.0455 * C[10] / 2;
+    D[11] = C[11] * 0.0182 * 6;
+    D[12] = C[12] * 0.0455;
+    D[13] = C[13] * 0.0455;
+    D[14] = C[14] * (1.875 + 0.1 * (5.5 + helperZhongMiao + helperJueDian));
+    D[15] = C[15] * 3;
+    D[16] = C[16] * 2.46;
+    D[17] = C[17] * 2.2;
+    D[18] = C[18] * 1.78;
+    D[19] = C[19] * 1.75;
+    D[20] = C[20] * 1.65;
+    D[21] = C[21] * 1.6;
+    D[22] = C[22] * 1.6;
+    D[23] = C[23] * 1.63;
+    D[24] = C[24] * 1.65;
+    D[25] = C[25] * 1.4;
+    D[26] = C[26] * 1.6;
+    D[27] = C[27] * 1.65;
+    D[28] = C[28] * 1.3;
+
+    D[29] = 0;
+    for (let r = 3; r <= 28; r++) D[29] += D[r] || 0;
+
+    const I = {};
+    for (const r of gRows) I[r] = isYes(r) ? 1 : 0;
+
+    const zhouTian = el('L2')?.value || '火木';
+    const zhouTianBonus = zhouTian === '金火' ? 0 : (zhouTian === '火木' ? 2.7 : (zhouTian === '金木' ? 2.8 : 0));
+    D[30] = zhouTianBonus;
+    for (const r of gRows) D[30] += I[r] * H[r];
+    D[31] = D[30] + D[29];
+
+    for (let r = 3; r <= 31; r++) setText('D' + r, D[r], true);
+    setText('H3', H[3], true);
+    for (let r = 4; r <= 17; r++) setText('H' + r, H[r], true);
+    for (const r of gRows) setText('I' + r, I[r], false);
+  }
+
+  function bind() {
+    document.querySelectorAll('input, select').forEach(node => {
+      node.addEventListener('input', recalc);
+      node.addEventListener('change', recalc);
+    });
+  }
+  bind();
+  recalc();
+  window.neigongCalculatorRecalc = recalc;
+})();
+</script>
+</body>
+</html>
