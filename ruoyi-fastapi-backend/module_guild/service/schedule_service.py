@@ -81,6 +81,20 @@ class ScheduleService:
         return CrudResponseModel(is_success=True, message='表格已保存')
 
     @classmethod
+    async def import_current_workbook_service(
+        cls, db: AsyncSession, current_user, data: ScheduleWorkbookModel
+    ) -> CrudResponseModel:
+        schedule = await cls._ensure_active_schedule(db, current_user.user.user_id)
+        await ScheduleDao.clear_schedule_structure(db, schedule.schedule_id)
+        await ScheduleDao.upsert_workbook(
+            db,
+            schedule.schedule_id,
+            json.dumps(data.workbook or {}, ensure_ascii=False, separators=(',', ':')),
+        )
+        await db.commit()
+        return CrudResponseModel(is_success=True, message='Excel 排表已导入，原有分团结构已清空')
+
+    @classmethod
     async def list_history_service(cls, db: AsyncSession, current_user) -> list[dict]:
         rows = await ScheduleDao.list_history(db, current_user.user.user_id)
         return [

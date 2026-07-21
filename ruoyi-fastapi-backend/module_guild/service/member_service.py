@@ -15,6 +15,7 @@ from module_guild.entity.vo.member_vo import (
     MemberCreateModel,
     MemberEditModel,
     MemberImportModel,
+    MemberJsonImportModel,
     MemberProfileEditModel,
 )
 
@@ -270,6 +271,58 @@ class MemberService:
         if skipped > 0:
             msg += f'，跳过 {skipped} 条已存在'
         return CrudResponseModel(is_success=True, message=msg)
+
+    @classmethod
+    async def import_from_json_service(
+        cls, db: AsyncSession, current_user: CurrentUserModel, data: MemberJsonImportModel
+    ) -> CrudResponseModel:
+        if not data.members:
+            raise ServiceException(message='导入文件中没有成员数据')
+
+        user_id = current_user.user.user_id
+        imported = 0
+        skipped = 0
+        invalid = 0
+        names_in_file: set[str] = set()
+        members_to_create = []
+
+        for item in data.members:
+            player_name = (item.player_name or '').strip()
+            if not player_name:
+                invalid += 1
+                continue
+            if player_name in names_in_file:
+                skipped += 1
+                continue
+            names_in_file.add(player_name)
+
+            if await MemberDao.check_member_exists(db, user_id, player_name):
+                skipped += 1
+                continue
+
+            members_to_create.append({
+                'guild_id': user_id,
+                'user_id': user_id,
+                'member_user_id': 0,
+                'player_name': player_name,
+                'player_class': (item.player_class or '').strip(),
+                'secondary_class': (item.secondary_class or '').strip(),
+                'is_active': '1',
+                'source_type': 'import',
+                'remark': (item.remark or '').strip(),
+            })
+
+        if members_to_create:
+            await MemberDao.batch_insert_members(db, members_to_create)
+            imported = len(members_to_create)
+        await db.commit()
+
+        details = [f'成功导入 {imported} 条成员']
+        if skipped:
+            details.append(f'跳过 {skipped} 条重复成员')
+        if invalid:
+            details.append(f'忽略 {invalid} 条空玩家名记录')
+        return CrudResponseModel(is_success=True, message='，'.join(details))
 
     @classmethod
     async def get_battle_list_for_import_service(cls, db: AsyncSession, current_user: CurrentUserModel) -> list:

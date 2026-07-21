@@ -149,3 +149,11 @@ export function saveCurrentScheduleWorkbook(workbook) {
     data: { workbook }
   })
 }
+
+export function importCurrentScheduleWorkbook(workbook) {
+  return request({
+    url: '/guild/schedule/current/workbook/import',
+    method: 'put',
+    data: { workbook }
+  })
+}

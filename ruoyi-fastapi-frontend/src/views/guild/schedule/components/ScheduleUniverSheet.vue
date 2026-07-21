@@ -7,7 +7,8 @@
       @pointerdown.capture="handleWorkbenchPointerDown"
       @pointermove.capture="handleWorkbenchPointerMove"
       @pointerup.capture="handleWorkbenchPointerUp"
-      @pointercancel.capture="cancelInternalCellMove"
+      @pointercancel.capture="handleWorkbenchPointerCancel"
+      @keydown.capture="handleWorkbenchKeydown"
       @contextmenu.capture="handleWorkbenchContextMenu"
     >
       <div ref="containerRef" class="univer-host"></div>
@@ -202,6 +203,7 @@ const systemSlotMap = shallowRef({})
 const commandDisposable = shallowRef(null)
 const dragOverDisposable = shallowRef(null)
 const dropDisposable = shallowRef(null)
+const cellPointerMoveDisposable = shallowRef(null)
 const dropHighlightDisposable = shallowRef(null)
 const regionHighlightDisposables = shallowRef([])
 const saveTimer = ref(null)
@@ -271,9 +273,12 @@ onBeforeUnmount(() => {
 defineExpose({
   flushWorkbookSave,
   saveWorkbookNow,
+  reloadWorkbook: loadWorkbook,
   upsertTempMember,
   getWorkbookSnapshot,
   exportWorkbook,
+  mergeSelectedCells,
+  undoLastAction,
   openCreateSquadFromSelection,
   openCreateTeamDialog
 })
@@ -311,11 +316,13 @@ function disposeUniver() {
   commandDisposable.value?.dispose?.()
   dragOverDisposable.value?.dispose?.()
   dropDisposable.value?.dispose?.()
+  cellPointerMoveDisposable.value?.dispose?.()
   clearDropHighlight()
   clearRegionHighlights()
   commandDisposable.value = null
   dragOverDisposable.value = null
   dropDisposable.value = null
+  cellPointerMoveDisposable.value = null
   univerAPIInstance.value?.dispose?.()
   univerInstance.value?.dispose?.()
   univerAPIInstance.value = null
@@ -350,7 +357,8 @@ function rebuildWorkbook() {
   univerAPI.createWorkbook(cloneWorkbook(workbookData.value))
   univerInstance.value = univer
   univerAPIInstance.value = univerAPI
-  commandDisposable.value = univerAPI.addEvent?.(univerAPI.Event.CommandExecuted, () => {
+  commandDisposable.value = univerAPI.addEvent?.(univerAPI.Event.CommandExecuted, (event) => {
+    if (event?.id === 'sheet.operation.set-selections') return
     if (!suppressCommandSave.value) {
       scheduleWorkbookSave()
       scheduleRegionAssignmentsSync()
@@ -364,9 +372,19 @@ function rebuildWorkbook() {
 }
 
 function registerUniverDropEvents(univerAPI) {
-  if (!univerAPI.addEvent || !univerAPI.Event?.DragOver || !univerAPI.Event?.Drop) return
-  dragOverDisposable.value = univerAPI.addEvent(univerAPI.Event.DragOver, handleUniverDragOver)
-  dropDisposable.value = univerAPI.addEvent(univerAPI.Event.Drop, handleUniverDrop)
+  if (!univerAPI.addEvent) return
+  if (univerAPI.Event?.DragOver) {
+    dragOverDisposable.value = univerAPI.addEvent(univerAPI.Event.DragOver, handleUniverDragOver)
+  }
+  if (univerAPI.Event?.Drop) {
+    dropDisposable.value = univerAPI.addEvent(univerAPI.Event.Drop, handleUniverDrop)
+  }
+  if (univerAPI.Event?.CellPointerMove) {
+    cellPointerMoveDisposable.value = univerAPI.addEvent(
+      univerAPI.Event.CellPointerMove,
+      handleUniverCellPointerMove
+    )
+  }
 }
 
 function buildDefaultWorkbookData() {
@@ -709,8 +727,10 @@ function handleWorkbenchPointerDown(event) {
     label: formatCellPosition(selectedCell),
     target: null,
     targetLabel: '',
+    outsideWorkbench: false,
     tooltipStyle: buildInternalMoveTooltipStyle(event)
   }
+  setWorkbenchPointerCapture(event)
 }
 
 function handleWorkbenchPointerMove(event) {
@@ -724,7 +744,23 @@ function handleWorkbenchPointerMove(event) {
   const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
   if (distance < 4 && !state.dragging) return
 
-  const target = getTargetCellFromActiveSelection(state.source, event)
+  const outsideWorkbench = isPointerOutsideWorkbench(event)
+  if (outsideWorkbench) {
+    internalCellMove.value = {
+      ...state,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      dragging: true,
+      target: null,
+      targetLabel: '移出排表将删除',
+      outsideWorkbench: true,
+      tooltipStyle: buildInternalMoveTooltipStyle(event)
+    }
+    clearDropHighlight()
+    return
+  }
+
+  const target = state.target
   const targetLabel = target ? formatCellPosition(target) : ''
   internalCellMove.value = {
     ...state,
@@ -733,25 +769,96 @@ function handleWorkbenchPointerMove(event) {
     dragging: true,
     target,
     targetLabel,
+    outsideWorkbench: false,
     tooltipStyle: buildInternalMoveTooltipStyle(event)
   }
 
-  if (target) {
-    updateDropHighlight({ ...target, worksheet: getActiveWorksheet() })
-  }
 }
 
 async function handleWorkbenchPointerUp(event) {
   const state = internalCellMove.value
   if (!state) return
 
-  const target = state.dragging
-    ? getTargetCellFromActiveSelection(state.source, event) || state.target
-    : null
+  releaseWorkbenchPointerCapture(event)
+  const target = state.dragging ? state.target : null
+  const shouldDelete = state.dragging && (state.outsideWorkbench || isPointerOutsideWorkbench(event))
   cancelInternalCellMove()
+  if (shouldDelete) {
+    await clearMemberCell(state.source)
+    return
+  }
   if (!target || isSameCell(state.source, target)) return
 
   await moveMemberCell(state.source, target, state.cellData)
+}
+
+function handleWorkbenchPointerCancel(event) {
+  releaseWorkbenchPointerCapture(event)
+  cancelInternalCellMove()
+}
+
+function handleWorkbenchKeydown(event) {
+  const isUndoShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && String(event.key || '').toLowerCase() === 'z'
+  if (!isUndoShortcut || event.repeat || event.isComposing) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  undoLastAction()
+}
+
+function handleUniverCellPointerMove(params) {
+  const state = internalCellMove.value
+  const event = params?.event
+  if (!state || !event?.altKey || activeDragMember.value || workbookLoading.value) return
+
+  const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
+  if (distance < 4 && !state.dragging) return
+
+  const target = normalizeUniverDropTarget(params)
+  if (!target) return
+  internalCellMove.value = {
+    ...state,
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    dragging: true,
+    target,
+    targetLabel: formatCellPosition(target),
+    outsideWorkbench: false,
+    tooltipStyle: buildInternalMoveTooltipStyle(event)
+  }
+  updateDropHighlight(target)
+  restoreSingleCellSelection(state.source)
+}
+
+function restoreSingleCellSelection(source) {
+  const workbook = univerAPIInstance.value?.getActiveWorkbook?.()
+  const worksheet = getActiveWorksheet()
+  const unitId = workbook?.getId?.() || workbook?.getUnitId?.()
+  const subUnitId = worksheet?.getSheetId?.() || worksheet?.getId?.()
+  if (!unitId || !subUnitId) return
+
+  const range = {
+    startRow: source.row,
+    endRow: source.row,
+    startColumn: source.column,
+    endColumn: source.column
+  }
+  univerAPIInstance.value?.executeCommand?.('sheet.operation.set-selections', {
+    unitId,
+    subUnitId,
+    selections: [{
+      range,
+      primary: {
+        ...range,
+        actualRow: source.row,
+        actualColumn: source.column,
+        isMerged: false,
+        isMergedMainCell: false
+      },
+      style: null
+    }],
+    type: 3
+  })
 }
 
 function getSelectedMemberCellForMove() {
@@ -764,30 +871,6 @@ function getSelectedMemberCellForMove() {
   const cellData = getSnapshotCellData(row, column)
   if (!cellData?.custom?.member_id) return null
   return { row, column, cellData }
-}
-
-function getTargetCellFromActiveSelection(source, event) {
-  const workbook = univerAPIInstance.value?.getActiveWorkbook?.()
-  const activeRange = workbook?.getActiveRange?.()
-  const range = activeRange?.getRange?.()
-  if (!range) {
-    const activeCell = workbook?.getActiveCell?.()
-    const row = Number(activeCell?.getRow?.())
-    const column = Number(activeCell?.getColumn?.())
-    return Number.isInteger(row) && Number.isInteger(column) ? { row, column } : null
-  }
-
-  const startRow = Number(range.startRow)
-  const endRow = Number(range.endRow)
-  const startColumn = Number(range.startColumn)
-  const endColumn = Number(range.endColumn)
-  if ([startRow, endRow, startColumn, endColumn].some(value => !Number.isInteger(value))) return null
-
-  const deltaX = event.clientX - (internalCellMove.value?.startX || event.clientX)
-  const deltaY = event.clientY - (internalCellMove.value?.startY || event.clientY)
-  const row = deltaY < 0 ? startRow : endRow
-  const column = deltaX < 0 ? startColumn : endColumn
-  return { row, column }
 }
 
 async function moveMemberCell(source, target, cellData) {
@@ -818,6 +901,67 @@ async function moveMemberCell(source, target, cellData) {
   }
 }
 
+async function mergeSelectedCells(mode) {
+  const range = univerAPIInstance.value?.getActiveWorkbook?.()?.getActiveRange?.()
+  const selectedRange = range?.getRange?.()
+  if (!range || !selectedRange) {
+    ElMessage.warning('请先选中需要合并的单元格')
+    return false
+  }
+
+  const rowCount = selectedRange.endRow - selectedRange.startRow + 1
+  const columnCount = selectedRange.endColumn - selectedRange.startColumn + 1
+  if (mode === 'all' && rowCount * columnCount < 2) {
+    ElMessage.warning('请至少选中两个单元格')
+    return false
+  }
+  if (mode === 'horizontal' && columnCount < 2) {
+    ElMessage.warning('水平合并需要选中至少两列')
+    return false
+  }
+  if (mode === 'vertical' && rowCount < 2) {
+    ElMessage.warning('垂直合并需要选中至少两行')
+    return false
+  }
+
+  try {
+    if (mode === 'horizontal') {
+      range.mergeAcross({ defaultMerge: true })
+    } else if (mode === 'vertical') {
+      range.mergeVertically({ defaultMerge: true })
+    } else {
+      range.merge({ defaultMerge: true })
+    }
+    await saveWorkbookNow()
+    ElMessage.success(mode === 'all' ? '单元格已全部合并' : mode === 'horizontal' ? '单元格已水平合并' : '单元格已垂直合并')
+    return true
+  } catch (error) {
+    ElMessage.warning('所选区域与已有合并单元格重叠，暂时无法合并')
+    return false
+  }
+}
+
+async function undoLastAction() {
+  const workbook = univerAPIInstance.value?.getActiveWorkbook?.()
+  if (!workbook) return false
+
+  workbook.undo()
+  await nextTick()
+  await saveWorkbookNow()
+  return true
+}
+
+async function clearMemberCell(source) {
+  const sourceRange = getActiveWorksheet()?.getRange?.(source.row, source.column)
+  if (!sourceRange) return
+
+  sourceRange.clear()
+  await saveWorkbookNow()
+  emitWorkbookAssignments()
+  scheduleRegionAssignmentsSync(0)
+  ElMessage.success('已从排表移除成员')
+}
+
 function getSnapshotCellData(row, column) {
   const workbook = getWorkbookSnapshot()
   const sheetId = workbook?.sheetOrder?.[0] || Object.keys(workbook?.sheets || {})[0]
@@ -846,6 +990,23 @@ function buildInternalMoveTooltipStyle(event) {
 function cancelInternalCellMove() {
   internalCellMove.value = null
   clearDropHighlight()
+}
+
+function isPointerOutsideWorkbench(event) {
+  const rect = containerRef.value?.parentElement?.getBoundingClientRect()
+  if (!rect) return false
+  return event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom
+}
+
+function setWorkbenchPointerCapture(event) {
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+}
+
+function releaseWorkbenchPointerCapture(event) {
+  const workbench = event.currentTarget
+  if (workbench?.hasPointerCapture?.(event.pointerId)) {
+    workbench.releasePointerCapture(event.pointerId)
+  }
 }
 
 function isSameCell(left, right) {

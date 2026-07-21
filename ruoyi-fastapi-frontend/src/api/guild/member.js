@@ -69,6 +69,14 @@ export function importFromBattle(data) {
   })
 }
 
+export function importMembersFromJson(data) {
+  return request({
+    url: '/guild/member/import-json',
+    method: 'post',
+    data
+  })
+}
+
 export function getBattleListForImport() {
   return request({
     url: '/guild/member/battle-list',

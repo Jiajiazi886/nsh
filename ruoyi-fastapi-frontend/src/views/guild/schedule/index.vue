@@ -109,6 +109,15 @@
           <div class="schedule-actions">
             <el-button type="primary" plain @click="createSquadFromSelection">创建小队</el-button>
             <el-button type="success" plain @click="createTeamFromSquads">创建团队</el-button>
+            <el-button-group class="schedule-merge-actions">
+              <el-button @click="mergeSelectedCells('all')">全部合并</el-button>
+              <el-button @click="mergeSelectedCells('horizontal')">水平合并</el-button>
+              <el-button @click="mergeSelectedCells('vertical')">垂直合并</el-button>
+            </el-button-group>
+            <el-tooltip content="撤回（Ctrl + Z）" placement="top">
+              <el-button :icon="RefreshLeft" aria-label="撤回" @click="undoSchedule" />
+            </el-tooltip>
+            <el-button :loading="scheduleImportLoading" @click="triggerScheduleImport">导入 Excel</el-button>
             <el-button @click="exportCurrentSchedule">导出 Excel</el-button>
             <el-button @click="saveHistorySnapshot">保存历史</el-button>
             <el-button @click="openHistory">历史查询</el-button>
@@ -125,6 +134,13 @@
           @workbook-assignments-change="syncWorkbookAssignments"
           @temp-members-change="syncTempMembers"
           @structure-changed="handleScheduleStructureChanged"
+        />
+        <input
+          ref="scheduleImportInputRef"
+          class="schedule-import-input"
+          type="file"
+          accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
+          @change="handleScheduleImport"
         />
       </section>
     </div>
@@ -246,7 +262,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
+import { ArrowRightBold, Folder, FolderOpened, RefreshLeft } from '@element-plus/icons-vue'
 import { getApprovedBattleRegistrationsForSchedule, getBattleLeaveRegistrationsForSchedule } from '@/api/guild/battle'
 import ScheduleUniverSheet from './components/ScheduleUniverSheet.vue'
 import ScheduleWorkbookTable from './components/ScheduleWorkbookTable.vue'
@@ -259,12 +275,13 @@ import {
   getScheduleHistory,
   renameScheduleHistory,
   saveScheduleAssignment,
-  saveScheduleSnapshot
+  saveScheduleSnapshot,
+  importCurrentScheduleWorkbook
 } from '@/api/guild/schedule'
 import useGuildMemberStore from '@/store/modules/guildMember'
 import { useGuildClassColors } from '@/utils/guildClassColor'
 import { useGuildPageMotion } from '@/composables/useGuildPageMotion'
-import { exportScheduleWorkbook } from './utils/scheduleWorkbook'
+import { exportScheduleWorkbook, importScheduleWorkbook } from './utils/scheduleWorkbook'
 
 let scheduleGsapLoader = null
 function loadScheduleGsap() {
@@ -277,6 +294,8 @@ function loadScheduleGsap() {
 const guildMemberStore = useGuildMemberStore()
 const pageRef = ref(null)
 const scheduleSheetRef = ref(null)
+const scheduleImportInputRef = ref(null)
+const scheduleImportLoading = ref(false)
 const loading = ref(false)
 const members = computed(() => guildMemberStore.members)
 const schedule = ref({ teams: [] })
@@ -517,12 +536,56 @@ async function exportCurrentSchedule() {
   }
 }
 
+function triggerScheduleImport() {
+  scheduleImportInputRef.value?.click()
+}
+
+async function handleScheduleImport(event) {
+  const input = event.target
+  const file = input?.files?.[0]
+  if (input) input.value = ''
+  if (!file) return
+
+  try {
+    await ElMessageBox.confirm(
+      '导入后会替换当前 Excel 排表，并清空当前团队、小队和成员分配。历史排表不会受影响。',
+      '确认导入 Excel',
+      { confirmButtonText: '确认替换', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error('无法确认 Excel 导入')
+    return
+  }
+
+  scheduleImportLoading.value = true
+  try {
+    const workbook = await importScheduleWorkbook(file, members.value)
+    const res = await importCurrentScheduleWorkbook(workbook)
+    normalizeSchedule({ ...schedule.value, teams: [] })
+    await nextTick()
+    await scheduleSheetRef.value?.reloadWorkbook?.()
+    ElMessage.success(res.msg || res.data?.msg || 'Excel 排表导入成功')
+  } catch (error) {
+    ElMessage.error(error?.message || 'Excel 排表导入失败')
+  } finally {
+    scheduleImportLoading.value = false
+  }
+}
+
 function createSquadFromSelection() {
   scheduleSheetRef.value?.openCreateSquadFromSelection?.()
 }
 
 function createTeamFromSquads() {
   scheduleSheetRef.value?.openCreateTeamDialog?.()
+}
+
+function mergeSelectedCells(mode) {
+  scheduleSheetRef.value?.mergeSelectedCells?.(mode)
+}
+
+function undoSchedule() {
+  scheduleSheetRef.value?.undoLastAction?.()
 }
 
 async function saveHistorySnapshot() {
@@ -1029,6 +1092,10 @@ onMounted(fetchData)
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.schedule-import-input {
+  display: none;
 }
 
 .history-layout {

@@ -9,6 +9,7 @@
           </div>
           <div class="header-actions">
             <el-button v-hasPermi="['guild:member:add']" type="primary" @click="openAddDialog">添加帮会成员</el-button>
+            <el-button v-hasPermi="['guild:member:import']" type="primary" plain @click="triggerJsonImport">导入 JSON</el-button>
             <el-button v-hasPermi="['guild:member:import']" type="primary" @click="openImportDialog">从历史数据导入</el-button>
             <el-button v-hasPermi="['guild:member:remove']" type="danger" @click="handleBatchDelete">批量删除</el-button>
           </div>
@@ -172,6 +173,14 @@
           <el-button type="primary" @click="handleSaveEdit" :loading="editLoading">保存</el-button>
         </template>
       </el-dialog>
+
+      <input
+        ref="jsonImportInputRef"
+        class="json-import-input"
+        type="file"
+        accept="application/json,.json"
+        @change="handleJsonImport"
+      />
     </el-card>
   </div>
 </template>
@@ -179,7 +188,7 @@
 <script setup>
 import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { addMember, editMember, batchDeleteMembers, importFromBattle, getBattleListForImport, getBattleGuilds } from '@/api/guild/member'
+import { addMember, editMember, batchDeleteMembers, importFromBattle, importMembersFromJson, getBattleListForImport, getBattleGuilds } from '@/api/guild/member'
 import { checkPermi } from '@/utils/permission'
 import useGuildMemberStore from '@/store/modules/guildMember'
 import { useGuildClassColors } from '@/utils/guildClassColor'
@@ -190,6 +199,7 @@ const pageRef = ref(null)
 const loading = computed(() => guildMemberStore.loading)
 const memberList = computed(() => guildMemberStore.members)
 const selectedMembers = ref([])
+const jsonImportInputRef = ref(null)
 
 const showAddDialog = ref(false)
 const showImportDialog = ref(false)
@@ -214,7 +224,7 @@ function getClassStyle(className) {
 
 function getSourceLabel(sourceType) {
   if (sourceType === 'application') return '审核入会'
-  if (sourceType === 'import') return '历史导入'
+  if (sourceType === 'import') return '导入'
   return '手动添加'
 }
 
@@ -399,6 +409,58 @@ function openImportDialog() {
   showImportDialog.value = true
 }
 
+function triggerJsonImport() {
+  jsonImportInputRef.value?.click()
+}
+
+async function handleJsonImport(event) {
+  const input = event.target
+  const file = input?.files?.[0]
+  if (input) input.value = ''
+  if (!file) return
+
+  try {
+    const payload = JSON.parse(await file.text())
+    if (!Array.isArray(payload)) {
+      ElMessage.warning('JSON 顶层必须是成员数组')
+      return
+    }
+
+    let invalid = 0
+    const members = payload.reduce((items, row) => {
+      const playerName = String(row?.['玩家名'] ?? '').trim()
+      if (!playerName) {
+        invalid += 1
+        return items
+      }
+      items.push({
+        player_name: playerName,
+        player_class: String(row?.['主职'] ?? '').trim(),
+        secondary_class: String(row?.['副职'] ?? '').trim(),
+        remark: String(row?.['备注'] ?? '').trim()
+      })
+      return items
+    }, [])
+
+    if (!members.length) {
+      ElMessage.warning('没有可导入的成员，请检查“玩家名”字段')
+      return
+    }
+
+    const res = await importMembersFromJson({ members })
+    const data = res.data || res
+    const suffix = invalid ? `，前端忽略 ${invalid} 条空玩家名记录` : ''
+    ElMessage.success(`${data.msg || 'JSON 导入成功'}${suffix}`)
+    await refreshAfterMemberChange()
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      ElMessage.error('JSON 格式不正确，无法读取文件')
+    } else {
+      ElMessage.error('JSON 导入失败')
+    }
+  }
+}
+
 async function handleImport() {
   importLoading.value = true
   try {
@@ -535,6 +597,10 @@ onMounted(() => {
 
 .page-alert {
   margin-bottom: 16px;
+}
+
+.json-import-input {
+  display: none;
 }
 
 .filter-bar {

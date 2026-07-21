@@ -14,6 +14,7 @@ from module_guild.entity.vo.member_vo import (
     MemberEditModel,
     GuildInfoUpdateModel,
     MemberImportModel,
+    MemberJsonImportModel,
     MemberProfileEditModel,
 )
 from module_guild.service.member_service import MemberService
@@ -164,6 +165,24 @@ async def import_from_battle(
         return ResponseUtil.error(msg=e.message)
     except Exception as e:
         logger.error(f'导入成员失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
+@member_controller.post(
+    '/import-json', summary='从JSON导入成员', dependencies=[UserInterfaceAuthDependency('guild:member:import')]
+)
+async def import_from_json(
+    data: MemberJsonImportModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await MemberService.import_from_json_service(query_db, current_user, data)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'JSON导入成员失败: {str(e)}')
         return ResponseUtil.error(msg=str(e))
 
 @member_controller.get(

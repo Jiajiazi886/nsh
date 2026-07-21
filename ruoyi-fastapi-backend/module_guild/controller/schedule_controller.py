@@ -141,6 +141,26 @@ async def save_current_schedule_workbook(
         return ResponseUtil.error(msg=str(e))
 
 
+@schedule_controller.put(
+    '/current/workbook/import',
+    summary='导入并替换当前约战排表自由表格',
+    dependencies=[UserInterfaceAuthDependency('guild:schedule:edit')],
+)
+async def import_current_schedule_workbook(
+    data: ScheduleWorkbookModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[dict, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await ScheduleService.import_current_workbook_service(query_db, current_user, data)
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'导入约战排表自由表格失败: {str(e)}')
+        return ResponseUtil.error(msg=str(e))
+
+
 @schedule_controller.get(
     '/{schedule_id}',
     summary='获取约战排表详情',

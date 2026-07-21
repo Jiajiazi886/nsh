@@ -6,6 +6,24 @@ const DEFAULT_PREVIEW_COLUMN_LIMIT = 40
 const DEFAULT_EXPORT_ROW_LIMIT = 2000
 const DEFAULT_EXPORT_COLUMN_LIMIT = 200
 
+const EXCEL_MAX_IMPORT_ROWS = 2000
+const EXCEL_MAX_IMPORT_COLUMNS = 200
+const EXCEL_BORDER_STYLE = {
+  thin: 1,
+  hair: 2,
+  dotted: 3,
+  dashed: 4,
+  dashDot: 5,
+  dashDotDot: 6,
+  double: 7,
+  medium: 8,
+  mediumDashed: 9,
+  mediumDashDot: 10,
+  mediumDashDotDot: 11,
+  slantDashDot: 12,
+  thick: 13
+}
+
 export function cloneWorkbook(value) {
   return JSON.parse(JSON.stringify(value || {}))
 }
@@ -263,6 +281,229 @@ export async function exportScheduleWorkbook(workbook, filename = '约战排表.
     new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
     filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`
   )
+}
+
+export async function importScheduleWorkbook(file, members = []) {
+  if (!file || !/\.xlsx$/i.test(file.name || '')) {
+    throw new Error('请选择 .xlsx 格式的 Excel 文件')
+  }
+
+  const excelWorkbook = new ExcelJS.Workbook()
+  await excelWorkbook.xlsx.load(await file.arrayBuffer())
+  const excelSheet = excelWorkbook.worksheets[0]
+  if (!excelSheet) {
+    throw new Error('Excel 中没有可导入的工作表')
+  }
+
+  const rowCount = Math.min(Math.max(excelSheet.actualRowCount || 1, 1), EXCEL_MAX_IMPORT_ROWS)
+  const columnCount = Math.min(Math.max(excelSheet.actualColumnCount || 1, 1), EXCEL_MAX_IMPORT_COLUMNS)
+  const memberByName = new Map(
+    members
+      .filter(member => member?.member_id && member?.player_name)
+      .map(member => [String(member.player_name).trim(), member])
+  )
+  const temporaryMembers = new Map()
+  const cellData = {}
+  const rowData = {}
+  const columnData = {}
+
+  for (let rowIndex = 1; rowIndex <= rowCount; rowIndex += 1) {
+    const excelRow = excelSheet.getRow(rowIndex)
+    if (excelRow.height) {
+      rowData[rowIndex - 1] = { h: Math.max(24, Math.round(excelRow.height / 0.75)) }
+    }
+    for (let columnIndex = 1; columnIndex <= columnCount; columnIndex += 1) {
+      const excelCell = excelRow.getCell(columnIndex)
+      const value = getExcelCellText(excelCell)
+      const style = buildImportedCellStyle(excelCell)
+      if (!value && !Object.keys(style).length) continue
+
+      const row = rowIndex - 1
+      const column = columnIndex - 1
+      const member = memberByName.get(value)
+      const custom = member
+        ? {
+            member_id: member.member_id,
+            player_name: member.player_name,
+            player_class: member.player_class || '',
+            is_temporary: false
+          }
+        : buildTemporaryMember(value, temporaryMembers)
+
+      if (!cellData[row]) cellData[row] = {}
+      cellData[row][column] = {
+        v: typeof excelCell.value === 'number' ? excelCell.value : value,
+        t: typeof excelCell.value === 'number' ? 2 : 1,
+        ...(Object.keys(style).length ? { s: style } : {}),
+        ...(custom ? { custom } : {})
+      }
+    }
+  }
+
+  for (let columnIndex = 1; columnIndex <= columnCount; columnIndex += 1) {
+    const width = excelSheet.getColumn(columnIndex).width
+    if (width) {
+      columnData[columnIndex - 1] = { w: Math.max(56, Math.round(width * 7)) }
+    }
+  }
+
+  return {
+    id: `guild-schedule-workbook-import-${Date.now()}`,
+    name: excelSheet.name || '约战排表',
+    appVersion: '0.25.0',
+    locale: 'zh-CN',
+    sheetOrder: ['sheet-import'],
+    sheets: {
+      'sheet-import': {
+        id: 'sheet-import',
+        name: excelSheet.name || '约战排表',
+        rowCount: Math.max(rowCount, 20),
+        columnCount: Math.max(columnCount, 10),
+        defaultRowHeight: 30,
+        defaultColumnWidth: 132,
+        cellData,
+        rowData,
+        columnData,
+        mergeData: getImportedMergeData(excelSheet, rowCount, columnCount),
+        showGridlines: 1
+      }
+    },
+    custom: {
+      guildScheduleTempMembers: Array.from(temporaryMembers.values()),
+      guildScheduleRegions: { squads: [], teams: [] }
+    }
+  }
+}
+
+function getExcelCellText(cell) {
+  const raw = cell?.value
+  if (raw === null || raw === undefined) return ''
+  if (typeof raw === 'object') {
+    if (Array.isArray(raw.richText)) return raw.richText.map(item => item.text || '').join('').trim()
+    if (raw.text !== undefined) return String(raw.text).trim()
+    if (raw.result !== undefined && raw.result !== null) return String(raw.result).trim()
+  }
+  return String(cell.text ?? raw).trim()
+}
+
+function buildImportedCellStyle(cell) {
+  const background = excelColorToCss(cell?.fill?.fgColor)
+  const foreground = excelColorToCss(cell?.font?.color)
+  const horizontal = {
+    left: 1,
+    center: 2,
+    right: 3,
+    justify: 4,
+    distributed: 6
+  }[cell?.alignment?.horizontal]
+  const vertical = {
+    top: 1,
+    middle: 2,
+    bottom: 3
+  }[cell?.alignment?.vertical]
+  const border = buildImportedBorder(cell?.border)
+  const style = {
+    ...(background ? { bg: { rgb: background } } : {}),
+    ...(foreground ? { cl: { rgb: foreground } } : {}),
+    ...(cell?.font?.name ? { ff: cell.font.name } : {}),
+    ...(cell?.font?.size ? { fs: Number(cell.font.size) } : {}),
+    ...(cell?.font?.bold ? { bl: 1 } : {}),
+    ...(cell?.font?.italic ? { it: 1 } : {}),
+    ...(horizontal ? { ht: horizontal } : {}),
+    ...(vertical ? { vt: vertical } : {}),
+    ...(cell?.alignment?.wrapText ? { tb: 3 } : {}),
+    ...(border ? { bd: border } : {})
+  }
+  return style
+}
+
+function buildImportedBorder(border) {
+  if (!border || typeof border !== 'object') return null
+  const sides = {
+    top: 't',
+    right: 'r',
+    bottom: 'b',
+    left: 'l'
+  }
+  const result = {}
+  Object.entries(sides).forEach(([excelSide, univerSide]) => {
+    const source = border[excelSide]
+    const style = EXCEL_BORDER_STYLE[source?.style]
+    if (!style) return
+    result[univerSide] = {
+      s: style,
+      cl: { rgb: excelColorToCss(source.color) || '#d6dce8' }
+    }
+  })
+  return Object.keys(result).length ? result : null
+}
+
+function excelColorToCss(color) {
+  const argb = String(color?.argb || color?.rgb || '').replace('#', '').trim()
+  if (/^[0-9a-fA-F]{8}$/.test(argb)) return `#${argb.slice(2)}`
+  if (/^[0-9a-fA-F]{6}$/.test(argb)) return `#${argb}`
+  return ''
+}
+
+function getImportedMergeData(sheet, rowCount, columnCount) {
+  const merges = sheet?.model?.merges || []
+  return merges.reduce((items, range) => {
+    const match = String(range).match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i)
+    if (!match) return items
+    const startColumn = excelColumnNameToIndex(match[1])
+    const endColumn = excelColumnNameToIndex(match[3])
+    const startRow = Number(match[2]) - 1
+    const endRow = Number(match[4]) - 1
+    if (startRow < 0 || startColumn < 0 || endRow >= rowCount || endColumn >= columnCount) return items
+    items.push({ startRow, endRow, startColumn, endColumn })
+    return items
+  }, [])
+}
+
+function excelColumnNameToIndex(name) {
+  return String(name).toUpperCase().split('').reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0) - 1
+}
+
+function buildTemporaryMember(value, temporaryMembers) {
+  if (!looksLikePlayerName(value)) return null
+  const existing = temporaryMembers.get(value)
+  if (existing) {
+    return {
+      member_id: existing.member_id,
+      player_name: existing.player_name,
+      player_class: '',
+      is_temporary: true
+    }
+  }
+  const member = {
+    member_id: `temp_excel_${stableTextId(value)}`,
+    player_name: value,
+    player_class: '',
+    secondary_class: '',
+    is_temporary: true
+  }
+  temporaryMembers.set(value, member)
+  return {
+    member_id: member.member_id,
+    player_name: member.player_name,
+    player_class: '',
+    is_temporary: true
+  }
+}
+
+function looksLikePlayerName(value) {
+  const text = String(value || '').trim()
+  if (!text || text.length > 30 || /[\r\n]/.test(text)) return false
+  if (/^\d+(?:\.\d+)?$/.test(text)) return false
+  return !/(排表|小队|团队|队伍|替补|职责|备注|请假|未接龙|成员|名称|位置)/.test(text)
+}
+
+function stableTextId(value) {
+  let hash = 0
+  for (const char of String(value)) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  }
+  return hash.toString(36)
 }
 
 function resolveCellStyle(cell, styles) {
