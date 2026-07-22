@@ -1,222 +1,222 @@
-export const ZHOU_TIAN_OPTIONS = ['金火', '火木', '金木']
-
-export const ENTRY_FIELDS = [
-  { row: 3, name: '赛年', defaultValue: 0, formula: C => 0.88 * C[3] },
-  { row: 4, name: '力量/气海', defaultValue: 0, maxValue: 10, formula: C => 2.5 * C[4] * 0.0455 + C[4] * 0.0425 },
-  { row: 5, name: '攻击', defaultValue: 0, maxValue: 33, formula: C => 0.0455 * C[5] },
-  { row: 6, name: '破防', defaultValue: 0, maxValue: 33, formula: C => C[6] * 0.0425 },
-  { row: 7, name: '流派克制', defaultValue: 0, maxValue: 1.2, formula: C => C[7] },
-  { row: 8, name: '会心', defaultValue: 0, maxValue: 66, formula: C => C[8] * 0.0182 },
-  { row: 9, name: '最大攻击', defaultValue: 0, maxValue: 36, formula: C => 0.0455 * C[9] / 2 },
-  { row: 10, name: '最小攻击', defaultValue: 0, maxValue: 36, formula: C => 0.0455 * C[10] / 2 },
-  { row: 11, name: '身法', defaultValue: 0, maxValue: 10, formula: C => C[11] * 0.0182 * 6 },
-  { row: 12, name: '耐力', defaultValue: 0, maxValue: 10, formula: C => C[12] * 0.0455 },
-  { row: 13, name: '根骨', defaultValue: 0, maxValue: 10, formula: C => C[13] * 0.0455 },
-  {
-    row: 14,
-    name: '灼星贯日-灵',
-    defaultValue: 0,
-    formula: (C, helpers) => C[14] * (1.875 + 0.1 * (5.5 + helpers.zhongMiao + helpers.jueDian))
-  },
-  { row: 15, name: '承影锋镝-灵', defaultValue: 0, formula: C => C[15] * 3 },
-  { row: 16, name: '绝电惊沙-灵', defaultValue: 0, formula: C => C[16] * 2.46 },
-  { row: 17, name: '日月两仪-灵', defaultValue: 0, formula: C => C[17] * 2.2 },
-  { row: 18, name: '楚狂歌-灵', defaultValue: 0, formula: C => C[18] * 1.78 },
-  { row: 19, name: '众妙-灵', defaultValue: 0, formula: C => C[19] * 1.75 },
-  { row: 20, name: '焚刃-灵', defaultValue: 0, formula: C => C[20] * 1.65 },
-  { row: 21, name: '斩精-灵', defaultValue: 0, formula: C => C[21] * 1.6 },
-  { row: 22, name: '破釜-灵', defaultValue: 0, formula: C => C[22] * 1.6 },
-  { row: 23, name: '贯山月(卡轴)-灵', defaultValue: 0, formula: C => C[23] * 1.63 },
-  { row: 24, name: '锻寒芒-灵', defaultValue: 0, formula: C => C[24] * 1.65 },
-  { row: 25, name: '击衰-灵', defaultValue: 0, formula: C => C[25] * 1.4 },
-  { row: 26, name: '惊羽-灵', defaultValue: 0, formula: C => C[26] * 1.6 },
-  { row: 27, name: '裁锋-灵', defaultValue: 0, formula: C => C[27] * 1.65 },
-  { row: 28, name: '五韵谣-灵', defaultValue: 0, formula: C => C[28] * 1.3 }
+export const DEFENDER_FIELDS = [
+  { key: 'defense', label: '防御', step: 1 },
+  { key: 'resist', label: '抵御', step: 1 },
+  { key: 'critResist', label: '会心抵抗', step: 1 },
+  { key: 'resistPct', label: '抵御百分比', step: 1, precision: 1, suffix: '%' },
+  { key: 'hp', label: '血量', step: 100 },
+  { key: 'critDefense', label: '会心防御', step: 0.1, suffix: '%' },
+  { key: 'techniqueResist', label: '技巧克制', step: 1 }
 ]
 
-export const TRAIT_FIELDS = [
-  { row: 3, name: '灼星贯日', defaultValue: true },
-  { row: 4, name: '承影锋镝', defaultValue: true, fixedGain: 6 },
-  { row: 5, name: '绝电惊沙', defaultValue: true, fixedGain: 5.5 },
-  { row: 6, name: '日月两仪', defaultValue: false, fixedGain: 4.9 },
-  { row: 7, name: '楚狂歌', defaultValue: true, fixedGain: 5.4 },
-  { row: 8, name: '众妙', defaultValue: true, fixedGain: 5.25 },
-  { row: 9, name: '焚刃', defaultValue: false, fixedGain: 5 },
-  { row: 10, name: '斩精', defaultValue: false, fixedGain: 4.8 },
-  { row: 11, name: '破釜', defaultValue: false, fixedGain: 4.8 },
-  { row: 12, name: '贯山月(卡轴)', defaultValue: false, fixedGain: 4.9 },
-  { row: 13, name: '锻寒芒', defaultValue: false, fixedGain: 4.8 },
-  { row: 14, name: '击衰', defaultValue: false, fixedGain: 4.2 },
-  { row: 15, name: '惊羽', defaultValue: false, fixedGain: 4.8 },
-  { row: 16, name: '裁锋', defaultValue: true, fixedGain: 5 },
-  { row: 17, name: '五韵谣', defaultValue: false, fixedGain: 1.75 }
+export const INNER_POWER_FIELDS = [
+  { key: 'rootBone', label: '根骨', step: 1 },
+  { key: 'agility', label: '身法', step: 1 },
+  { key: 'endurance', label: '耐力', step: 1 },
+  ...DEFENDER_FIELDS.filter(field => field.key !== 'resist')
 ]
 
-export function isSpiritEntryField(name) {
-  return String(name || '').endsWith('-灵')
+export const DEFAULT_ATTACK_PANEL = {
+  panelId: 0,
+  panelName: '默认参考进攻面板',
+  attack: 1750,
+  breakDefense: 1100,
+  restraintValue: 285,
+  crit: 1100,
+  critDmg: 0.575,
+  extraCritRate: 0,
+  restraintPct: 0,
+  skillBonus: 0,
+  skillBonusPct: 0,
+  internalBonus: 0,
+  gearBonus: 0,
+  martialBonus: 0,
+  otherBonus: 0,
+  techniqueRestraint: 0
 }
 
-export const DEFENSE_CALCULATOR_EXAMPLE = {
-  '周天': '火木',
-  '词条': {
-    '赛年': 0,
-    '力量/气海': 10,
-    '攻击': 120,
-    '破防': 80,
-    '流派克制': 1.2,
-    '会心': 66,
-    '最大攻击': 36,
-    '最小攻击': 36,
-    '身法': 10,
-    '耐力': 10,
-    '根骨': 10,
-    '灼星贯日-灵': 1,
-    '承影锋镝-灵': 1,
-    '绝电惊沙-灵': 1,
-    '日月两仪-灵': 0,
-    '楚狂歌-灵': 1,
-    '众妙-灵': 1,
-    '焚刃-灵': 0,
-    '斩精-灵': 0,
-    '破釜-灵': 0,
-    '贯山月(卡轴)-灵': 0,
-    '锻寒芒-灵': 0,
-    '击衰-灵': 0,
-    '惊羽-灵': 0,
-    '裁锋-灵': 1,
-    '五韵谣-灵': 0
-  },
-  '特性': {
-    '灼星贯日': true,
-    '承影锋镝': true,
-    '绝电惊沙': true,
-    '日月两仪': false,
-    '楚狂歌': true,
-    '众妙': true,
-    '焚刃': false,
-    '斩精': false,
-    '破釜': false,
-    '贯山月(卡轴)': false,
-    '锻寒芒': false,
-    '击衰': false,
-    '惊羽': false,
-    '裁锋': true,
-    '五韵谣': false
-  }
-}
-
-export function createDefaultDefenseInput() {
+export function createDefaultDefender() {
   return {
-    '周天': '火木',
-    '词条': Object.fromEntries(ENTRY_FIELDS.map(field => [field.name, field.defaultValue])),
-    '特性': Object.fromEntries(TRAIT_FIELDS.map(field => [field.name, field.defaultValue]))
+    defense: 2550,
+    resist: 0,
+    critResist: 0,
+    resistPct: 0,
+    hp: 100000,
+    critDefense: 0,
+    techniqueResist: 0
   }
 }
 
-export function normalizeDefenseInput(value = {}) {
-  const source = isPlainObject(value) ? value : {}
-  const sourceEntries = isPlainObject(source['词条']) ? source['词条'] : {}
-  const sourceTraits = isPlainObject(source['特性']) ? source['特性'] : {}
-  const zhouTian = ZHOU_TIAN_OPTIONS.includes(source['周天']) ? source['周天'] : '火木'
+export function createEmptyInnerPowerEntries() {
+  return Object.fromEntries(INNER_POWER_FIELDS.map(field => [field.key, 0]))
+}
 
+export function calculateDefense(defenderInput, attackPanelInput) {
+  const defender = normalizeDefender(defenderInput)
+  const attackPanel = normalizeAttackPanel(attackPanelInput)
+  const result = calculateSnapshot(defender, attackPanel)
   return {
-    '周天': zhouTian,
-    '词条': Object.fromEntries(
-      ENTRY_FIELDS.map(field => [field.name, parseNumber(sourceEntries[field.name], field.defaultValue)])
-    ),
-    '特性': Object.fromEntries(
-      TRAIT_FIELDS.map(field => [field.name, parseBoolean(sourceTraits[field.name], field.defaultValue)])
-    )
+    defender,
+    attackPanel,
+    ...result,
+    defenseCurve: buildDefenseCurve(),
+    defenseDerivativeCurve: buildDefenseDerivativeCurve(),
+    critCurve: buildCritCurve(),
+    critDerivativeCurve: buildCritDerivativeCurve()
   }
 }
 
-export function calculatePersonalDefense(input = createDefaultDefenseInput()) {
-  const normalizedInput = normalizeDefenseInput(input)
-  const C = Object.fromEntries(
-    ENTRY_FIELDS.map(field => [field.row, normalizedInput['词条'][field.name]])
+export function calculateInnerPowerComparison(defenderInput, attackPanelInput, entriesA, entriesB) {
+  const base = calculateDefense(defenderInput, attackPanelInput)
+  const buildA = calculateDefense(addEntries(base.defender, entriesA), base.attackPanel)
+  const buildB = calculateDefense(addEntries(base.defender, entriesB), base.attackPanel)
+  return {
+    base,
+    buildA: comparisonItem('方案 A', buildA, base),
+    buildB: comparisonItem('方案 B', buildB, base)
+  }
+}
+
+export function calculateRecommendation(defenderInput, attackPanelInput) {
+  const base = calculateDefense(defenderInput, attackPanelInput)
+  return [
+    recommendationItem('防御词条（+33 防御）', base, { defense: 33 }),
+    recommendationItem('会心抵抗词条（+66 会心抵抗）', base, { critResist: 66 })
+  ]
+}
+
+function calculateSnapshot(defender, attackPanel) {
+  const remainingDefense = Math.max(defender.defense - attackPanel.breakDefense, 0)
+  const defenseMitigation = remainingDefense / (remainingDefense + 1714)
+  const netCrit = attackPanel.crit - defender.critResist
+  const critRate = clamp(1 / (1 + Math.exp(1 - netCrit / 686)) + asRate(attackPanel.extraCritRate), 0, 1)
+  const techniqueDifference = Math.max(attackPanel.techniqueRestraint - defender.techniqueResist, 0)
+  const attackPool = Math.max(
+    attackPanel.attack + attackPanel.restraintValue - defender.resist + attackPanel.skillBonus + techniqueDifference,
+    0
   )
-  const traitsByRow = Object.fromEntries(
-    TRAIT_FIELDS.map(field => [field.row, normalizedInput['特性'][field.name]])
-  )
-  const helpers = {
-    zhongMiao: C[19] === 1 ? 7 : (traitsByRow[8] ? 5.25 : 0),
-    jueDian: C[16] === 1 ? 8 : (traitsByRow[5] ? 5.5 : 0)
-  }
-  const traitGainByRow = {
-    ...Object.fromEntries(TRAIT_FIELDS.filter(field => field.fixedGain != null).map(field => [field.row, field.fixedGain])),
-    3: 3 + 0.2 * (5.5 + helpers.zhongMiao + helpers.jueDian)
-  }
-  const entryDetails = ENTRY_FIELDS.map(field => {
-    const score = field.formula(C, helpers)
-    const fullScore = field.maxValue == null ? null : field.formula({ ...C, [field.row]: field.maxValue }, helpers)
-    return {
-      '名称': field.name,
-      '输入': round(normalizedInput['词条'][field.name]),
-      '评分': round(score),
-      '满词条输入': field.maxValue ?? null,
-      '满词条评分': fullScore == null ? null : round(fullScore)
-    }
-  })
-  const traitDetails = TRAIT_FIELDS.map(field => {
-    const carried = normalizedInput['特性'][field.name]
-    const gain = traitGainByRow[field.row] || 0
-    return {
-      '名称': field.name,
-      '携带': carried,
-      '收益': round(gain),
-      '计数': carried ? 1 : 0
-    }
-  })
-  const entryScore = entryDetails.reduce((sum, item) => sum + item['评分'], 0)
-  const zhouTianBonus = getZhouTianBonus(normalizedInput['周天'])
-  const traitScore = traitDetails.reduce((sum, item) => sum + item['收益'] * item['计数'], zhouTianBonus)
-
+  const restraintFactor = Math.max(1 + asRate(attackPanel.restraintPct) - asPercentPoints(defender.resistPct), 0)
+  const bonusFactor = (1 + asRate(attackPanel.internalBonus))
+    * (1 + asRate(attackPanel.gearBonus))
+    * (1 + asRate(attackPanel.martialBonus))
+    * (1 + asRate(attackPanel.otherBonus))
+    * (1 + asRate(attackPanel.skillBonusPct))
+  const nonCritDamage = 0.5 * attackPool * (1 - defenseMitigation) * restraintFactor * bonusFactor
+  const critExtra = Math.max(asRate(attackPanel.critDmg) - asRate(defender.critDefense), 0)
+  const expectedDamage = Math.max(nonCritDamage * (1 + critRate * critExtra), 0.0001)
+  const durability = defender.hp / expectedDamage
   return {
-    summary: {
-      '词条分': round(entryScore),
-      '特性分': round(traitScore),
-      '总分': round(entryScore + traitScore),
-      '周天加成': round(zhouTianBonus)
-    },
-    '词条明细': entryDetails,
-    '特性明细': traitDetails,
-    normalizedInput
+    remainingDefense,
+    defenseMitigation,
+    netCrit,
+    critRate,
+    techniqueDifference,
+    nonCritDamage,
+    expectedDamage,
+    durability
   }
 }
 
-export function getZhouTianBonus(value) {
-  if (value === '火木') return 2.7
-  if (value === '金木') return 2.8
-  return 0
+function buildDefenseCurve() {
+  return Array.from({ length: 41 }, (_, index) => {
+    const remainingDefense = index * 250
+    return [remainingDefense, round(remainingDefense / (remainingDefense + 1714), 6)]
+  })
 }
 
-export function stringifyDefenseJson(value) {
-  return JSON.stringify(value, null, 2)
+function buildDefenseDerivativeCurve() {
+  return Array.from({ length: 41 }, (_, index) => {
+    const remainingDefense = index * 250
+    // 将单点导数换算为每增加 100 点剩余防御的减免增量，便于在 0-1 纵轴中观察。
+    return [remainingDefense, round(100 * 1714 / ((remainingDefense + 1714) ** 2), 6)]
+  })
 }
 
-function parseNumber(value, fallback = 0) {
-  if (value === '' || value == null) return fallback
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : 0
+function buildCritCurve() {
+  return Array.from({ length: 41 }, (_, index) => {
+    const netCrit = -1000 + index * 75
+    return [netCrit, round(logisticCritRate(netCrit), 6)]
+  })
 }
 
-function parseBoolean(value, fallback = false) {
-  if (value == null || value === '') return fallback
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'number') return value === 1
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase()
-    if (['true', '1', 'yes', 'y', '是'].includes(normalized)) return true
-    if (['false', '0', 'no', 'n', '否'].includes(normalized)) return false
+function buildCritDerivativeCurve() {
+  return Array.from({ length: 41 }, (_, index) => {
+    const netCrit = -1000 + index * 75
+    const critRate = logisticCritRate(netCrit)
+    // 将单点导数换算为每增加 100 点净会心的会心率增量，便于在 0-1 纵轴中观察。
+    return [netCrit, round(100 * critRate * (1 - critRate) / 686, 6)]
+  })
+}
+
+function logisticCritRate(netCrit) {
+  return clamp(1 / (1 + Math.exp(1 - netCrit / 686)), 0, 1)
+}
+
+function recommendationItem(label, base, changes) {
+  const upgraded = calculateDefense(addEntries(base.defender, changes), base.attackPanel)
+  return {
+    label,
+    durability: upgraded.durability,
+    gainPct: percentGain(upgraded.durability, base.durability)
   }
-  return Boolean(value)
 }
 
-function isPlainObject(value) {
-  return Object.prototype.toString.call(value) === '[object Object]'
+function comparisonItem(name, current, base) {
+  return {
+    name,
+    expectedDamage: current.expectedDamage,
+    durability: current.durability,
+    gainPct: percentGain(current.durability, base.durability)
+  }
 }
 
-function round(value, precision = 4) {
+function addEntries(defender, entries) {
+  const normalized = normalizeEntries(entries)
+  const result = Object.fromEntries(DEFENDER_FIELDS.map(field => [
+    field.key,
+    defender[field.key] + (normalized[field.key] ?? 0)
+  ]))
+  result.hp += normalized.rootBone * 102
+  result.critResist += normalized.agility * 2
+  result.defense += normalized.endurance * 2.75
+  return result
+}
+
+function normalizeDefender(value = {}) {
+  const defaults = createDefaultDefender()
+  return Object.fromEntries(DEFENDER_FIELDS.map(field => [field.key, number(value[field.key], defaults[field.key])]))
+}
+
+function normalizeEntries(value = {}) {
+  return Object.fromEntries(INNER_POWER_FIELDS.map(field => [field.key, number(value?.[field.key], 0)]))
+}
+
+function normalizeAttackPanel(value = {}) {
+  return Object.fromEntries(Object.entries(DEFAULT_ATTACK_PANEL).map(([key, fallback]) => [key, key === 'panelName' ? String(value[key] || fallback) : number(value[key], fallback)]))
+}
+
+function asRate(value) {
+  const normalized = number(value, 0)
+  return Math.abs(normalized) > 1 ? normalized / 100 : normalized
+}
+
+function asPercentPoints(value) {
+  return number(value, 0) / 100
+}
+
+function number(value, fallback = 0) {
+  const result = Number(value)
+  return Number.isFinite(result) ? result : fallback
+}
+
+function percentGain(value, base) {
+  return base > 0 ? (value / base - 1) * 100 : 0
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function round(value, precision = 6) {
   const factor = 10 ** precision
-  return Math.round((Number(value) || 0) * factor) / factor
+  return Math.round(value * factor) / factor
 }

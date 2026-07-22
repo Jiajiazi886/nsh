@@ -103,9 +103,12 @@ class UserService:
     @staticmethod
     def is_admin_role(current_user: CurrentUserModel) -> bool:
         """
-        判断当前用户是否拥有admin角色。
+        判断当前用户是否为超级管理员或拥有admin角色。
         """
-        return 'admin' in (current_user.roles or [])
+        current_user_info = getattr(current_user, 'user', None)
+        return bool(getattr(current_user_info, 'admin', False)) or getattr(current_user_info, 'user_id', None) == 1 or (
+            'admin' in (current_user.roles or [])
+        )
 
     @staticmethod
     def is_effective_vip(user: Any) -> bool:

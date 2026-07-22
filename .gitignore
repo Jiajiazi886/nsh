@@ -167,9 +167,13 @@ ruoyi-fastapi-backend/build/
 ruoyi-fastapi-frontend/.vite/
 ruoyi-fastapi-frontend/dist/
 deploy/prod.env
+deploy/releases/
 
 # Local UI reference project
 animated-characters-login-page-main/
 
 # Local school documents
 哈尔滨信息工程学院/
+
+# Docker Desktop local WSL virtual disks
+docker/

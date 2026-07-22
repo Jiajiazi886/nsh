@@ -25,6 +25,8 @@ class CheckUserInterfaceAuth:
             request, err_msg='当前路由不在认证规则内，不可使用CheckUserInterfaceAuth依赖项'
         )
         current_user = RequestContext.get_current_user()
+        if current_user.user and current_user.user.admin:
+            return True
         user_auth_list = current_user.permissions
         if '*:*:*' in user_auth_list:
             return True
@@ -59,6 +61,8 @@ class CheckRoleInterfaceAuth:
             request, err_msg='当前路由不在认证规则内，不可使用CheckRoleInterfaceAuth依赖项'
         )
         current_user = RequestContext.get_current_user()
+        if current_user.user and current_user.user.admin:
+            return True
         user_role_list = current_user.user.role
         user_role_key_list = [role.role_key for role in user_role_list]
         if isinstance(self.role_key, str) and self.role_key in user_role_key_list:

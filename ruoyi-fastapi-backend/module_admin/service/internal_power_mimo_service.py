@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from openai import AsyncOpenAI
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.env import MimoConfig
 from exceptions.exception import ServiceException
+from module_admin.service.ai_key_service import AiKeyService
 
 
 @dataclass
@@ -40,8 +42,9 @@ class InternalPowerMimoService:
         mime_type: str,
         prompt: str,
         client: AsyncOpenAI | None = None,
+        query_db: AsyncSession | None = None,
     ) -> InternalPowerMimoResult:
-        result = await cls.recognize_image_json(image_bytes, mime_type, prompt, client)
+        result = await cls.recognize_image_json(image_bytes, mime_type, prompt, client, query_db)
         if result.parsed is None:
             return result
         validation_error = cls.validate_parsed_result(result.parsed)
@@ -56,17 +59,19 @@ class InternalPowerMimoService:
         mime_type: str,
         prompt: str,
         client: AsyncOpenAI | None = None,
+        query_db: AsyncSession | None = None,
     ) -> InternalPowerMimoResult:
         """
         调用Mimo并只要求返回可解析JSON，具体业务校验由调用方完成。
         """
-        if not MimoConfig.mimo_api_key:
-            raise ServiceException(message='Mimo API Key 未配置，请在后端环境变量 MIMO_API_KEY 中配置')
+        api_key = await cls._get_api_key(query_db)
+        if not api_key:
+            raise ServiceException(message='内功识别 API Key 未配置，请在系统管理的 AIKey管理中配置')
         if not prompt or not prompt.strip():
             raise ServiceException(message='识别提示词不能为空')
 
         mimo_client = client or AsyncOpenAI(
-            api_key=MimoConfig.mimo_api_key,
+            api_key=api_key,
             base_url=MimoConfig.mimo_base_url,
             timeout=MimoConfig.mimo_timeout_seconds,
         )
@@ -95,6 +100,14 @@ class InternalPowerMimoService:
         if parsed is None:
             return InternalPowerMimoResult(parsed=None, raw_text=raw_text, error='模型未返回可解析JSON')
         return InternalPowerMimoResult(parsed=parsed, raw_text=raw_text)
+
+    @staticmethod
+    async def _get_api_key(query_db: AsyncSession | None) -> str:
+        if query_db is not None:
+            # 个人内功识别的运行时密钥统一由系统管理保存和维护。
+            return await AiKeyService.get_internal_power_api_key(query_db)
+        # 保留无数据库上下文的调用兼容性，例如离线单元测试。
+        return MimoConfig.mimo_api_key
 
     @classmethod
     def parse_json_response(cls, text: str) -> dict[str, Any] | None:

@@ -128,7 +128,6 @@ async def edit_system_role(
     current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
     data_scope_sql: Annotated[ColumnElement, DataScopeDependency(SysDept)],
 ) -> Response:
-    await RoleService.check_role_allowed_services(edit_role)
     if not current_user.user.admin:
         await RoleService.check_role_data_scope_services(query_db, str(edit_role.role_id), data_scope_sql)
     edit_role.update_by = current_user.user.user_name
@@ -155,7 +154,6 @@ async def edit_system_role_datascope(
     current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
     data_scope_sql: Annotated[ColumnElement, DataScopeDependency(SysDept)],
 ) -> Response:
-    await RoleService.check_role_allowed_services(role_data_scope)
     if not current_user.user.admin:
         await RoleService.check_role_data_scope_services(query_db, str(role_data_scope.role_id), data_scope_sql)
     edit_role = AddRoleModel(

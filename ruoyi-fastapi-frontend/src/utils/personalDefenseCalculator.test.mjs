@@ -1,53 +1,48 @@
 import assert from 'node:assert/strict'
 
 import {
-  DEFENSE_CALCULATOR_EXAMPLE,
-  calculatePersonalDefense,
-  isSpiritEntryField,
-  normalizeDefenseInput
+  DEFAULT_ATTACK_PANEL,
+  INNER_POWER_FIELDS,
+  calculateDefense,
+  calculateInnerPowerComparison,
+  calculateRecommendation,
+  createDefaultDefender,
+  createEmptyInnerPowerEntries
 } from './personalDefenseCalculator.js'
 
-function nearlyEqual(actual, expected, message) {
-  assert.equal(Number(actual).toFixed(4), Number(expected).toFixed(4), message)
-}
+const base = calculateDefense(createDefaultDefender(), DEFAULT_ATTACK_PANEL)
 
-const result = calculatePersonalDefense(DEFENSE_CALCULATOR_EXAMPLE)
+assert.equal(base.remainingDefense, 1450)
+assert.equal(Number(base.defenseMitigation.toFixed(6)), 0.458281)
+assert.equal(Number(base.critRate.toFixed(6)), 0.646456)
+assert.ok(base.expectedDamage > 0)
+assert.ok(base.durability > 0)
+const withResistPct = calculateDefense({ ...createDefaultDefender(), resistPct: 1.2 }, DEFAULT_ATTACK_PANEL)
+assert.ok(withResistPct.expectedDamage < base.expectedDamage)
+assert.ok(withResistPct.durability > base.durability)
+assert.equal(base.defenseCurve.at(-1)[0], 10000)
+assert.equal(base.defenseCurve[0][1], 0)
+assert.equal(Number(base.defenseCurve[4][1].toFixed(6)), 0.36846)
+assert.equal(Number(base.defenseDerivativeCurve[0][1].toFixed(6)), 0.058343)
+assert.ok(base.defenseDerivativeCurve[0][1] > base.defenseDerivativeCurve.at(-1)[1])
+assert.equal(base.critCurve.at(-1)[0], 2000)
+assert.equal(base.critDerivativeCurve[0][0], -1000)
+assert.ok(base.critDerivativeCurve.some(([, value]) => value > 0))
 
-nearlyEqual(result.summary['词条分'], 31.0287, 'example entry score')
-nearlyEqual(result.summary['特性分'], 36.95, 'example trait score')
-nearlyEqual(result.summary['总分'], 67.9787, 'example total score')
-nearlyEqual(result.summary['周天加成'], 2.7, 'example zhou tian bonus')
+const recommendations = calculateRecommendation(createDefaultDefender(), DEFAULT_ATTACK_PANEL)
+assert.equal(recommendations.length, 2)
+assert.equal(recommendations[0].label, '防御词条（+33 防御）')
+assert.equal(recommendations[1].label, '会心抵抗词条（+66 会心抵抗）')
+assert.ok(recommendations[0].gainPct > 0)
+assert.ok(recommendations[1].gainPct > 0)
 
-const attackEntry = result['词条明细'].find(item => item['名称'] === '攻击')
-assert.deepEqual(attackEntry, { '名称': '攻击', '输入': 120, '评分': 5.46, '满词条输入': 33, '满词条评分': 1.5015 })
-
-const qiHaiEntry = result['词条明细'].find(item => item['名称'] === '力量/气海')
-assert.equal(qiHaiEntry['满词条输入'], 10)
-nearlyEqual(qiHaiEntry['满词条评分'], 1.5625, 'full strength/qihai score')
-
-const restraintEntry = result['词条明细'].find(item => item['名称'] === '流派克制')
-assert.equal(restraintEntry['满词条输入'], 1.2)
-nearlyEqual(restraintEntry['满词条评分'], 1.2, 'full restraint score')
-
-assert.equal(isSpiritEntryField('灼星贯日-灵'), true)
-assert.equal(isSpiritEntryField('力量/气海'), false)
-
-const zhuoxingTrait = result['特性明细'].find(item => item['名称'] === '灼星贯日')
-assert.deepEqual(zhuoxingTrait, { '名称': '灼星贯日', '携带': true, '收益': 7.1, '计数': 1 })
-
-const normalized = normalizeDefenseInput({
-  '周天': '不存在',
-  '词条': { '攻击': 'abc', '破防': '12.5' },
-  '特性': { '灼星贯日': '是', '承影锋镝': '否' }
-})
-
-assert.equal(normalized['周天'], '火木')
-assert.equal(normalized['词条']['攻击'], 0)
-assert.equal(normalized['词条']['破防'], 12.5)
-assert.equal(normalized['特性']['灼星贯日'], true)
-assert.equal(normalized['特性']['承影锋镝'], false)
-
-const defaults = calculatePersonalDefense()
-nearlyEqual(defaults.summary['词条分'], 0, 'default entry score')
-nearlyEqual(defaults.summary['特性分'], 36.1, 'default trait score')
-nearlyEqual(defaults.summary['总分'], 36.1, 'default total score')
+const entriesA = createEmptyInnerPowerEntries()
+entriesA.defense = 100
+entriesA.rootBone = 1
+entriesA.agility = 1
+entriesA.endurance = 1
+assert.equal(entriesA.resist, undefined)
+assert.ok(INNER_POWER_FIELDS.every(field => field.key !== 'resist'))
+const comparison = calculateInnerPowerComparison(createDefaultDefender(), DEFAULT_ATTACK_PANEL, entriesA, {})
+assert.ok(comparison.buildA.gainPct > 0)
+assert.equal(comparison.buildB.gainPct, 0)

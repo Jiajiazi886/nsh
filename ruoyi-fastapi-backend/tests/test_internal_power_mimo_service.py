@@ -22,6 +22,34 @@ def test_mimo_parse_json_response_supports_plain_and_fenced_json():
 
 
 @pytest.mark.asyncio
+async def test_mimo_prefers_api_key_configured_in_system_settings(monkeypatch):
+    async def fake_get_internal_power_api_key(_query_db):
+        return 'configured-key'
+
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_mimo_service.AiKeyService.get_internal_power_api_key',
+        fake_get_internal_power_api_key,
+    )
+    monkeypatch.setattr('module_admin.service.internal_power_mimo_service.MimoConfig.mimo_api_key', 'environment-key')
+
+    assert await InternalPowerMimoService._get_api_key(object()) == 'configured-key'
+
+
+@pytest.mark.asyncio
+async def test_mimo_runtime_does_not_fallback_to_environment_key_when_system_key_is_empty(monkeypatch):
+    async def fake_get_internal_power_api_key(_query_db):
+        return ''
+
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_mimo_service.AiKeyService.get_internal_power_api_key',
+        fake_get_internal_power_api_key,
+    )
+    monkeypatch.setattr('module_admin.service.internal_power_mimo_service.MimoConfig.mimo_api_key', 'environment-key')
+
+    assert await InternalPowerMimoService._get_api_key(object()) == ''
+
+
+@pytest.mark.asyncio
 async def test_mimo_request_uses_openai_compatible_image_payload_and_disabled_thinking(monkeypatch):
     captured = {}
 
@@ -189,7 +217,7 @@ async def test_recognize_images_keeps_history_ids_before_commit_to_avoid_async_l
     async def fake_presets(db):
         return [make_preset(1, '贯山月', 'metal')]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
             raw_text='{}',
@@ -250,7 +278,7 @@ async def test_recognize_images_keeps_user_scalars_before_commit_to_avoid_async_
     async def fake_presets(db):
         return [make_preset(1, '贯山月', 'metal')]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
             raw_text='{}',
@@ -361,7 +389,7 @@ async def test_recognize_images_deducts_only_successful_images_and_returns_candi
             make_preset(2, '稀有-灼星贯日', 'fire'),
         ]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         if prompt == 'bad':
             raise AssertionError('unexpected prompt')
         if len(calls := getattr(fake_recognize_image, 'calls', [])) == 0:
@@ -435,7 +463,7 @@ async def test_recognize_images_filters_multi_element_candidates_when_element_is
             make_preset(2, '稀有-不动明王', 'water'),
         ]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '稀有-不动明王', '元素': '水', '属性加成': [{'词条': '气血上限', '数值': 2084}]},
             raw_text='{}',
@@ -494,7 +522,7 @@ async def test_recognize_images_normalizes_plain_rare_power_name_and_filters_by_
             make_preset(2, '稀有-不动明王', 'water'),
         ]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '不动明王', '元素': '水', '属性加成': [{'词条': '气血上限', '数值': 2084}]},
             raw_text='{}',
@@ -554,7 +582,7 @@ async def test_recognize_images_normalizes_trial_rare_power_name(monkeypatch):
             make_preset(2, '稀有-绝电惊沙', 'wood'),
         ]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '绝电惊沙·试用', '元素': '金', '属性加成': [{'词条': '会心', '数值': 57}]},
             raw_text='{}',
@@ -611,7 +639,7 @@ async def test_recognize_images_keeps_old_json_without_element_when_single_candi
     async def fake_presets(db):
         return [make_preset(1, '贯山月', 'metal')]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
             raw_text='{}',
@@ -670,7 +698,7 @@ async def test_recognize_images_keeps_multi_element_candidates_when_element_is_u
             make_preset(2, '稀有-不动明王', 'water'),
         ]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '稀有-不动明王', '元素': '看不清', '属性加成': [{'词条': '气血上限', '数值': 2084}]},
             raw_text='{}',
@@ -728,7 +756,7 @@ async def test_recognize_images_does_not_deduct_when_all_images_fail(monkeypatch
     async def fake_presets(db):
         return [make_preset(1, '贯山月', 'metal')]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(parsed=None, raw_text='oops', error='模型未返回可解析JSON')
 
     monkeypatch.setattr('module_admin.service.internal_power_service.UserDao.get_user_detail_by_id', fake_get_user_detail_by_id)
@@ -783,7 +811,7 @@ async def test_recognize_images_admin_can_use_without_remaining_count_and_does_n
     async def fake_presets(db):
         return [make_preset(1, '贯山月', 'metal')]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
             raw_text='{}',
@@ -841,7 +869,7 @@ async def test_recognize_images_marks_success_items_failed_when_atomic_deduct_fa
     async def fake_presets(db):
         return [make_preset(1, '贯山月', 'metal')]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
             raw_text='{}',
@@ -902,7 +930,7 @@ async def test_recognize_images_deducts_vip_count_before_normal_count(monkeypatc
     async def fake_presets(db):
         return [make_preset(1, '贯山月', 'metal')]
 
-    async def fake_recognize_image(image_bytes, mime_type, prompt):
+    async def fake_recognize_image(image_bytes, mime_type, prompt, **_kwargs):
         return SimpleNamespace(
             parsed={'内功名': '贯山月', '属性加成': [{'词条': '攻击', '数值': 33}]},
             raw_text='{}',

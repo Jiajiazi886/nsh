@@ -220,7 +220,12 @@ class InternalPowerService:
             history_user_id = int(history.user_id)
             await InternalPowerRecognitionHistoryDao.trim_by_user_id(query_db, target_user_id)
             await query_db.commit()
-            mimo_result = await InternalPowerMimoService.recognize_image(image_bytes, content_type, prompt)
+            mimo_result = await InternalPowerMimoService.recognize_image(
+                image_bytes,
+                content_type,
+                prompt,
+                query_db=query_db,
+            )
             if mimo_result.parsed is None:
                 item = cls.__recognize_item(file_name, False, None, mimo_result.raw_text, mimo_result.error, [])
                 await cls.__update_recognition_history(query_db, history_record_id, history_user_id, item)

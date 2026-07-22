@@ -87,6 +87,7 @@ class InternalPowerPanelRecognitionService:
             image_bytes,
             mime_type,
             PANEL_RECOGNITION_PROMPT,
+            query_db=query_db,
         )
         if mimo_result.parsed is None:
             await cls.__update_history(
