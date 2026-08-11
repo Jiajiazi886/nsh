@@ -2,28 +2,110 @@
   <div v-if="isDefenseCalculator" class="app-container defense-page">
     <section class="page-header">
       <div><h1>防守计算器</h1><p>基于 PVP 计算器 4.1.1 的防御减免、会心率与伤害期望公式。</p></div>
-      <el-select v-model="selectedPanelId" class="panel-select" placeholder="选择进攻方面板">
-        <el-option v-for="panel in attackPanels" :key="panel.panelId" :label="panel.panelName" :value="panel.panelId" />
-      </el-select>
+      <div class="header-actions">
+        <el-button :icon="Edit" @click="openCustomAttackPanelDialog">攻击方面板设置</el-button>
+        <el-button :icon="Picture" @click="openRecognitionDialog">面板识别</el-button>
+        <el-select v-model="selectedPanelKey" class="panel-select" placeholder="选择进攻方面板">
+          <el-option-group label="我的攻击方面板">
+            <el-option v-for="panel in personalAttackPanels" :key="`personal-${panel.panelId}`" :label="panel.panelName" :value="panelKey('personal', panel.panelId)" />
+          </el-option-group>
+          <el-option-group label="系统参考面板">
+            <el-option v-for="panel in systemAttackPanels" :key="`system-${panel.panelId}`" :label="panel.panelName" :value="panelKey('system', panel.panelId)" />
+          </el-option-group>
+        </el-select>
+      </div>
     </section>
 
+    <el-dialog v-model="recognitionDialogVisible" title="防守面板识别" width="560px" append-to-body destroy-on-close>
+      <el-upload
+        drag
+        accept="image/png,image/jpeg,image/webp"
+        :auto-upload="false"
+        :limit="1"
+        :on-change="handleRecognitionFileChange"
+        :on-remove="clearRecognitionFile"
+        :on-exceed="handleRecognitionExceed"
+      >
+        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+        <div class="el-upload__text">上传逆水寒角色防御属性面板截图</div>
+      </el-upload>
+      <div v-if="recognizing" class="recognition-progress"><el-icon class="is-loading"><Loading /></el-icon> 正在识别并回填防守面板</div>
+      <el-alert v-if="recognitionError" class="recognition-alert" type="error" :closable="false" :title="recognitionError" />
+      <el-alert v-if="defenseRecognition.success" class="recognition-alert" type="success" :closable="false" title="识别成功，已回填防守方面板" />
+      <template #footer>
+        <el-button @click="recognitionDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="customAttackPanelDialogVisible" title="攻击方面板设置" width="820px" append-to-body destroy-on-close>
+      <p class="attack-panel-description">模板仅属于当前登录用户，系统参考面板不会被修改。模板名称由系统按创建顺序自动生成。</p>
+      <div class="template-toolbar">
+        <el-select v-model="editingPersonalPanelId" class="template-select" placeholder="选择我的模板" @change="selectPersonalPanel">
+          <el-option v-for="panel in personalAttackPanels" :key="panel.panelId" :label="panel.panelName" :value="panel.panelId" />
+        </el-select>
+        <el-button type="primary" plain :icon="Plus" :loading="templateSaving" @click="addPersonalPanel">新增模板</el-button>
+        <el-button v-if="editingPersonalPanelId" type="danger" plain :icon="Delete" :loading="templateSaving" @click="removePersonalPanel">删除模板</el-button>
+      </div>
+      <el-empty v-if="!editingPersonalPanelId" description="还没有个人攻击方面板，请新增一套模板" :image-size="90" />
+      <el-form v-else :model="personalPanelDraft" label-width="108px" class="attack-panel-form" @submit.prevent>
+        <el-row :gutter="16">
+          <el-col :span="24"><el-form-item label="面板名称"><el-input :model-value="personalPanelDraft.panelName" disabled /></el-form-item></el-col>
+          <el-col v-for="field in attackPanelCoreFields" :key="field.key" :span="8">
+            <el-form-item :label="field.label"><el-input-number v-model="personalPanelDraft[field.key]" :min="0" :step="field.step || 1" :precision="field.precision || 0" controls-position="right" style="width: 100%"><template v-if="field.suffix" #suffix>{{ field.suffix }}</template></el-input-number></el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-collapse class="attack-panel-advanced">
+              <el-collapse-item title="额外伤害乘区" name="advanced">
+                <el-row :gutter="16">
+                  <el-col v-for="field in attackPanelAdvancedFields" :key="field.key" :span="8">
+                    <el-form-item :label="field.label"><el-input-number v-model="personalPanelDraft[field.key]" :min="0" :step="0.01" :precision="3" controls-position="right" style="width: 100%"><template #suffix>%</template></el-input-number></el-form-item>
+                  </el-col>
+                </el-row>
+              </el-collapse-item>
+            </el-collapse>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="customAttackPanelDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!editingPersonalPanelId" :loading="templateSaving" @click="savePersonalPanel">保存并使用</el-button>
+      </template>
+    </el-dialog>
+
     <section class="curve-grid">
-      <div class="chart-section"><h2>防御减免曲线</h2><div ref="defenseChartRef" class="chart"></div></div>
-      <div class="chart-section"><h2>会心率曲线</h2><div ref="critChartRef" class="chart"></div></div>
-      <div class="chart-section"><h2>防御边际收益</h2><p>每增加 100 点剩余防御，防御减免的理论增量。</p><div ref="defenseDerivativeChartRef" class="chart"></div></div>
-      <div class="chart-section"><h2>会心边际收益</h2><p>每增加 100 点净会心，会心率的理论增量。</p><div ref="critDerivativeChartRef" class="chart"></div></div>
+      <div class="chart-section"><h2>防御减免曲线</h2><div ref="defenseChartRef" class="chart"></div><div class="curve-point-input"><span>剩余防御</span><el-input-number v-model="curveInputs.defense" :min="0" :max="10000" :step="10" controls-position="right" /></div></div>
+      <div class="chart-section"><h2>会心率曲线</h2><div ref="critChartRef" class="chart"></div><div class="curve-point-input"><span>净会心</span><el-input-number v-model="curveInputs.crit" :min="-1000" :max="2000" :step="10" controls-position="right" /></div></div>
+      <div class="chart-section"><h2>防御边际收益</h2><p>每增加 33 点剩余防御，防御减免的理论增量。</p><div ref="defenseDerivativeChartRef" class="chart"></div><div class="curve-point-input"><span>剩余防御</span><el-input-number v-model="curveInputs.defense" :min="0" :max="10000" :step="10" controls-position="right" /></div></div>
+      <div class="chart-section"><h2>会心边际收益</h2><p>每增加 66 点净会心，会心率的理论增量。</p><div ref="critDerivativeChartRef" class="chart"></div><div class="curve-point-input"><span>净会心</span><el-input-number v-model="curveInputs.crit" :min="-1000" :max="2000" :step="10" controls-position="right" /></div></div>
     </section>
 
     <section class="calculator-grid">
-      <div class="input-section">
-        <h2>防守方面板</h2>
+      <div class="input-section defender-drop-zone" :class="{ 'is-dragging': defenseDropActive }" @dragenter.prevent="defenseDropActive = true" @dragover.prevent="defenseDropActive = true" @dragleave.prevent="defenseDropActive = false" @drop.prevent="handleDefensePanelDrop">
+        <div class="section-title"><h2>防守方面板</h2><span>可将角色防御属性截图拖入此处自动识别</span></div>
         <div class="field-grid">
-          <label v-for="field in DEFENDER_FIELDS" :key="field.key" class="number-field">
+          <label v-for="field in defenderCoreFields" :key="field.key" class="number-field">
             <span>{{ field.label }}</span>
             <el-input-number v-model="defender[field.key]" :min="0" :step="field.step" :precision="field.precision ?? (field.step < 1 ? 1 : 0)" controls-position="right">
               <template v-if="field.suffix" #suffix>{{ field.suffix }}</template>
             </el-input-number>
           </label>
+        </div>
+        <el-collapse class="defender-advanced">
+          <el-collapse-item title="额外减伤乘区" name="reduction">
+            <div class="field-grid defender-reduction-grid">
+              <label v-for="field in defenderReductionFields" :key="field.key" class="number-field">
+                <span>{{ field.label }}</span>
+                <el-input-number v-model="defender[field.key]" :min="0" :step="field.step" :precision="field.precision ?? 3" controls-position="right">
+                  <template v-if="field.suffix" #suffix>{{ field.suffix }}</template>
+                </el-input-number>
+              </label>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+        <div v-if="defenseRecognition.loading || defenseRecognition.error || defenseRecognition.success" class="inline-recognition">
+          <div v-if="defenseRecognition.loading" class="recognition-progress"><el-icon class="is-loading"><Loading /></el-icon> 正在识别并回填防守面板</div>
+          <el-alert v-if="defenseRecognition.error" class="recognition-alert" type="error" :closable="false" :title="defenseRecognition.error" />
+          <el-alert v-if="defenseRecognition.success" class="recognition-alert" type="success" :closable="false" title="识别成功，已回填防守方面板" />
         </div>
       </div>
 
@@ -52,15 +134,27 @@
     </section>
 
     <section class="comparison-section">
-      <div class="section-title"><h2>自定义内功词条对比</h2><span>仅计算数值词条，不计入内功增伤占比。</span></div>
+      <div class="section-title"><div><h2>自定义内功词条对比</h2><span>仅计算数值词条，不计入内功增伤占比。</span></div><el-button type="primary" plain :icon="Plus" @click="addComparisonPlan">新增方案</el-button></div>
       <div class="comparison-inputs">
-        <div v-for="(entries, index) in compareEntries" :key="index" class="entry-set">
-          <h3>方案 {{ index === 0 ? 'A' : 'B' }}</h3>
-          <label v-for="field in INNER_POWER_FIELDS" :key="field.key"><span>{{ field.label }}</span><el-input-number v-model="entries[field.key]" :step="field.step" :precision="field.precision ?? (field.step < 1 ? 1 : 0)" controls-position="right" /></label>
+        <div v-for="plan in comparePlans" :key="plan.id" class="entry-set plan-drop-zone" :class="{ 'is-dragging': plan.dropActive }" @dragenter.prevent="plan.dropActive = true" @dragover.prevent="plan.dropActive = true" @dragleave.prevent="plan.dropActive = false" @drop.prevent="handlePlanDrop($event, plan)">
+          <div class="entry-heading">
+            <h3>{{ plan.name }}</h3>
+            <div class="entry-actions">
+              <el-tooltip content="上传内功收益截图" placement="top"><el-upload accept="image/png,image/jpeg,image/webp" :auto-upload="false" :show-file-list="false" :on-change="file => handlePlanFileChange(file, plan)"><el-button :icon="Picture" circle :loading="plan.recognition.loading" aria-label="上传内功收益截图" /></el-upload></el-tooltip>
+              <el-tooltip v-if="comparePlans.length > 1" content="删除方案" placement="top"><el-button :icon="Delete" circle type="danger" plain aria-label="删除方案" @click="removeComparisonPlan(plan.id)" /></el-tooltip>
+            </div>
+          </div>
+          <div class="plan-drop-hint">拖拽内功词条总体收益截图到此处即可识别</div>
+          <div v-if="plan.recognition.loading || plan.recognition.error || plan.recognition.success" class="inline-recognition">
+            <div v-if="plan.recognition.loading" class="recognition-progress"><el-icon class="is-loading"><Loading /></el-icon> 正在识别并回填 {{ plan.name }}</div>
+            <el-alert v-if="plan.recognition.error" class="recognition-alert" type="error" :closable="false" :title="plan.recognition.error" />
+            <el-alert v-if="plan.recognition.success" class="recognition-alert" type="success" :closable="false" title="识别成功，已回填可识别词条" />
+          </div>
+          <label v-for="field in INNER_POWER_FIELDS" :key="field.key"><span>{{ field.label }}</span><el-input-number v-model="plan.entries[field.key]" :min="0" :step="field.step" :precision="field.precision ?? (field.step < 1 ? 1 : 0)" controls-position="right"><template v-if="field.suffix" #suffix>{{ field.suffix }}</template></el-input-number></label>
         </div>
       </div>
       <div class="comparison-results">
-        <div v-for="item in [comparison.buildA, comparison.buildB]" :key="item.name"><span>{{ item.name }}</span><strong>肉度 {{ item.gainPct >= 0 ? '+' : '' }}{{ formatPercent(item.gainPct / 100) }}</strong><small>血量/伤害期望 {{ formatNumber(item.durability) }}</small></div>
+        <div v-for="item in comparison.plans" :key="item.id"><span>{{ item.name }}</span><strong>肉度 {{ item.gainPct >= 0 ? '+' : '' }}{{ formatPercent(item.gainPct / 100) }}</strong><small>血量/伤害期望 {{ formatNumber(item.durability) }}</small></div>
       </div>
     </section>
   </div>
@@ -71,40 +165,75 @@
 <script setup name="PersonalDefenseCalculator">
 import * as echarts from 'echarts'
 import { useRoute } from 'vue-router'
-import { listDefenseAttackPanels } from '@/api/personal/defenseCalculator'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Edit, Loading, Picture, Plus, UploadFilled } from '@element-plus/icons-vue'
+import {
+  addPersonalDefenseAttackPanel,
+  deletePersonalDefenseAttackPanel,
+  getDefenseCalculatorSetting,
+  listDefenseAttackPanels,
+  listPersonalDefenseAttackPanels,
+  recognizeDefensePanelImage,
+  recognizeInternalPowerBenefitsImage,
+  saveDefenseCalculatorSetting,
+  updatePersonalDefenseAttackPanel
+} from '@/api/personal/defenseCalculator'
 import {
   DEFAULT_ATTACK_PANEL,
   DEFENDER_FIELDS,
   INNER_POWER_FIELDS,
   calculateDefense,
-  calculateInnerPowerComparison,
+  calculateInnerPowerComparisons,
   calculateRecommendation,
   createDefaultDefender,
-  createEmptyInnerPowerEntries
+  createEmptyInnerPowerEntries,
+  loadDefenseCalculatorPanelSetting,
+  saveDefenseCalculatorPanelSetting
 } from '@/utils/personalDefenseCalculator'
 
 const route = useRoute()
 const isDefenseCalculator = computed(() => route.path.includes('defense-calculator') || route.name === 'PersonalDefenseCalculator')
 const defender = reactive(createDefaultDefender())
-const attackPanels = ref([])
-const selectedPanelId = ref(0)
+const systemAttackPanels = ref([])
+const personalAttackPanels = ref([])
+const selectedPanelKey = ref(panelKey('system', 0))
+const customAttackPanelDialogVisible = ref(false)
+const editingPersonalPanelId = ref(0)
+const personalPanelDraft = reactive(createPersonalPanelDraft())
+const templateSaving = ref(false)
+const settingLoaded = ref(false)
+const recognitionDialogVisible = ref(false)
+const recognitionFile = ref(null)
+const recognizing = ref(false)
+const recognitionError = ref('')
+const defenseRecognition = reactive(createRecognitionState())
+const defenseDropActive = ref(false)
 const defenseChartRef = ref()
 const critChartRef = ref()
 const defenseDerivativeChartRef = ref()
 const critDerivativeChartRef = ref()
-const compareEntries = reactive([createEmptyInnerPowerEntries(), createEmptyInnerPowerEntries()])
+const curveInputs = reactive({ defense: 2550, crit: 0 })
+const comparePlans = reactive([createComparisonPlan(1), createComparisonPlan(2)])
+const defenderCoreFields = DEFENDER_FIELDS.filter(field => !field.key.endsWith('Reduction'))
+const defenderReductionFields = DEFENDER_FIELDS.filter(field => field.key.endsWith('Reduction'))
+let nextPlanIndex = 3
 let defenseChart
 let critChart
 let defenseDerivativeChart
 let critDerivativeChart
+let settingSaveTimer
 
-const activePanel = computed(() => attackPanels.value.find(item => item.panelId === selectedPanelId.value) || DEFAULT_ATTACK_PANEL)
+const activePanel = computed(() => {
+  const selected = parsePanelKey(selectedPanelKey.value)
+  const panels = selected.source === 'personal' ? personalAttackPanels.value : systemAttackPanels.value
+  return panels.find(item => item.panelId === selected.panelId) || DEFAULT_ATTACK_PANEL
+})
 const calculation = computed(() => calculateDefense(defender, activePanel.value))
 const recommendations = computed(() => calculateRecommendation(defender, activePanel.value))
-const comparison = computed(() => calculateInnerPowerComparison(defender, activePanel.value, compareEntries[0], compareEntries[1]))
+const comparison = computed(() => calculateInnerPowerComparisons(defender, activePanel.value, comparePlans))
 
 onMounted(async () => {
-  await loadAttackPanels()
+  await loadCalculatorData()
   initCharts()
   window.addEventListener('resize', resizeCharts)
 })
@@ -114,17 +243,360 @@ onBeforeUnmount(() => {
   critChart?.dispose()
   defenseDerivativeChart?.dispose()
   critDerivativeChart?.dispose()
+  window.clearTimeout(settingSaveTimer)
 })
 watch(calculation, updateCharts, { deep: true })
+watch([defender, selectedPanelKey], () => {
+  scheduleSettingSave()
+}, { deep: true })
+watch(() => curveInputs.defense, () => syncDefenseCurvePointers())
+watch(() => curveInputs.crit, () => syncCritCurvePointers())
 
-async function loadAttackPanels() {
+async function loadCalculatorData() {
+  const legacySetting = loadDefenseCalculatorPanelSetting()
   try {
-    const res = await listDefenseAttackPanels()
-    attackPanels.value = res.data?.length ? res.data : [DEFAULT_ATTACK_PANEL]
+    const [settingResponse, systemResponse, personalResponse] = await Promise.all([
+      getDefenseCalculatorSetting(),
+      listDefenseAttackPanels(),
+      listPersonalDefenseAttackPanels()
+    ])
+    const setting = settingResponse.data || settingResponse || {}
+    systemAttackPanels.value = systemResponse.data?.length ? systemResponse.data : [DEFAULT_ATTACK_PANEL]
+    personalAttackPanels.value = personalResponse.data || []
+    Object.assign(defender, createDefaultDefender(), setting.defender || {})
+    selectedPanelKey.value = panelKey(setting.selectedPanelSource, setting.selectedPanelId)
+    await migrateLegacyCustomPanel(legacySetting)
   } catch {
-    attackPanels.value = [DEFAULT_ATTACK_PANEL]
+    systemAttackPanels.value = [DEFAULT_ATTACK_PANEL]
+    personalAttackPanels.value = []
+    Object.assign(defender, legacySetting.defender || createDefaultDefender())
+    selectedPanelKey.value = panelKey('system', 0)
   }
-  selectedPanelId.value = attackPanels.value[0].panelId
+  ensureSelectedPanel()
+  settingLoaded.value = true
+  await saveCurrentSetting()
+}
+
+function openCustomAttackPanelDialog() {
+  if (editingPersonalPanelId.value) selectPersonalPanel(editingPersonalPanelId.value)
+  else if (personalAttackPanels.value.length) selectPersonalPanel(personalAttackPanels.value[0].panelId)
+  customAttackPanelDialogVisible.value = true
+}
+
+async function addPersonalPanel() {
+  templateSaving.value = true
+  try {
+    const response = await addPersonalDefenseAttackPanel(attackPanelPayload(DEFAULT_ATTACK_PANEL))
+    const panel = response.data || response
+    personalAttackPanels.value.push(panel)
+    selectPersonalPanel(panel.panelId)
+    selectedPanelKey.value = panelKey('personal', panel.panelId)
+  } finally {
+    templateSaving.value = false
+  }
+}
+
+function selectPersonalPanel(panelId) {
+  const panel = personalAttackPanels.value.find(item => item.panelId === panelId)
+  if (!panel) {
+    editingPersonalPanelId.value = 0
+    Object.assign(personalPanelDraft, createPersonalPanelDraft())
+    return
+  }
+  editingPersonalPanelId.value = panel.panelId
+  Object.assign(personalPanelDraft, createPersonalPanelDraft(panel))
+}
+
+async function savePersonalPanel() {
+  if (!editingPersonalPanelId.value) return
+  templateSaving.value = true
+  try {
+    await updatePersonalDefenseAttackPanel(editingPersonalPanelId.value, attackPanelPayload(personalPanelDraft))
+    const index = personalAttackPanels.value.findIndex(item => item.panelId === editingPersonalPanelId.value)
+    if (index >= 0) Object.assign(personalAttackPanels.value[index], personalPanelDraft)
+    selectedPanelKey.value = panelKey('personal', editingPersonalPanelId.value)
+    customAttackPanelDialogVisible.value = false
+    await saveCurrentSetting()
+    ElMessage.success('攻击方面板已保存并应用')
+  } finally {
+    templateSaving.value = false
+  }
+}
+
+async function removePersonalPanel() {
+  const panel = personalAttackPanels.value.find(item => item.panelId === editingPersonalPanelId.value)
+  if (!panel) return
+  try {
+    await ElMessageBox.confirm(`确定删除“${panel.panelName}”吗？`, '删除攻击方面板', { type: 'warning' })
+  } catch {
+    return
+  }
+  templateSaving.value = true
+  try {
+    await deletePersonalDefenseAttackPanel(panel.panelId)
+    personalAttackPanels.value = personalAttackPanels.value.filter(item => item.panelId !== panel.panelId)
+    const next = personalAttackPanels.value[0]
+    if (next) selectPersonalPanel(next.panelId)
+    else selectPersonalPanel(0)
+    ensureSelectedPanel()
+    await saveCurrentSetting()
+    ElMessage.success('攻击方面板已删除')
+  } finally {
+    templateSaving.value = false
+  }
+}
+
+async function migrateLegacyCustomPanel(legacySetting) {
+  if (personalAttackPanels.value.length || Number(legacySetting.selectedPanelId) !== -1) return
+  const response = await addPersonalDefenseAttackPanel(attackPanelPayload(legacySetting.customAttackPanel || DEFAULT_ATTACK_PANEL))
+  const panel = response.data || response
+  personalAttackPanels.value.push(panel)
+  selectedPanelKey.value = panelKey('personal', panel.panelId)
+  saveDefenseCalculatorPanelSetting({
+    defender: legacySetting.defender,
+    selectedPanelId: 0,
+    customAttackPanel: legacySetting.customAttackPanel
+  })
+  await saveCurrentSetting()
+}
+
+function ensureSelectedPanel() {
+  const selected = parsePanelKey(selectedPanelKey.value)
+  const panels = selected.source === 'personal' ? personalAttackPanels.value : systemAttackPanels.value
+  if (panels.some(item => item.panelId === selected.panelId)) return
+  const fallback = personalAttackPanels.value[0] || systemAttackPanels.value[0] || DEFAULT_ATTACK_PANEL
+  const source = personalAttackPanels.value.some(item => item.panelId === fallback.panelId) ? 'personal' : 'system'
+  selectedPanelKey.value = panelKey(source, fallback.panelId)
+}
+
+function scheduleSettingSave() {
+  if (!settingLoaded.value) return
+  window.clearTimeout(settingSaveTimer)
+  settingSaveTimer = window.setTimeout(() => { saveCurrentSetting() }, 500)
+}
+
+async function saveCurrentSetting() {
+  if (!settingLoaded.value) return
+  const selected = parsePanelKey(selectedPanelKey.value)
+  try {
+    await saveDefenseCalculatorSetting({
+      defender,
+      selectedPanelSource: selected.source,
+      selectedPanelId: selected.panelId
+    })
+  } catch {
+    ElMessage.warning('防守计算器设置暂未同步到账号')
+  }
+}
+
+function panelKey(source, panelId) {
+  return `${source === 'personal' ? 'personal' : 'system'}:${Number(panelId) || 0}`
+}
+
+function parsePanelKey(value) {
+  const [source, panelId] = String(value || '').split(':')
+  return { source: source === 'personal' ? 'personal' : 'system', panelId: Number(panelId) || 0 }
+}
+
+function createPersonalPanelDraft(source = {}) {
+  return { ...DEFAULT_ATTACK_PANEL, ...source }
+}
+
+function attackPanelPayload(panel = {}) {
+  return Object.fromEntries(Object.keys(DEFAULT_ATTACK_PANEL)
+    .filter(key => !['panelId', 'panelName'].includes(key))
+    .map(key => [key, Number(panel[key]) || 0]))
+}
+
+const attackPanelCoreFields = [
+  { key: 'attack', label: '攻击' },
+  { key: 'breakDefense', label: '破防' },
+  { key: 'restraintValue', label: '克制数值' },
+  { key: 'crit', label: '会心' },
+  { key: 'critDmg', label: '会伤增幅', precision: 3, step: 0.01 },
+  { key: 'extraCritRate', label: '额外会心率', precision: 3, step: 0.01 },
+  { key: 'restraintPct', label: '流派克制', precision: 3, step: 0.01 },
+  { key: 'skillBonus', label: '技能增强' },
+  { key: 'skillBonusPct', label: '技能增强%', precision: 3, step: 0.01 },
+  { key: 'techniqueRestraint', label: '技巧克制' }
+]
+const attackPanelAdvancedFields = [
+  { key: 'internalBonus', label: '内功增伤' },
+  { key: 'gearBonus', label: '装备增伤' },
+  { key: 'martialBonus', label: '武蕴增伤' },
+  { key: 'otherBonus', label: '其他增伤' }
+]
+
+function openRecognitionDialog() {
+  recognitionFile.value = null
+  recognitionError.value = ''
+  recognitionDialogVisible.value = true
+}
+
+function handleRecognitionFileChange(uploadFile) {
+  recognitionFile.value = uploadFile.raw || null
+  if (recognitionFile.value) recognizeDefensePanelFile(recognitionFile.value, true)
+}
+
+function clearRecognitionFile() {
+  recognitionFile.value = null
+  recognitionError.value = ''
+  defenseRecognition.success = false
+}
+
+function handleRecognitionExceed() {
+  ElMessage.warning('一次只能识别一张面板截图')
+}
+
+async function recognizeDefensePanelFile(file, showDialog = false) {
+  if (!isImageFile(file)) {
+    const message = '请上传 PNG、JPG 或 WebP 格式的图片'
+    recognitionError.value = message
+    defenseRecognition.error = message
+    defenseRecognition.success = false
+    return
+  }
+  recognizing.value = true
+  recognitionError.value = ''
+  defenseRecognition.loading = true
+  defenseRecognition.error = ''
+  defenseRecognition.success = false
+  if (showDialog) recognitionDialogVisible.value = true
+  try {
+    const response = await recognizeDefensePanelImage(file)
+    const result = response.data || response
+    if (!result?.success || !result.parsed) {
+      const message = result?.error || '图片识别失败'
+      recognitionError.value = message
+      defenseRecognition.error = message
+      return
+    }
+    defenseRecognition.success = true
+    applyRecognizedDefensePanel(result.parsed)
+    ElMessage.success('识别完成，已回填防守方面板')
+  } catch (error) {
+    const message = error?.msg || error?.message || '图片识别请求失败'
+    recognitionError.value = message
+    defenseRecognition.error = message
+  } finally {
+    recognizing.value = false
+    defenseRecognition.loading = false
+  }
+}
+
+function handleDefensePanelDrop(event) {
+  defenseDropActive.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) recognizeDefensePanelFile(file)
+}
+
+function applyRecognizedDefensePanel(parsed) {
+  assignRecognizedNumber('hp', parsed['气血'])
+  assignRecognizedNumber('defense', parsed['防御'])
+  assignRecognizedNumber('critResist', parsed['会心抗性'])
+  assignRecognizedNumber('resist', parsed['流派抵御'])
+  const resistPct = Number(String(parsed['流派抵御百分比'] ?? '').replace('%', '').trim())
+  if (Number.isFinite(resistPct) && resistPct >= 0) defender.resistPct = resistPct
+}
+
+function assignRecognizedNumber(field, value) {
+  const number = Number(value)
+  if (Number.isFinite(number) && number >= 0) defender[field] = number
+}
+
+function createRecognitionState() {
+  return { loading: false, error: '', success: false }
+}
+
+function createComparisonPlan(index) {
+  return {
+    id: `plan-${index}`,
+    name: `方案 ${planName(index)}`,
+    entries: createEmptyInnerPowerEntries(),
+    dropActive: false,
+    recognition: createRecognitionState()
+  }
+}
+
+function planName(index) {
+  return index <= 26 ? String.fromCharCode(64 + index) : String(index)
+}
+
+function addComparisonPlan() {
+  comparePlans.push(createComparisonPlan(nextPlanIndex++))
+}
+
+function removeComparisonPlan(planId) {
+  if (comparePlans.length <= 1) return
+  const index = comparePlans.findIndex(plan => plan.id === planId)
+  if (index >= 0) comparePlans.splice(index, 1)
+}
+
+function handlePlanDrop(event, plan) {
+  plan.dropActive = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) recognizePlanFile(file, plan)
+}
+
+function handlePlanFileChange(uploadFile, plan) {
+  const file = uploadFile.raw || null
+  if (file) recognizePlanFile(file, plan)
+}
+
+async function recognizePlanFile(file, plan) {
+  if (!isImageFile(file)) {
+    plan.recognition.error = '请上传 PNG、JPG 或 WebP 格式的图片'
+    plan.recognition.success = false
+    return
+  }
+  plan.recognition.loading = true
+  plan.recognition.error = ''
+  plan.recognition.success = false
+  try {
+    const response = await recognizeInternalPowerBenefitsImage(file)
+    const result = response.data || response
+    if (!result?.success || !result.parsed) {
+      plan.recognition.error = result?.error || '图片识别失败'
+      return
+    }
+    applyRecognizedBenefitEntries(plan.entries, result.parsed)
+    plan.recognition.success = true
+    ElMessage.success(`${plan.name}识别完成，已回填词条`)
+  } catch (error) {
+    plan.recognition.error = error?.msg || error?.message || '图片识别请求失败'
+  } finally {
+    plan.recognition.loading = false
+  }
+}
+
+function applyRecognizedBenefitEntries(entries, parsed) {
+  const fields = {
+    '耐力': 'endurance',
+    '根骨': 'rootBone',
+    '身法': 'agility',
+    '内功防御': 'internalDefense',
+    '外功防御': 'externalDefense',
+    '防御': 'defense',
+    '气血上限': 'hp',
+    '抗会心': 'critResist',
+    '抗内功会心': 'internalCritResist',
+    '抗外功会心': 'externalCritResist'
+  }
+  Object.entries(fields).forEach(([source, target]) => {
+    const value = Number(parsed[source])
+    if (Number.isFinite(value) && value >= 0) entries[target] = value
+  })
+  const resistPct = parsePercent(parsed['流派抵御'])
+  if (resistPct !== null) entries.resistPct = resistPct
+}
+
+function parsePercent(value) {
+  const number = Number(String(value ?? '').replace('%', '').trim())
+  return Number.isFinite(number) && number >= 0 ? number : null
+}
+
+function isImageFile(file) {
+  return Boolean(file?.type && ['image/png', 'image/jpeg', 'image/webp'].includes(file.type))
 }
 
 function initCharts() {
@@ -139,16 +611,23 @@ function updateCharts() {
   if (!defenseChart || !critChart || !defenseDerivativeChart || !critDerivativeChart) return
   defenseChart.setOption(lineOption('剩余防御', '防御减免比例', calculation.value.defenseCurve, '#27689d'))
   critChart.setOption(lineOption('净会心', '会心率', calculation.value.critCurve, '#b87819', { inverseX: true }))
-  defenseDerivativeChart.setOption(lineOption('剩余防御', '每 +100 点减免增量', calculation.value.defenseDerivativeCurve, '#427d45', { yMax: curveMaximum(calculation.value.defenseDerivativeCurve) }))
-  critDerivativeChart.setOption(lineOption('净会心', '每 +100 点会心率增量', calculation.value.critDerivativeCurve, '#925189', { inverseX: true, yMax: curveMaximum(calculation.value.critDerivativeCurve) }))
+  defenseDerivativeChart.setOption(lineOption('剩余防御', '每 +33 点减免增量', calculation.value.defenseDerivativeCurve, '#427d45', { yMax: curveMaximum(calculation.value.defenseDerivativeCurve) }))
+  critDerivativeChart.setOption(lineOption('净会心', '每 +66 点会心率增量', calculation.value.critDerivativeCurve, '#925189', { inverseX: true, yMax: curveMaximum(calculation.value.critDerivativeCurve) }))
 }
 
 function lineOption(xName, yName, data, color, options = {}) {
   const yMax = options.yMax || 1
   return {
     grid: { left: 52, right: 24, top: 22, bottom: 42 },
-    tooltip: { trigger: 'axis', valueFormatter: value => `${(Number(value) * 100).toFixed(2)}%` },
-    xAxis: { type: 'value', name: xName, nameLocation: 'end', inverse: Boolean(options.inverseX), splitLine: { lineStyle: { color: '#edf0f5' } } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross', snap: true },
+      formatter: params => {
+        const [x, y] = params?.[0]?.data || []
+        return `${xName}: ${formatNumber(x)}<br/>${yName}: ${(Number(y) * 100).toFixed(6)}%`
+      }
+    },
+    xAxis: { type: 'value', name: xName, nameLocation: 'end', axisPointer: { snap: true }, inverse: Boolean(options.inverseX), splitLine: { lineStyle: { color: '#edf0f5' } } },
     yAxis: { type: 'value', name: yName, min: 0, max: yMax, interval: yMax / 4, axisLabel: { formatter: value => `${value}` }, splitLine: { lineStyle: { color: '#dbe3ed' } } },
     series: [{ type: 'line', smooth: true, showSymbol: false, data, lineStyle: { color, width: 3 }, areaStyle: { color: `${color}18` } }]
   }
@@ -164,8 +643,29 @@ function resizeCharts() {
   defenseDerivativeChart?.resize()
   critDerivativeChart?.resize()
 }
+function syncDefenseCurvePointers() {
+  nextTick(() => {
+    showChartPointer(defenseChart, curveInputs.defense, 0, 10000)
+    showChartPointer(defenseDerivativeChart, curveInputs.defense, 0, 10000)
+  })
+}
+function syncCritCurvePointers() {
+  nextTick(() => {
+    showChartPointer(critChart, curveInputs.crit, -1000, 2000)
+    showChartPointer(critDerivativeChart, curveInputs.crit, -1000, 2000)
+  })
+}
+function showChartPointer(chart, value, min, max) {
+  if (!chart) return
+  const x = clampCurveInput(value, min, max)
+  const dataIndex = Math.round((x - min) / 10)
+  const xPixel = chart.convertToPixel({ xAxisIndex: 0 }, x)
+  chart.dispatchAction({ type: 'updateAxisPointer', x: xPixel, y: chart.getHeight() / 2 })
+  chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex })
+}
 function formatNumber(value) { return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 }) }
 function formatPercent(value) { return `${(Number(value || 0) * 100).toFixed(2)}%` }
+function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(value) || 0, min), max) }
 </script>
 
 <style scoped>
@@ -175,12 +675,28 @@ function formatPercent(value) { return `${(Number(value || 0) * 100).toFixed(2)}
 .page-header h1 { font-size: 26px; }
 .page-header p, .section-title span { margin: 8px 0 0; color: #6c7b8d; font-size: 14px; }
 .panel-select { width: 240px; }
+.header-actions { display: flex; align-items: center; gap: 10px; }
+.attack-panel-description { margin: 0 0 18px; color: #68788c; font-size: 13px; line-height: 1.7; }
+.template-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.template-select { flex: 1; min-width: 0; }
+.attack-panel-form :deep(.el-form-item) { margin-bottom: 16px; }
+.attack-panel-advanced { width: 100%; }
+.defender-advanced { width: 100%; margin-top: 18px; }
+.defender-reduction-grid { margin-top: 0; padding: 0 2px 2px; }
+.upload-icon { margin-bottom: 8px; font-size: 34px; color: #3c7bb2; }
+.recognition-progress { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: #376b9a; font-size: 13px; }
+.recognition-alert { margin-top: 14px; }
 .curve-grid, .calculator-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .chart-section, .input-section, .result-section, .advice-section, .comparison-section { border: 1px solid #dbe3ed; border-radius: 8px; background: #fff; }
 .chart-section { padding: 18px; }
 .chart-section h2, .input-section h2, .result-section h2, .advice-section h2, .comparison-section h2 { font-size: 17px; }
-.chart { height: 310px; margin-top: 12px; }
+.chart { height: 270px; margin-top: 12px; }
+.curve-point-input { display: grid; grid-template-columns: auto minmax(120px, 1fr); align-items: center; gap: 10px; margin-top: 10px; color: #526176; font-size: 13px; }
+.curve-point-input :deep(.el-input-number) { width: 100%; }
 .input-section, .result-section { padding: 20px; }
+.defender-drop-zone, .plan-drop-zone { transition: border-color .18s ease, background-color .18s ease; }
+.defender-drop-zone.is-dragging, .plan-drop-zone.is-dragging { border-color: #3c7bb2; background: #f0f7fd; box-shadow: inset 0 0 0 1px #3c7bb2; }
+.inline-recognition { grid-column: 1 / -1; }
 .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
 .number-field, .entry-set label { display: grid; gap: 7px; color: #526176; font-size: 13px; }
 .number-field :deep(.el-input-number), .entry-set :deep(.el-input-number) { width: 100%; }
@@ -196,10 +712,15 @@ function formatPercent(value) { return `${(Number(value || 0) * 100).toFixed(2)}
 .recommendations strong, .comparison-results strong { display: block; margin-top: 8px; color: #16634e; font-size: 18px; }
 .recommendations small, .comparison-results small { display: block; margin-top: 7px; color: #69788b; }
 .section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.section-title > div { min-width: 0; }
 .comparison-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
 .entry-set { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; border: 1px solid #e1e7ef; }
-.entry-set h3 { grid-column: 1 / -1; color: #305675; font-size: 15px; }
+.entry-heading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.entry-set h3 { color: #305675; font-size: 15px; }
+.entry-actions { display: flex; gap: 6px; }
+.entry-actions :deep(.el-upload) { display: inline-flex; }
+.plan-drop-hint { grid-column: 1 / -1; padding: 9px 10px; border: 1px dashed #cbd9e6; background: #f8fafc; color: #708196; font-size: 12px; }
 .empty-calculator { display: grid; min-height: 360px; place-items: center; }
 @media (max-width: 980px) { .curve-grid, .calculator-grid, .comparison-inputs { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .page-header, .section-title { align-items: stretch; flex-direction: column; } .panel-select { width: 100%; } .field-grid, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .page-header, .section-title, .template-toolbar { align-items: stretch; flex-direction: column; } .header-actions { align-items: stretch; flex-direction: column; } .panel-select { width: 100%; } .curve-point-input, .field-grid, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } }
 </style>

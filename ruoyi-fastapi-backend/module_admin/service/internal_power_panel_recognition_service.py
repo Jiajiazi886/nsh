@@ -1,5 +1,6 @@
 import base64
 import json
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -34,6 +35,28 @@ PANEL_RECOGNITION_FIELDS = [
     '流派抵御百分比',
 ]
 
+DEFENSE_PANEL_RECOGNITION_FIELDS = [
+    '气血',
+    '防御',
+    '会心抗性',
+    '流派抵御',
+    '流派抵御百分比',
+]
+
+INTERNAL_POWER_BENEFIT_RECOGNITION_FIELDS = [
+    '耐力',
+    '根骨',
+    '身法',
+    '内功防御',
+    '外功防御',
+    '防御',
+    '气血上限',
+    '抗会心',
+    '抗内功会心',
+    '抗外功会心',
+    '流派抵御',
+]
+
 PANEL_RECOGNITION_PROMPT = """
 你是《逆水寒手游》玩家面板截图识别助手。请只根据图片内容抽取玩家面板数值，并严格返回一个JSON对象。
 必须包含这些中文字段：攻击、破防、会心、会心伤害、流派克制、流派克制百分比、防御、会心抗性、会心防御、流派抵御、流派抵御百分比。
@@ -41,6 +64,23 @@ PANEL_RECOGNITION_PROMPT = """
 无法识别的字段填null。不要输出解释、Markdown或JSON之外的任何文本。
 示例：
 {"攻击":1665,"破防":1529,"会心":1301,"会心伤害":142.0,"流派克制":301,"流派克制百分比":5.1,"防御":2710,"会心抗性":911,"会心防御":0,"流派抵御":486,"流派抵御百分比":1.2}
+""".strip()
+
+DEFENSE_PANEL_RECOGNITION_PROMPT = """
+你是《逆水寒手游》防御属性面板截图识别助手。只识别角色属性面板中的以下五项，并且只返回一个合法JSON对象：
+气血、防御、会心抗性、流派抵御、流派抵御百分比。
+气血只读取“当前气血/最大气血”斜杠右侧的最大气血；不要读取当前气血。
+流派抵御必须按“数值/百分比”拆分。不要把会心防御、首领抵御、技能减免、伤害减免或其他属性写入结果。
+字段名称、顺序和类型必须严格如下：
+{"气血":91310,"防御":4071,"会心抗性":1130,"流派抵御":391,"流派抵御百分比":"0.0%"}
+前四项必须为整数；流派抵御百分比必须为保留百分号的字符串。看不清的字段填null。不要输出解释、Markdown或额外字段。
+""".strip()
+
+INTERNAL_POWER_BENEFIT_RECOGNITION_PROMPT = """
+你是《逆水寒手游》内功词条总体收益截图识别助手。只识别防御向词条，并且只返回一个合法JSON对象。
+字段名称、顺序和类型必须严格如下：
+{"耐力":16,"根骨":21,"身法":10,"内功防御":63,"外功防御":29,"防御":182,"气血上限":14207,"抗会心":241,"抗内功会心":407,"抗外功会心":253,"流派抵御":"3.2%"}
+前十项必须为整数；流派抵御必须为保留百分号的字符串。只识别防御向词条区域，不要输出攻击、首领抵御、灵韵或任何其他字段。看不清的字段填null。不要输出解释、Markdown或额外字段。
 """.strip()
 
 
@@ -52,6 +92,49 @@ class InternalPowerPanelRecognitionService:
     @classmethod
     async def recognize_image_services(
         cls, query_db: AsyncSession, current_user: CurrentUserModel, file: UploadFile
+    ) -> PanelRecognitionResultModel:
+        return await cls.__recognize_image_services(
+            query_db,
+            current_user,
+            file,
+            PANEL_RECOGNITION_PROMPT,
+            cls.normalize_panel_json,
+        )
+
+    @classmethod
+    async def recognize_defense_image_services(
+        cls, query_db: AsyncSession, current_user: CurrentUserModel, file: UploadFile
+    ) -> PanelRecognitionResultModel:
+        """防守计算器专用识别，使用与内功识别完全相同的统一 Mimo API Key。"""
+        return await cls.__recognize_image_services(
+            query_db,
+            current_user,
+            file,
+            DEFENSE_PANEL_RECOGNITION_PROMPT,
+            cls.normalize_defense_panel_json,
+        )
+
+    @classmethod
+    async def recognize_internal_power_benefit_image_services(
+        cls, query_db: AsyncSession, current_user: CurrentUserModel, file: UploadFile
+    ) -> PanelRecognitionResultModel:
+        """内功防御词条识别，统一使用系统管理维护的 Mimo API Key。"""
+        return await cls.__recognize_image_services(
+            query_db,
+            current_user,
+            file,
+            INTERNAL_POWER_BENEFIT_RECOGNITION_PROMPT,
+            cls.normalize_internal_power_benefit_json,
+        )
+
+    @classmethod
+    async def __recognize_image_services(
+        cls,
+        query_db: AsyncSession,
+        current_user: CurrentUserModel,
+        file: UploadFile,
+        prompt: str,
+        normalizer: Callable[[dict[str, Any]], tuple[dict[str, Any], str]],
     ) -> PanelRecognitionResultModel:
         user_id = int(current_user.user.user_id)
         user_name = current_user.user.user_name
@@ -86,7 +169,7 @@ class InternalPowerPanelRecognitionService:
         mimo_result = await InternalPowerMimoService.recognize_image_json(
             image_bytes,
             mime_type,
-            PANEL_RECOGNITION_PROMPT,
+            prompt,
             query_db=query_db,
         )
         if mimo_result.parsed is None:
@@ -110,7 +193,7 @@ class InternalPowerPanelRecognitionService:
                 remainingAiImageRecognitionCount=current_normal_count,
             )
 
-        parsed, validation_error = cls.normalize_panel_json(mimo_result.parsed)
+        parsed, validation_error = normalizer(mimo_result.parsed)
         if validation_error:
             await cls.__update_history(
                 query_db,
@@ -221,6 +304,70 @@ class InternalPowerPanelRecognitionService:
             if number is None:
                 return {}, f'{field}不是有效数字'
             normalized[field] = int(number) if float(number).is_integer() else number
+        return normalized, ''
+
+    @classmethod
+    def normalize_defense_panel_json(cls, parsed: dict[str, Any]) -> tuple[dict[str, int | str | None], str]:
+        if not isinstance(parsed, dict):
+            return {}, '识别结果必须是JSON对象'
+        missing = [field for field in DEFENSE_PANEL_RECOGNITION_FIELDS if field not in parsed]
+        if missing:
+            return {}, f'识别结果缺少字段：{"、".join(missing)}'
+
+        normalized: dict[str, int | str | None] = {}
+        for field in DEFENSE_PANEL_RECOGNITION_FIELDS[:-1]:
+            value = parsed.get(field)
+            if value is None or value == '':
+                normalized[field] = None
+                continue
+            number = cls.__to_number(value)
+            if number is None or not float(number).is_integer() or number < 0:
+                return {}, f'{field}不是有效整数'
+            normalized[field] = int(number)
+
+        percent_value = parsed.get('流派抵御百分比')
+        if percent_value is None or percent_value == '':
+            normalized['流派抵御百分比'] = None
+            return normalized, ''
+        percent_number = cls.__to_number(percent_value)
+        if percent_number is None or percent_number < 0:
+            return {}, '流派抵御百分比不是有效百分比'
+        percent_text = str(percent_value).strip().replace('%', '').replace(',', '').replace('，', '')
+        if '.' not in percent_text:
+            percent_text = f'{int(percent_number)}.0'
+        normalized['流派抵御百分比'] = f'{percent_text}%'
+        return normalized, ''
+
+    @classmethod
+    def normalize_internal_power_benefit_json(cls, parsed: dict[str, Any]) -> tuple[dict[str, int | str | None], str]:
+        if not isinstance(parsed, dict):
+            return {}, '识别结果必须是JSON对象'
+        missing = [field for field in INTERNAL_POWER_BENEFIT_RECOGNITION_FIELDS if field not in parsed]
+        if missing:
+            return {}, f'识别结果缺少字段：{"、".join(missing)}'
+
+        normalized: dict[str, int | str | None] = {}
+        for field in INTERNAL_POWER_BENEFIT_RECOGNITION_FIELDS[:-1]:
+            value = parsed.get(field)
+            if value is None or value == '':
+                normalized[field] = None
+                continue
+            number = cls.__to_number(value)
+            if number is None or not float(number).is_integer() or number < 0:
+                return {}, f'{field}不是有效整数'
+            normalized[field] = int(number)
+
+        percent_value = parsed.get('流派抵御')
+        if percent_value is None or percent_value == '':
+            normalized['流派抵御'] = None
+            return normalized, ''
+        percent_number = cls.__to_number(percent_value)
+        if percent_number is None or percent_number < 0:
+            return {}, '流派抵御不是有效百分比'
+        percent_text = str(percent_value).strip().replace('%', '').replace(',', '').replace('，', '')
+        if '.' not in percent_text:
+            percent_text = f'{int(percent_number)}.0'
+        normalized['流派抵御'] = f'{percent_text}%'
         return normalized, ''
 
     @classmethod

@@ -4,13 +4,13 @@
       <div>
         <p class="eyebrow">Personal · PVP 收益面板</p>
         <h1>面板设置</h1>
-        <p>保存攻击方无内功基础面板和受击方面板，内功页会用同一套公式动态计算词条收益。</p>
+        <p>读取防守计算器的防守方面板和系统进攻方面板，内功页会使用同一套坦度公式。</p>
       </div>
       <div class="toolbar-actions">
         <el-tag effect="plain" type="info">公式来源 PVP 计算器 4.1</el-tag>
         <el-button plain icon="Refresh" :loading="loading" @click="loadData">刷新</el-button>
         <el-button plain icon="RefreshLeft" @click="resetDefaults">恢复默认</el-button>
-        <el-button type="primary" icon="Check" :loading="saving" @click="saveData">保存配置</el-button>
+        <el-button type="primary" icon="Check" :loading="saving" @click="saveData">保存到防守计算器</el-button>
       </div>
     </section>
 
@@ -108,8 +108,8 @@
     <section class="setting-grid">
       <div class="setting-panel">
         <div class="panel-heading">
-          <strong>受击方面板</strong>
-          <span>防御、抵御、血量、减伤等目标属性。</span>
+          <strong>防守方面板</strong>
+          <span>与防守计算器共用，修改后会同步用于内功坦度收益。</span>
         </div>
         <div class="field-grid">
           <label v-for="field in targetFields" :key="field.key" class="field-item">
@@ -118,10 +118,11 @@
               <el-input-number
                 v-model="form.targetPanel[field.key]"
                 :min="0"
-                :precision="field.type === 'percent' ? 5 : 0"
+                :step="field.step || 1"
+                :precision="field.precision ?? (field.type === 'percent' ? 5 : 0)"
                 controls-position="right"
               />
-              <em v-if="field.type === 'percent'">%</em>
+              <em v-if="field.suffix || field.type === 'percent'">{{ field.suffix || '%' }}</em>
             </div>
           </label>
         </div>
@@ -129,18 +130,23 @@
 
       <div class="setting-panel">
         <div class="panel-heading">
-          <strong>攻击方无内功基础面板</strong>
-          <span>攻击、破防、会心、克制与各伤害乘区。</span>
+          <strong>进攻方面板</strong>
+          <span>可选系统参考面板或当前账号的个人攻击方面板。</span>
         </div>
+        <el-select v-model="selectedAttackPanelKey" class="attack-panel-select" :loading="loading" @change="applySelectedAttackPanel">
+          <el-option-group label="我的攻击方面板"><el-option v-for="panel in personalAttackPanels" :key="`personal-${panel.panelId}`" :label="panel.panelName" :value="panelKey('personal', panel.panelId)" /></el-option-group>
+          <el-option-group label="系统参考面板"><el-option v-for="panel in systemAttackPanels" :key="`system-${panel.panelId}`" :label="panel.panelName" :value="panelKey('system', panel.panelId)" /></el-option-group>
+        </el-select>
         <div class="field-grid">
           <label v-for="field in attackFields" :key="field.key" class="field-item">
             <span>{{ field.label }}</span>
             <div class="number-wrap">
               <el-input-number
-                v-model="form.attackPanel[field.key]"
+                :model-value="form.attackPanel[field.key]"
                 :min="0"
                 :precision="field.type === 'percent' ? 5 : 0"
                 controls-position="right"
+                disabled
               />
               <em v-if="field.type === 'percent'">%</em>
             </div>
@@ -191,12 +197,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import {
   clearInternalPowerPanelRecognitionHistory,
-  getInternalPowerPanelSetting,
   getInternalPowerPanelRecognitionHistory,
   getInternalPowerPanelTemplates,
-  recognizeInternalPowerPanelImage,
-  saveInternalPowerPanelSetting
+  recognizeInternalPowerPanelImage
 } from '@/api/personal/internalPowerPanel'
+import {
+  getDefenseCalculatorSetting,
+  listDefenseAttackPanels,
+  listPersonalDefenseAttackPanels,
+  saveDefenseCalculatorSetting,
+  updatePersonalDefenseAttackPanel
+} from '@/api/personal/defenseCalculator'
 import {
   ATTACK_FIELDS,
   DEFAULT_ATTACK,
@@ -206,13 +217,25 @@ import {
   normalizePanelSetting,
   toPanelDisplayValue
 } from '@/utils/internalPowerBenefit'
+import {
+  DEFAULT_ATTACK_PANEL,
+  DEFENDER_FIELDS,
+  createDefaultDefender
+} from '@/utils/personalDefenseCalculator'
 
 const loading = ref(false)
 const saving = ref(false)
 const templateLoading = ref(false)
 const recognizing = ref(false)
-const targetFields = TARGET_FIELDS
-const attackFields = ATTACK_FIELDS
+const targetFields = DEFENDER_FIELDS
+const attackFields = [
+  { key: 'attack', label: '攻击', type: 'number' },
+  { key: 'breakDefense', label: '破防', type: 'number' },
+  { key: 'restraintValue', label: '克制', type: 'number' },
+  { key: 'crit', label: '会心', type: 'number' },
+  { key: 'critDmg', label: '会伤', type: 'percent' },
+  { key: 'restraintPct', label: '流派克制', type: 'percent' }
+]
 const recognitionFields = [
   '攻击',
   '破防',
@@ -231,6 +254,9 @@ const form = reactive({
   targetPanel: {},
   attackPanel: {}
 })
+const systemAttackPanels = ref([])
+const personalAttackPanels = ref([])
+const selectedAttackPanelKey = ref(panelKey('system', 0))
 const templates = ref([])
 const selectedTemplateId = ref(null)
 const selectedImageFile = ref(null)
@@ -251,11 +277,25 @@ onMounted(() => {
 async function loadData() {
   loading.value = true
   try {
-    const response = await getInternalPowerPanelSetting()
-    applyPanelSetting(response.data || response)
+    const [settingResponse, systemResponse, personalResponse] = await Promise.all([
+      getDefenseCalculatorSetting(),
+      listDefenseAttackPanels(),
+      listPersonalDefenseAttackPanels()
+    ])
+    const setting = settingResponse.data || settingResponse || {}
+    systemAttackPanels.value = systemResponse.data?.length ? systemResponse.data : [DEFAULT_ATTACK_PANEL]
+    personalAttackPanels.value = personalResponse.data || []
+    selectedAttackPanelKey.value = panelKey(setting.selectedPanelSource, setting.selectedPanelId)
+    form.targetPanel = { ...createDefaultDefender(), ...(setting.defender || {}) }
+    ensureSelectedAttackPanel()
+    applySelectedAttackPanel()
   } catch {
-    ElMessage.error('面板设置加载失败')
-    applyPanelSetting({ targetPanel: DEFAULT_TARGET, attackPanel: DEFAULT_ATTACK })
+    systemAttackPanels.value = [DEFAULT_ATTACK_PANEL]
+    personalAttackPanels.value = []
+    selectedAttackPanelKey.value = panelKey('system', DEFAULT_ATTACK_PANEL.panelId)
+    form.targetPanel = createDefaultDefender()
+    form.attackPanel = { ...DEFAULT_ATTACK_PANEL }
+    ElMessage.error('防守计算器面板加载失败，已使用默认面板')
   } finally {
     loading.value = false
   }
@@ -276,10 +316,16 @@ async function loadTemplates() {
 async function saveData() {
   saving.value = true
   try {
-    const payload = buildPayload()
-    const response = await saveInternalPowerPanelSetting(payload)
-    applyPanelSetting(response.data || response || payload)
-    ElMessage.success('保存成功，内功页收益会按新面板重新计算')
+    const selected = parsePanelKey(selectedAttackPanelKey.value)
+    if (selected.source === 'personal') {
+      await updatePersonalDefenseAttackPanel(selected.panelId, attackPanelPayload(form.attackPanel))
+    }
+    await saveDefenseCalculatorSetting({
+      defender: form.targetPanel,
+      selectedPanelSource: selected.source,
+      selectedPanelId: selected.panelId
+    })
+    ElMessage.success('已保存到防守计算器，内功页会按同一面板计算坦度收益')
   } catch {
     ElMessage.error('保存失败，请检查面板数值')
   } finally {
@@ -294,7 +340,9 @@ async function resetDefaults() {
       confirmButtonText: '恢复',
       cancelButtonText: '取消'
     })
-    applyPanelSetting({ targetPanel: DEFAULT_TARGET, attackPanel: DEFAULT_ATTACK })
+    form.targetPanel = createDefaultDefender()
+    selectedAttackPanelKey.value = panelKey('system', systemAttackPanels.value[0]?.panelId || DEFAULT_ATTACK_PANEL.panelId)
+    applySelectedAttackPanel()
   } catch {}
 }
 
@@ -302,6 +350,38 @@ function applySelectedTemplate() {
   if (!selectedTemplate.value) return
   applyPanelSetting(selectedTemplate.value)
   ElMessage.success('已应用模板，请确认后保存配置')
+}
+
+function applySelectedAttackPanel() {
+  const selected = parsePanelKey(selectedAttackPanelKey.value)
+  form.attackPanel = {
+    ...((selected.source === 'personal' ? personalAttackPanels.value : systemAttackPanels.value)
+      .find(item => item.panelId === selected.panelId) || DEFAULT_ATTACK_PANEL)
+  }
+}
+
+function ensureSelectedAttackPanel() {
+  const selected = parsePanelKey(selectedAttackPanelKey.value)
+  const panels = selected.source === 'personal' ? personalAttackPanels.value : systemAttackPanels.value
+  if (panels.some(item => item.panelId === selected.panelId)) return
+  const fallback = personalAttackPanels.value[0] || systemAttackPanels.value[0] || DEFAULT_ATTACK_PANEL
+  const source = personalAttackPanels.value.some(item => item.panelId === fallback.panelId) ? 'personal' : 'system'
+  selectedAttackPanelKey.value = panelKey(source, fallback.panelId)
+}
+
+function panelKey(source, panelId) {
+  return `${source === 'personal' ? 'personal' : 'system'}:${Number(panelId) || 0}`
+}
+
+function parsePanelKey(value) {
+  const [source, panelId] = String(value || '').split(':')
+  return { source: source === 'personal' ? 'personal' : 'system', panelId: Number(panelId) || 0 }
+}
+
+function attackPanelPayload(panel = {}) {
+  return Object.fromEntries(Object.keys(DEFAULT_ATTACK_PANEL)
+    .filter(key => !['panelId', 'panelName'].includes(key))
+    .map(key => [key, Number(panel[key]) || 0]))
 }
 
 function handleImageChange(uploadFile) {

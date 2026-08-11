@@ -7,14 +7,7 @@
         <p>先把内功、词条和五行配比管理起来；随机数值与后端同步留给下一轮。</p>
       </div>
       <div class="hero-actions">
-        <el-select v-model="benefitMode" class="benefit-mode-select" placeholder="收益类型">
-          <el-option
-            v-for="item in benefitModeOptions"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </el-select>
+        <el-tag effect="plain" type="success">坦度收益</el-tag>
         <el-tag effect="plain" type="info">AI识图 {{ aiRecognitionQuotaLabel }}</el-tag>
         <el-tag v-if="backgroundRecognitionRunning" effect="plain" type="warning">后台识别中</el-tag>
         <el-badge :value="recognitionRecordBadge" :hidden="!recognitionItems.length" class="recognition-record-badge">
@@ -122,8 +115,7 @@
           <button class="delete-card" type="button" @click.stop="deletePower(item)">×</button>
           <div class="score-badge" :title="getPowerBenefitTitle(item)">
             <strong>{{ formatBenefit(getPowerBenefit(item).totalGain) }}</strong>
-            <span>基础：{{ formatBenefit(getPowerBenefit(item).baseGain) }}</span>
-            <span>词条：{{ formatBenefit(getPowerBenefit(item).entryGain) }}</span>
+            <span>防御词条：{{ formatBenefit(getPowerBenefit(item).entryGain) }}</span>
           </div>
 
           <div class="card-center">
@@ -645,7 +637,7 @@
               <div class="section-heading">
                 <div>
                   <strong>内功词条</strong>
-                  <span>{{ draft.entries.length || 0 }} 条 · 行内显示当前收益</span>
+                  <span>{{ draft.entries.length || 0 }} 条 · 行内显示当前坦度收益</span>
                 </div>
                 <el-button size="small" plain :disabled="!entryOptions.length" @click="addEntry">添加词条</el-button>
               </div>
@@ -653,7 +645,7 @@
                 <div v-if="draft.entries.length" class="entry-table-head">
                   <span>词条</span>
                   <span>数值</span>
-                  <span>收益</span>
+                  <span>坦度收益</span>
                   <span>操作</span>
                 </div>
                 <div
@@ -901,18 +893,24 @@ import {
   recognizeInternalPowerImage,
   updateInternalPower
 } from '@/api/personal/internalPower'
-import { getInternalPowerPanelSetting } from '@/api/personal/internalPowerPanel'
+import {
+  getDefenseCalculatorSetting,
+  listDefenseAttackPanels,
+  listPersonalDefenseAttackPanels
+} from '@/api/personal/defenseCalculator'
 import { getActiveFormulaVersion } from '@/api/system/formulaDesign'
 import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
 import {
-  calculateEntryBenefit,
-  calculatePowerBenefit,
-  createDefaultPanelSetting,
   FORMULA_SCOPE_INTERNAL_POWER_PVP,
   formatBenefitPercent,
-  normalizePanelSetting,
   setActiveFormulaPackage
 } from '@/utils/internalPowerBenefit'
+import {
+  DEFAULT_ATTACK_PANEL,
+  calculateInternalPowerDefenseBenefit,
+  calculateInternalPowerDefenseBenefits,
+  createDefaultDefender
+} from '@/utils/personalDefenseCalculator'
 import { getInternalPowerTraitEffect } from '@/utils/internalPowerTraits'
 
 const userStore = useUserStore()
@@ -937,7 +935,7 @@ const powerCatalog = ref([])
 const internalPowerImageVisible = ref(true)
 const entryOptions = ref([])
 const entryConversion = ref({ unitPercent: 0, entries: [] })
-const panelSetting = ref(createDefaultPanelSetting())
+const panelSetting = ref({ defender: createDefaultDefender(), attackPanel: DEFAULT_ATTACK_PANEL })
 const benefitMode = ref('defense')
 const catalogDraft = ref([])
 const baseApi = import.meta.env.VITE_APP_BASE_API
@@ -977,8 +975,7 @@ const filters = reactive({
 })
 
 const benefitModeOptions = [
-  { value: 'defense', label: '数值收益', help: '按当前面板动态计算' },
-  { value: 'tower', label: '拆塔收益', help: '暂未接入拆塔计算逻辑' }
+  { value: 'defense', label: '坦度收益', help: '读取防守计算器的防守方面板和进攻方面板计算' }
 ]
 
 const elementOptions = [
@@ -1295,11 +1292,20 @@ async function loadEntryConversion() {
 
 async function loadPanelSetting() {
   try {
-    const response = await getInternalPowerPanelSetting()
-    panelSetting.value = normalizePanelSetting(response.data || response)
+    const [settingResponse, systemResponse, personalResponse] = await Promise.all([
+      getDefenseCalculatorSetting(),
+      listDefenseAttackPanels(),
+      listPersonalDefenseAttackPanels()
+    ])
+    const setting = settingResponse.data || settingResponse || {}
+    const systemPanels = systemResponse.data?.length ? systemResponse.data : [DEFAULT_ATTACK_PANEL]
+    const personalPanels = personalResponse.data || []
+    const panels = setting.selectedPanelSource === 'personal' ? personalPanels : systemPanels
+    const attackPanel = panels.find(item => item.panelId === setting.selectedPanelId) || systemPanels[0] || DEFAULT_ATTACK_PANEL
+    panelSetting.value = { defender: { ...createDefaultDefender(), ...(setting.defender || {}) }, attackPanel }
   } catch {
-    panelSetting.value = createDefaultPanelSetting()
-    console.warn('内功面板设置加载失败，已使用默认面板计算收益')
+    panelSetting.value = { defender: createDefaultDefender(), attackPanel: DEFAULT_ATTACK_PANEL }
+    console.warn('防守计算器进攻方面板加载失败，已使用默认面板计算坦度收益')
   }
 }
 
@@ -2778,15 +2784,7 @@ function calculateEntryAttackPercent(entry = {}) {
 }
 
 function getPowerBenefit(power = {}) {
-  if (benefitMode.value === 'tower') {
-    return {
-      totalGain: 0,
-      baseGain: 0,
-      entryGain: 0,
-      note: '拆塔收益暂未接入计算逻辑'
-    }
-  }
-  return calculatePowerBenefit(power, panelSetting.value)
+  return calculateInternalPowerDefenseBenefits(power, panelSetting.value.defender, panelSetting.value.attackPanel)
 }
 
 function getPowerBenefitTitle(power = {}) {
@@ -2800,13 +2798,7 @@ function getSingleEntryBenefit(entry = {}) {
 }
 
 function getEntryBenefitResult(entry = {}) {
-  if (benefitMode.value === 'tower') {
-    return {
-      gain: 0,
-      note: '拆塔收益暂未接入计算逻辑'
-    }
-  }
-  return calculateEntryBenefit(entry, panelSetting.value)
+  return calculateInternalPowerDefenseBenefit(entry, panelSetting.value.defender, panelSetting.value.attackPanel)
 }
 
 function getEntryBenefitTitle(entry = {}) {
@@ -2821,14 +2813,7 @@ function getEntryLimitHint(entry = {}) {
 }
 
 function getEntryPreviewRows(power = {}) {
-  const rows = [{
-    key: 'base-benefit',
-    type: 'base',
-    name: `基础${benefitModeLabel.value}`,
-    value: formatBonus(getBaseBonus(power)),
-    benefit: formatBenefit(getPowerBenefit(power).baseGain),
-    note: `基础百分比增伤 ${formatBonus(getBaseBonus(power))}`
-  }]
+  const rows = []
 
   for (const entry of power.entries || []) {
     const name = String(entry.name || '').trim() || '未选择词条'
