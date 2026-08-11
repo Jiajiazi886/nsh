@@ -1,5 +1,12 @@
 ARG BASE_IMAGE=python:3.10
 FROM ${BASE_IMAGE}
+
+ARG BUILD_REVISION=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.revision=$BUILD_REVISION \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.source="https://github.com/Jiajiazi886/nsh"
+
 WORKDIR /app
 
 # 复制源代码

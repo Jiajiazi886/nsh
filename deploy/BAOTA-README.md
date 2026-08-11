@@ -2,6 +2,8 @@
 
 本发布包已在本地完成前端打包、后端镜像构建和 Redis 镜像下载。服务器不需要安装 Node.js、Python、pip，也不会执行 `docker build`。
 
+GitHub 仓库保存源码、Dockerfile 和构建脚本；由于 `images.tar` 超过 GitHub 普通仓库的 100 MB 单文件限制，真正可直接运行的镜像包由本地 `Prepare-OfflineRelease.ps1` 生成后手动上传。服务器不能只克隆 GitHub 仓库就跳过镜像包。
+
 Docker 只运行三个容器：前端、后端和 Redis。业务数据库使用服务器上由宝塔管理的 MySQL 8，不在 Docker 容器中。
 
 网站地址：`http://www.xn--kbrr2vyxjytebq4azkrrie.icu/`
@@ -44,7 +46,7 @@ uname -m
 将整个离线发布目录上传到其中，例如：
 
 ```text
-/www/wwwroot/nsh-release/nsh-20260725-baota-external-mysql/
+/www/wwwroot/nsh-release/nsh-发布标签/
 ```
 
 必须保留以下文件和目录：
@@ -53,6 +55,7 @@ uname -m
 images.tar
 docker-compose.yml
 prod.env
+BUILD-INFO.txt
 site-config.example.env
 SHA256SUMS.txt
 sql/ruoyi-fastapi.sql
@@ -65,7 +68,7 @@ BAOTA-README.md
 进入上传目录后，先核对文件完整性：
 
 ```bash
-cd /www/wwwroot/nsh-release/nsh-20260725-baota-external-mysql
+cd /www/wwwroot/nsh-release/nsh-发布标签
 sha256sum -c SHA256SUMS.txt
 ```
 
@@ -129,10 +132,13 @@ mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/ruoyi-fastapi.sql
 仍在发布目录执行：
 
 ```bash
+sudo systemctl enable --now docker
 docker load -i images.tar
 docker compose --env-file prod.env -f docker-compose.yml up -d --remove-orphans
 docker compose --env-file prod.env -f docker-compose.yml ps
 ```
+
+`systemctl is-enabled docker` 必须返回 `enabled`。三个服务均使用 `restart: always`，Docker 服务和服务器重新启动后都会自动恢复。
 
 等待约 30 秒后检查：
 
@@ -142,6 +148,16 @@ curl -I http://127.0.0.1:12580/
 ```
 
 应看到 `ruoyi-frontend`、`ruoyi-backend-my`、`ruoyi-redis` 三个容器；Redis 应为 `healthy`，HTTP 检查应返回 `200`。
+
+检查镜像确实来自本次 Git 提交：
+
+```bash
+cat BUILD-INFO.txt
+docker image inspect "nsh-frontend:$(grep '^APP_IMAGE_TAG=' prod.env | cut -d= -f2)" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
+docker image inspect "nsh-backend-my:$(grep '^APP_IMAGE_TAG=' prod.env | cut -d= -f2)" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
+```
+
+两个镜像输出的提交号必须与 `BUILD-INFO.txt` 中的 `SOURCE_COMMIT` 完全一致。
 
 若后端无法连接数据库，查看日志：
 
@@ -229,6 +245,18 @@ docker compose --env-file prod.env -f docker-compose.yml stop
 
 # 启动已停止的 Docker 服务
 docker compose --env-file prod.env -f docker-compose.yml start
+
+# 检查 Docker 开机启动与容器重启策略
+systemctl is-enabled docker
+docker inspect ruoyi-frontend ruoyi-backend-my ruoyi-redis --format '{{.Name}} {{.HostConfig.RestartPolicy.Name}}'
 ```
+
+重启策略输出必须全部为 `always`。首次部署完成后可以执行一次重启演练：
+
+```bash
+sudo reboot
+```
+
+服务器恢复后再次执行 `docker compose ... ps` 和 `curl -I http://127.0.0.1:12580/`，确认无需人工启动即可恢复服务。
 
 不要执行 `docker compose down -v`。虽然 MySQL 已不在 Docker 中，但该命令会删除 Redis 和项目上传数据卷。

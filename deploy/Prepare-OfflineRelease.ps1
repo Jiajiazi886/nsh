@@ -14,6 +14,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $prodEnv = Join-Path $PSScriptRoot 'prod.env'
 $composeFile = Join-Path $PSScriptRoot 'docker-compose.bundle.my.yml'
 $releaseDirectory = Join-Path $OutputRoot "nsh-$Tag"
+$buildDate = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 
 function Invoke-Docker {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -45,6 +46,26 @@ function Assert-DockerImage {
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw 'Docker Desktop is required on this computer. Start Docker Desktop, then run this script again.'
 }
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw 'Git is required so the release can be tied to an exact source revision.'
+}
+
+Push-Location $projectRoot
+try {
+    $buildRevision = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $buildRevision) {
+        throw 'Unable to read the current Git revision.'
+    }
+    $buildBranch = (& git branch --show-current).Trim()
+    $trackedChanges = & git status --porcelain --untracked-files=no
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect the Git worktree.' }
+    if ($trackedChanges) {
+        throw 'Tracked files have uncommitted changes. Commit them before building so images match one exact Git revision.'
+    }
+}
+finally {
+    Pop-Location
+}
 if (-not (Test-Path -LiteralPath $prodEnv)) {
     throw "Missing $prodEnv. Run .\\deploy\\New-ProductionEnv.ps1 first, then configure MIMO_API_KEY if needed."
 }
@@ -68,14 +89,28 @@ Build-FrontendAssets
 Write-Host "Packaging $Platform frontend image: nsh-frontend:$Tag" -ForegroundColor Cyan
 $frontendBuildArguments = @('buildx', 'build', '--platform', $Platform, '--load')
 if (-not $UseLocalBaseImages) { $frontendBuildArguments += '--pull' }
-$frontendBuildArguments += @('--tag', "nsh-frontend:$Tag", '--build-arg', "BASE_IMAGE=$FrontendBaseImage", '--file', (Join-Path $projectRoot 'ruoyi-fastapi-frontend/Dockerfile.prod'), (Join-Path $projectRoot 'ruoyi-fastapi-frontend'))
+$frontendBuildArguments += @(
+    '--tag', "nsh-frontend:$Tag",
+    '--build-arg', "BASE_IMAGE=$FrontendBaseImage",
+    '--build-arg', "BUILD_REVISION=$buildRevision",
+    '--build-arg', "BUILD_DATE=$buildDate",
+    '--file', (Join-Path $projectRoot 'ruoyi-fastapi-frontend/Dockerfile.prod'),
+    (Join-Path $projectRoot 'ruoyi-fastapi-frontend')
+)
 if ($UseLocalBaseImages) { Assert-DockerImage $FrontendBaseImage }
 Invoke-Docker @frontendBuildArguments
 
 Write-Host "Building $Platform backend image: nsh-backend-my:$Tag" -ForegroundColor Cyan
 $backendBuildArguments = @('buildx', 'build', '--platform', $Platform, '--load')
 if (-not $UseLocalBaseImages) { $backendBuildArguments += '--pull' }
-$backendBuildArguments += @('--tag', "nsh-backend-my:$Tag", '--build-arg', "BASE_IMAGE=$BackendBaseImage", '--file', (Join-Path $projectRoot 'ruoyi-fastapi-backend/Dockerfile.my'), (Join-Path $projectRoot 'ruoyi-fastapi-backend'))
+$backendBuildArguments += @(
+    '--tag', "nsh-backend-my:$Tag",
+    '--build-arg', "BASE_IMAGE=$BackendBaseImage",
+    '--build-arg', "BUILD_REVISION=$buildRevision",
+    '--build-arg', "BUILD_DATE=$buildDate",
+    '--file', (Join-Path $projectRoot 'ruoyi-fastapi-backend/Dockerfile.my'),
+    (Join-Path $projectRoot 'ruoyi-fastapi-backend')
+)
 if ($UseLocalBaseImages) { Assert-DockerImage $BackendBaseImage }
 Invoke-Docker @backendBuildArguments
 
@@ -94,6 +129,18 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/ruoyi-
 Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/20260725_reset_admin_credentials.sql') -Destination (Join-Path $releaseDirectory 'sql/20260725_reset_admin_credentials.sql')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BAOTA-README.md') -Destination (Join-Path $releaseDirectory 'BAOTA-README.md')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'site-config.example.env') -Destination (Join-Path $releaseDirectory 'site-config.example.env')
+
+@"
+RELEASE_TAG=$Tag
+SOURCE_REPOSITORY=https://github.com/Jiajiazi886/nsh.git
+SOURCE_BRANCH=$buildBranch
+SOURCE_COMMIT=$buildRevision
+BUILD_PLATFORM=$Platform
+BUILD_DATE_UTC=$buildDate
+FRONTEND_IMAGE=nsh-frontend:$Tag
+BACKEND_IMAGE=nsh-backend-my:$Tag
+REDIS_IMAGE=redis:7
+"@ | Set-Content -LiteralPath (Join-Path $releaseDirectory 'BUILD-INFO.txt') -Encoding ascii
 
 $envContent = Get-Content -LiteralPath $prodEnv -Raw
 $envContent = [regex]::Replace($envContent, '(?m)^APP_IMAGE_TAG=.*$', "APP_IMAGE_TAG=$Tag")

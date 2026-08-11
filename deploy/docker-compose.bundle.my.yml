@@ -4,7 +4,7 @@ services:
   ruoyi-frontend:
     image: nsh-frontend:${APP_IMAGE_TAG:?set APP_IMAGE_TAG in prod.env}
     container_name: ruoyi-frontend
-    restart: unless-stopped
+    restart: always
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-12580}:80"
     depends_on:
@@ -15,7 +15,7 @@ services:
   ruoyi-backend-my:
     image: nsh-backend-my:${APP_IMAGE_TAG:?set APP_IMAGE_TAG in prod.env}
     container_name: ruoyi-backend-my
-    restart: unless-stopped
+    restart: always
     env_file:
       - ./prod.env
     environment:
@@ -49,7 +49,7 @@ services:
   ruoyi-redis:
     image: redis:7
     container_name: ruoyi-redis
-    restart: unless-stopped
+    restart: always
     env_file:
       - ./prod.env
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in prod.env}"]
