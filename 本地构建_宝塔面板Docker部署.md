@@ -46,6 +46,19 @@ docker info --format '{{.OSType}}/{{.Architecture}}'
 .\deploy\Prepare-OfflineRelease.ps1 -Tag 20260811-baota -Platform linux/amd64
 ```
 
+如果 Docker Hub 暂时无法连接，但本机已经加载过上一版离线镜像，可以完全复用本地镜像层：
+
+```powershell
+.\deploy\Prepare-OfflineRelease.ps1 `
+  -Tag 20260811-baota `
+  -Platform linux/amd64 `
+  -UseLocalBaseImages `
+  -FrontendBaseImage nsh-frontend:上一版标签 `
+  -BackendBaseImage nsh-backend-my:上一版标签
+```
+
+Dockerfile 会先清空旧应用目录，再复制当前前端 `dist` 和后端源码；旧版本业务文件不会残留。Python 依赖已包含在上一版后端镜像中，只有当前依赖清单新增包时才需要恢复网络拉取。
+
 脚本会完成：
 
 1. 执行前端 `npm run build:docker`。

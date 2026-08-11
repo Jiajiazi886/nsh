@@ -4,6 +4,8 @@
 
 GitHub 仓库保存源码、Dockerfile 和构建脚本；由于 `images.tar` 超过 GitHub 普通仓库的 100 MB 单文件限制，真正可直接运行的镜像包由本地 `Prepare-OfflineRelease.ps1` 生成后手动上传。服务器不能只克隆 GitHub 仓库就跳过镜像包。
 
+发布脚本支持在 Docker Hub 暂时不可用时复用上一版本地 Linux 镜像作为构建基础。Dockerfile 会先清空旧应用目录，再写入当前提交的前端和后端文件，避免旧业务文件残留。
+
 Docker 只运行三个容器：前端、后端和 Redis。业务数据库使用服务器上由宝塔管理的 MySQL 8，不在 Docker 容器中。
 
 网站地址：`http://www.xn--kbrr2vyxjytebq4azkrrie.icu/`

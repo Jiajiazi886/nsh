@@ -7,6 +7,7 @@ LABEL org.opencontainers.image.revision=$BUILD_REVISION \
       org.opencontainers.image.created=$BUILD_DATE \
       org.opencontainers.image.source="https://github.com/Jiajiazi886/nsh"
 
+RUN rm -rf /app && mkdir -p /app
 WORKDIR /app
 
 # 复制源代码
