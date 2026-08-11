@@ -1,102 +1,166 @@
-# 宝塔面板操作说明
+# 宝塔离线部署说明（使用宝塔 MySQL 8）
 
-此目录已经包含前端、后端、MySQL、Redis 的 Docker 离线镜像。请只在宝塔面板中按下面步骤操作。
+本发布包已在本地完成前端打包、后端镜像构建和 Redis 镜像下载。服务器不需要安装 Node.js、Python、pip，也不会执行 `docker build`。
 
-## 1. 安装软件
+Docker 只运行三个容器：前端、后端和 Redis。业务数据库使用服务器上由宝塔管理的 MySQL 8，不在 Docker 容器中。
 
-宝塔左侧进入“软件商店”，安装：
+网站地址：`http://www.xn--kbrr2vyxjytebq4azkrrie.icu/`
+
+管理员初始账号：`cptbtptp369`
+管理员初始密码：`cptbtptp369`
+
+本次部署只使用 HTTP，不申请 SSL，不开启强制 HTTPS。
+
+## 1. 宝塔准备
+
+在宝塔软件商店安装：
 
 ```text
 Docker 管理器
 Nginx
+MySQL 8.0
 ```
 
-然后进入“终端”，执行：
+在宝塔终端执行：
 
 ```bash
 docker --version
 docker compose version
+uname -m
 ```
 
-两个命令都能显示版本号即可。
+`uname -m` 必须为 `x86_64`，才能使用本离线包的 `linux/amd64` 镜像。
 
-## 2. 放行 HTTP 端口
+在宝塔的“安全 -> 系统防火墙”中只放行 `80` 端口。不要放行 `3306`、`6379`、`9099`、`12580`。
 
-宝塔左侧进入：
+## 2. 上传发布包
 
-```text
-安全 → 系统防火墙 → 放行端口
-```
-
-放行端口：
-
-```text
-80
-```
-
-不要放行 `3306`、`6379`、`9099`、`12580`。本次部署不使用 SSL，不需要配置 `443`。
-
-## 3. 上传本目录
-
-在宝塔“文件”中创建目录：
+在宝塔文件管理器创建：
 
 ```text
 /www/wwwroot/nsh-release/
 ```
 
-将当前整个发布目录上传到该目录下。例如：
+将整个离线发布目录上传到其中，例如：
 
 ```text
-/www/wwwroot/nsh-release/nsh-20260713153000/
+/www/wwwroot/nsh-release/nsh-20260725-baota-external-mysql/
 ```
 
-必须保留以下文件：
+必须保留以下文件和目录：
 
 ```text
 images.tar
 docker-compose.yml
 prod.env
+site-config.example.env
 SHA256SUMS.txt
 sql/ruoyi-fastapi.sql
+sql/20260725_reset_admin_credentials.sql
+BAOTA-README.md
 ```
 
-不要解压 `images.tar`。
+不要解压 `images.tar`，也不要把 `prod.env` 上传到公开的网站目录。
 
-## 4. 启动 Docker 容器
-
-进入宝塔“终端”，将下面的目录名替换为实际目录名：
+进入上传目录后，先核对文件完整性：
 
 ```bash
-cd /www/wwwroot/nsh-release/nsh-20260713153000
+cd /www/wwwroot/nsh-release/nsh-20260725-baota-external-mysql
 sha256sum -c SHA256SUMS.txt
+```
+
+所有行都显示 `OK` 才继续。
+
+## 3. 创建宝塔 MySQL 数据库
+
+本包中的 `prod.env` 已生成应用数据库账号 `nsh_app` 和随机密码。先在宝塔终端查看该密码：
+
+```bash
+grep '^MYSQL_HOST\|^MYSQL_PORT\|^MYSQL_DATABASE\|^MYSQL_USERNAME\|^MYSQL_PASSWORD\|^DOCKER_NETWORK_SUBNET' prod.env
+```
+
+默认值为：
+
+```text
+数据库名：ruoyi-fastapi
+数据库用户：nsh_app
+数据库密码：以 prod.env 中 MYSQL_PASSWORD 的实际值为准
+Docker 网段：172.28.0.0/16
+```
+
+### 3.1 允许 Docker 访问本机 MySQL
+
+在宝塔“软件商店 -> MySQL 8.0 -> 配置修改”中，确认 `[mysqld]` 下存在：
+
+```ini
+bind-address = 0.0.0.0
+```
+
+保存后重启 MySQL。虽然 MySQL 会监听 Docker 网桥，但防火墙没有放行 `3306`，且下面的应用账号只允许 Docker 网段连接，公网无法使用此账号登录。
+
+### 3.2 创建数据库、账号并导入结构
+
+在宝塔终端进入 MySQL：
+
+```bash
+mysql -uroot -p
+```
+
+将下面 `这里替换为 prod.env 里的 MYSQL_PASSWORD` 替换成刚才查到的真实密码，然后依次执行：
+
+```sql
+CREATE DATABASE `ruoyi-fastapi` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+CREATE USER 'nsh_app'@'172.28.%' IDENTIFIED BY '这里替换为 prod.env 里的 MYSQL_PASSWORD';
+GRANT ALL PRIVILEGES ON `ruoyi-fastapi`.* TO 'nsh_app'@'172.28.%';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+导入项目数据库结构和初始数据：
+
+```bash
+mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/ruoyi-fastapi.sql
+```
+
+如果服务器已有同名数据库，不要再次导入全量 SQL；请先备份，再按需要迁移数据。
+
+## 4. 导入镜像并启动 Docker
+
+仍在发布目录执行：
+
+```bash
 docker load -i images.tar
 docker compose --env-file prod.env -f docker-compose.yml up -d --remove-orphans
 docker compose --env-file prod.env -f docker-compose.yml ps
 ```
 
-第一次启动后等待约 60 秒，再执行一次：
+等待约 30 秒后检查：
 
 ```bash
 docker compose --env-file prod.env -f docker-compose.yml ps
+curl -I http://127.0.0.1:12580/
 ```
 
-应看到 `ruoyi-frontend`、`ruoyi-backend-my`、`ruoyi-mysql`、`ruoyi-redis`；MySQL 和 Redis 状态应为 `healthy`。
+应看到 `ruoyi-frontend`、`ruoyi-backend-my`、`ruoyi-redis` 三个容器；Redis 应为 `healthy`，HTTP 检查应返回 `200`。
 
-## 5. 宝塔 HTTP 反向代理
+若后端无法连接数据库，查看日志：
 
-宝塔左侧进入：
+```bash
+docker logs --tail 200 ruoyi-backend-my
+```
+
+重点检查 MySQL 的 `bind-address`、数据库账号授权的 `172.28.%` 网段，以及 `prod.env` 中的 `MYSQL_*` 值。
+
+## 5. 宝塔网站与反向代理
+
+进入宝塔“网站 -> 添加站点”：
 
 ```text
-网站 → 添加站点
+域名：www.xn--kbrr2vyxjytebq4azkrrie.icu
+PHP版本：纯静态
 ```
 
-填写域名或服务器公网 IP，PHP 版本选择“纯静态”。创建后进入：
-
-```text
-站点设置 → 反向代理 → 添加反向代理
-```
-
-填写：
+创建后进入“站点设置 -> 反向代理 -> 添加反向代理”：
 
 ```text
 代理名称：nsh
@@ -104,29 +168,67 @@ docker compose --env-file prod.env -f docker-compose.yml ps
 发送域名：$host
 ```
 
-保存后直接通过以下地址访问：
+保存并重载 Nginx 后访问：
 
 ```text
-http://你的域名
+http://www.xn--kbrr2vyxjytebq4azkrrie.icu/
 ```
 
-或：
+不要在站点中申请 SSL，也不要启用强制 HTTPS。
+
+## 6. 上线后配置 AI Key 与模型
+
+首次登录后进入：
 
 ```text
-http://服务器公网IP
+系统管理 -> AIKey管理
 ```
 
-不要申请 SSL，不要开启强制 HTTPS。
+填写图片识别 API Key 并保存。该 Key 会加密存入宝塔 MySQL，不在 `prod.env` 或离线包中保存。
 
-## 6. 故障检查
+模型的访问地址、模型名称、超时和输出长度位于发布目录的 `prod.env`：
 
-在宝塔终端执行：
+```env
+MIMO_BASE_URL=https://api.xiaomimimo.com/v1
+MIMO_MODEL=mimo-v2.5
+MIMO_TIMEOUT_SECONDS=60
+MIMO_MAX_COMPLETION_TOKENS=2048
+```
+
+修改这四项后执行：
 
 ```bash
-docker logs --tail 100 ruoyi-mysql
-docker logs --tail 100 ruoyi-redis
-docker logs --tail 100 ruoyi-backend-my
-docker logs --tail 100 ruoyi-frontend
+docker compose --env-file prod.env -f docker-compose.yml up -d --force-recreate ruoyi-backend-my
 ```
 
-不要运行 `docker compose down -v`，其中的 `-v` 会删除数据库数据。
+`MIMO_API_KEY` 请保持为空；运行中的图片识别只读取 AIKey 管理页面保存的 Key。
+
+## 7. 已有数据库时重置管理员
+
+新建并导入数据库后，管理员账号和密码已经是 `cptbtptp369`。如需重置已有数据库中的管理员，在发布目录执行：
+
+```bash
+mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/20260725_reset_admin_credentials.sql
+docker compose --env-file prod.env -f docker-compose.yml restart ruoyi-backend-my
+```
+
+## 8. 常用维护命令
+
+```bash
+# 查看状态
+docker compose --env-file prod.env -f docker-compose.yml ps
+
+# 查看后端日志
+docker logs --tail 200 ruoyi-backend-my
+
+# 重启 Docker 服务，不影响宝塔 MySQL 数据
+docker compose --env-file prod.env -f docker-compose.yml restart
+
+# 停止 Docker 服务
+docker compose --env-file prod.env -f docker-compose.yml stop
+
+# 启动已停止的 Docker 服务
+docker compose --env-file prod.env -f docker-compose.yml start
+```
+
+不要执行 `docker compose down -v`。虽然 MySQL 已不在 Docker 中，但该命令会删除 Redis 和项目上传数据卷。

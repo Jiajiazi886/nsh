@@ -64,8 +64,17 @@ $jwtSecret = New-HexSecret 48
 FRONTEND_PORT=12580
 APP_IMAGE_TAG=local
 
+APP_NAME=Nsh Guild Console
+APP_VERSION=1.9.0
+
+# Baota MySQL 8 runs on the server host. Create this database user in Baota
+# using the password below before starting Docker.
+MYSQL_HOST=host.docker.internal
+MYSQL_PORT=3306
 MYSQL_DATABASE=ruoyi-fastapi
-MYSQL_ROOT_PASSWORD=$mysqlPassword
+MYSQL_USERNAME=nsh_app
+MYSQL_PASSWORD=$mysqlPassword
+DOCKER_NETWORK_SUBNET=172.28.0.0/16
 REDIS_PASSWORD=$redisPassword
 
 JWT_SECRET_KEY=$jwtSecret
@@ -85,10 +94,13 @@ LOG_FILE_ENABLED=true
 LOG_INSTANCE_ID=prod
 LOG_SERVICE_NAME=ruoyi-fastapi-backend
 
-# Fill this before packaging if the AI image-recognition function will be used.
+# Leave this empty. Configure the runtime key after deployment through
+# System Management -> AIKey Management; it is encrypted and saved in MySQL.
 MIMO_API_KEY=
 MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
+MIMO_TIMEOUT_SECONDS=60
+MIMO_MAX_COMPLETION_TOKENS=2048
 
 TRANSPORT_CRYPTO_ENABLED=true
 TRANSPORT_CRYPTO_MODE=optional
@@ -99,4 +111,5 @@ TRANSPORT_CRYPTO_PRIVATE_KEY='$privateKey'
 "@
 $content | Set-Content -LiteralPath $OutputPath -Encoding utf8NoBOM
 Write-Host "Created production environment file: $OutputPath" -ForegroundColor Green
-Write-Host 'Set MIMO_API_KEY if you need AI image recognition, then run deploy/Prepare-OfflineRelease.ps1.' -ForegroundColor Yellow
+Write-Host 'Create the Baota MySQL database/user with MYSQL_* values before starting Docker.' -ForegroundColor Yellow
+Write-Host 'Keep MIMO_API_KEY empty. After deployment, configure it in System Management -> AIKey Management.' -ForegroundColor Yellow

@@ -3,7 +3,10 @@ param(
     [string]$Tag = (Get-Date -Format 'yyyyMMddHHmmss'),
     [string]$OutputRoot = (Join-Path $PSScriptRoot 'releases'),
     [ValidateSet('linux/amd64', 'linux/arm64')]
-    [string]$Platform = 'linux/amd64'
+    [string]$Platform = 'linux/amd64',
+    [switch]$UseLocalBaseImages,
+    [string]$FrontendBaseImage = 'nginx:1.27-alpine',
+    [string]$BackendBaseImage = 'python:3.10'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,6 +30,15 @@ function Build-FrontendAssets {
     }
     finally {
         Pop-Location
+    }
+}
+
+function Assert-DockerImage {
+    param([string]$Image)
+
+    & docker image inspect $Image *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Required local Docker image was not found: $Image"
     }
 }
 
@@ -54,19 +66,34 @@ Write-Host 'Building frontend static assets locally.' -ForegroundColor Cyan
 Build-FrontendAssets
 
 Write-Host "Packaging $Platform frontend image: nsh-frontend:$Tag" -ForegroundColor Cyan
-Invoke-Docker buildx build --platform $Platform --load --pull --tag "nsh-frontend:$Tag" --file (Join-Path $projectRoot 'ruoyi-fastapi-frontend/Dockerfile.prod') (Join-Path $projectRoot 'ruoyi-fastapi-frontend')
+$frontendBuildArguments = @('buildx', 'build', '--platform', $Platform, '--load')
+if (-not $UseLocalBaseImages) { $frontendBuildArguments += '--pull' }
+$frontendBuildArguments += @('--tag', "nsh-frontend:$Tag", '--build-arg', "BASE_IMAGE=$FrontendBaseImage", '--file', (Join-Path $projectRoot 'ruoyi-fastapi-frontend/Dockerfile.prod'), (Join-Path $projectRoot 'ruoyi-fastapi-frontend'))
+if ($UseLocalBaseImages) { Assert-DockerImage $FrontendBaseImage }
+Invoke-Docker @frontendBuildArguments
 
 Write-Host "Building $Platform backend image: nsh-backend-my:$Tag" -ForegroundColor Cyan
-Invoke-Docker buildx build --platform $Platform --load --pull --tag "nsh-backend-my:$Tag" --file (Join-Path $projectRoot 'ruoyi-fastapi-backend/Dockerfile.my') (Join-Path $projectRoot 'ruoyi-fastapi-backend')
+$backendBuildArguments = @('buildx', 'build', '--platform', $Platform, '--load')
+if (-not $UseLocalBaseImages) { $backendBuildArguments += '--pull' }
+$backendBuildArguments += @('--tag', "nsh-backend-my:$Tag", '--build-arg', "BASE_IMAGE=$BackendBaseImage", '--file', (Join-Path $projectRoot 'ruoyi-fastapi-backend/Dockerfile.my'), (Join-Path $projectRoot 'ruoyi-fastapi-backend'))
+if ($UseLocalBaseImages) { Assert-DockerImage $BackendBaseImage }
+Invoke-Docker @backendBuildArguments
 
-Write-Host 'Downloading MySQL and Redis images locally for the offline package.' -ForegroundColor Cyan
-Invoke-Docker pull --platform $Platform mysql:8.0
-Invoke-Docker pull --platform $Platform redis:7
+if ($UseLocalBaseImages) {
+    Write-Host 'Reusing the local Redis image for the offline package.' -ForegroundColor Cyan
+    Assert-DockerImage 'redis:7'
+}
+else {
+    Write-Host 'Downloading the Redis image locally for the offline package.' -ForegroundColor Cyan
+    Invoke-Docker pull --platform $Platform redis:7
+}
 
 New-Item -ItemType Directory -Force -Path (Join-Path $releaseDirectory 'sql') | Out-Null
 Copy-Item -LiteralPath $composeFile -Destination (Join-Path $releaseDirectory 'docker-compose.yml')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/ruoyi-fastapi.sql') -Destination (Join-Path $releaseDirectory 'sql/ruoyi-fastapi.sql')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/20260725_reset_admin_credentials.sql') -Destination (Join-Path $releaseDirectory 'sql/20260725_reset_admin_credentials.sql')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BAOTA-README.md') -Destination (Join-Path $releaseDirectory 'BAOTA-README.md')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'site-config.example.env') -Destination (Join-Path $releaseDirectory 'site-config.example.env')
 
 $envContent = Get-Content -LiteralPath $prodEnv -Raw
 $envContent = [regex]::Replace($envContent, '(?m)^APP_IMAGE_TAG=.*$', "APP_IMAGE_TAG=$Tag")
@@ -74,7 +101,7 @@ if ($envContent -notmatch '(?m)^APP_IMAGE_TAG=') { $envContent += "`nAPP_IMAGE_T
 $envContent | Set-Content -LiteralPath (Join-Path $releaseDirectory 'prod.env') -Encoding utf8NoBOM
 
 Write-Host 'Exporting Docker images. This can create a large images.tar file.' -ForegroundColor Cyan
-Invoke-Docker save --output (Join-Path $releaseDirectory 'images.tar') "nsh-frontend:$Tag" "nsh-backend-my:$Tag" mysql:8.0 redis:7
+Invoke-Docker save --output (Join-Path $releaseDirectory 'images.tar') "nsh-frontend:$Tag" "nsh-backend-my:$Tag" redis:7
 
 $manifestPath = Join-Path $releaseDirectory 'SHA256SUMS.txt'
 Get-ChildItem -LiteralPath $releaseDirectory -Recurse -File |
