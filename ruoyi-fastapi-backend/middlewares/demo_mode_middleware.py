@@ -33,8 +33,6 @@ class DemoModeMiddleware(BaseHTTPMiddleware):
             'monitor/job',
             'monitor/jobLog',
             'monitor/cache',
-            'ai/model',
-            'ai/chat',
         ]
 
         for item in intercept_url_list:

@@ -6,7 +6,10 @@ param(
     [string]$Platform = 'linux/amd64',
     [switch]$UseLocalBaseImages,
     [string]$FrontendBaseImage = 'nginx:1.27-alpine',
-    [string]$BackendBaseImage = 'python:3.10'
+    [string]$BackendBaseImage = 'python:3.10',
+    [string]$DatabaseDump = '',
+    [string]$DataManifest = '',
+    [string]$UserFilesDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -129,6 +132,28 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/ruoyi-
 Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/20260725_reset_admin_credentials.sql') -Destination (Join-Path $releaseDirectory 'sql/20260725_reset_admin_credentials.sql')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BAOTA-README.md') -Destination (Join-Path $releaseDirectory 'BAOTA-README.md')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'site-config.example.env') -Destination (Join-Path $releaseDirectory 'site-config.example.env')
+
+if ($DatabaseDump) {
+    if (-not (Test-Path -LiteralPath $DatabaseDump -PathType Leaf)) {
+        throw "Database dump was not found: $DatabaseDump"
+    }
+    New-Item -ItemType Directory -Force -Path (Join-Path $releaseDirectory 'local-data') | Out-Null
+    Copy-Item -LiteralPath $DatabaseDump -Destination (Join-Path $releaseDirectory 'local-data/database.local-data.sql')
+}
+if ($DataManifest) {
+    if (-not (Test-Path -LiteralPath $DataManifest -PathType Leaf)) {
+        throw "Data manifest was not found: $DataManifest"
+    }
+    New-Item -ItemType Directory -Force -Path (Join-Path $releaseDirectory 'local-data') | Out-Null
+    Copy-Item -LiteralPath $DataManifest -Destination (Join-Path $releaseDirectory 'local-data/DATA-MANIFEST.json')
+}
+if ($UserFilesDirectory) {
+    if (-not (Test-Path -LiteralPath $UserFilesDirectory -PathType Container)) {
+        throw "User files directory was not found: $UserFilesDirectory"
+    }
+    New-Item -ItemType Directory -Force -Path (Join-Path $releaseDirectory 'local-data/vf_admin') | Out-Null
+    Get-ChildItem -LiteralPath $UserFilesDirectory -Force | Copy-Item -Destination (Join-Path $releaseDirectory 'local-data/vf_admin') -Recurse -Force
+}
 
 @"
 RELEASE_TAG=$Tag

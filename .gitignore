@@ -168,6 +168,9 @@ ruoyi-fastapi-frontend/.vite/
 ruoyi-fastapi-frontend/dist/
 deploy/prod.env
 deploy/releases/
+deploy/local-data/
+*.local-data.sql
+*.local-data.sql.gz
 
 # Local UI reference project
 animated-characters-login-page-main/

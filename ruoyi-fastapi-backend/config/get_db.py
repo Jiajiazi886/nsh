@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.database import AsyncSessionLocal, Base, async_engine
 from config.env import DataBaseConfig
+from config.schema_migrations import run_schema_migrations
 from utils.log_util import logger
 
 INTERNAL_POWER_ENTRY_TABLE = 'system_internal_power_entry'
@@ -132,45 +133,6 @@ SYS_USER_VIP_SPONSOR_COLUMN_SQL = {
     },
 }
 
-SYS_USER_VIP_SPONSOR_PERMISSION_SQL = [
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache,
-      menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark
-    )
-    SELECT 3130, 'VIP授权修改', menu_id, 8, '#', '', '', '', 1, 0, 'F', '0', '0',
-           'system:user:vip:edit', '#', 'admin', NOW(), '', NULL, ''
-    FROM sys_menu
-    WHERE perms = 'system:user:list'
-      AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'system:user:vip:edit')
-    LIMIT 1
-    """,
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache,
-      menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark
-    )
-    SELECT 3131, '赞助状态修改', menu_id, 9, '#', '', '', '', 1, 0, 'F', '0', '0',
-           'system:user:sponsor:edit', '#', 'admin', NOW(), '', NULL, ''
-    FROM sys_menu
-    WHERE perms = 'system:user:list'
-      AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'system:user:sponsor:edit')
-    LIMIT 1
-    """,
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache,
-      menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark
-    )
-    SELECT 3132, 'AI识图次数修改', menu_id, 10, '#', '', '', '', 1, 0, 'F', '0', '0',
-           'system:user:ai:edit', '#', 'admin', NOW(), '', NULL, ''
-    FROM sys_menu
-    WHERE perms = 'system:user:list'
-      AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'system:user:ai:edit')
-    LIMIT 1
-    """,
-]
-
 DEFAULT_AI_RECOGNITION_CONFIG_SQL = {
     'mysql': """
     INSERT INTO sys_config (
@@ -196,258 +158,6 @@ DEFAULT_AI_RECOGNITION_CONFIG_SQL = {
     )
     """,
 }
-
-PERSONAL_DEFENSE_CALCULATOR_MENU_SQL = [
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES (
-      3000, '个人管理', 0, 5, 'personal', 'Layout', '', '',
-      1, 0, 'M', '0', '0', '', 'user',
-      'admin', NOW(), '', NULL, '个人管理目录'
-    )
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name),
-      path = VALUES(path),
-      component = VALUES(component),
-      menu_type = VALUES(menu_type),
-      visible = VALUES(visible),
-      status = VALUES(status),
-      icon = VALUES(icon),
-      update_by = 'admin',
-      update_time = NOW(),
-      remark = VALUES(remark)
-    """,
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES (
-      3005, '防守计算器', 3000, 4, 'defense-calculator', 'personal/calculator/index', '',
-      'PersonalDefenseCalculator', 1, 0, 'C', '0', '0', 'personal:defense-calculator:list',
-      'shield', 'admin', NOW(), '', NULL, '防守计算器菜单'
-    )
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name),
-      parent_id = VALUES(parent_id),
-      order_num = VALUES(order_num),
-      path = VALUES(path),
-      component = VALUES(component),
-      route_name = VALUES(route_name),
-      menu_type = VALUES(menu_type),
-      visible = VALUES(visible),
-      status = VALUES(status),
-      perms = VALUES(perms),
-      icon = VALUES(icon),
-      update_by = 'admin',
-      update_time = NOW(),
-      remark = VALUES(remark)
-    """,
-    """
-    INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-      (1, 3000), (1, 3005),
-      (2, 3000), (2, 3005)
-    """,
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES
-      (3160, '进攻方面板设置', 1, 14, 'pvpAttackPanel', 'system/pvpAttackPanel/index', '', 'SystemPvpAttackPanel', 1, 0, 'C', '0', '0', 'system:pvp-attack-panel:list', 'histogram', 'admin', NOW(), '', NULL, '管理员维护防守计算器进攻方面板'),
-      (3161, '进攻方面板查询', 3160, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:query', '#', 'admin', NOW(), '', NULL, ''),
-      (3162, '进攻方面板新增', 3160, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:add', '#', 'admin', NOW(), '', NULL, ''),
-      (3163, '进攻方面板修改', 3160, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:edit', '#', 'admin', NOW(), '', NULL, ''),
-      (3164, '进攻方面板删除', 3160, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:remove', '#', 'admin', NOW(), '', NULL, ''),
-      (3165, '职业加成设置', 1, 15, 'pvpDefenseProfessionBonus', 'system/pvpDefenseProfessionBonus/index', '', 'SystemPvpDefenseProfessionBonus', 1, 0, 'C', '0', '0', 'system:pvp-defense-profession-bonus:list', 'setting', 'admin', NOW(), '', NULL, '管理员维护防守计算器职业默认加成'),
-      (3166, '职业加成修改', 3165, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-defense-profession-bonus:edit', '#', 'admin', NOW(), '', NULL, '')
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name), parent_id = VALUES(parent_id), order_num = VALUES(order_num),
-      path = VALUES(path), component = VALUES(component), route_name = VALUES(route_name),
-      menu_type = VALUES(menu_type), visible = VALUES(visible), status = VALUES(status), perms = VALUES(perms),
-      icon = VALUES(icon), update_by = 'admin', update_time = NOW(), remark = VALUES(remark)
-    """,
-    """
-    DELETE rm
-    FROM sys_role_menu rm
-    JOIN sys_role r ON r.role_id = rm.role_id
-    WHERE rm.menu_id IN (3160, 3161, 3162, 3163, 3164, 3165, 3166) AND r.role_key <> 'admin'
-    """,
-    """
-    INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
-    SELECT r.role_id, m.menu_id
-    FROM sys_role r
-    JOIN sys_menu m ON m.menu_id IN (3160, 3161, 3162, 3163, 3164, 3165, 3166)
-    WHERE r.role_key = 'admin'
-    """,
-]
-
-INTERNAL_POWER_PANEL_SETTING_MENU_SQL = [
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES (
-      3115, '面板设置', 3000, 7, 'internal-power-panel', 'personal/internalPowerPanel/index', '',
-      'PersonalInternalPowerPanel', 1, 0, 'C', '0', '0', 'personal:internal-power-panel:list',
-      'chart', 'admin', NOW(), '', NULL, '个人内功PVP收益面板设置菜单'
-    )
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name),
-      parent_id = VALUES(parent_id),
-      order_num = VALUES(order_num),
-      path = VALUES(path),
-      component = VALUES(component),
-      route_name = VALUES(route_name),
-      menu_type = VALUES(menu_type),
-      visible = VALUES(visible),
-      status = VALUES(status),
-      perms = VALUES(perms),
-      icon = VALUES(icon),
-      update_by = 'admin',
-      update_time = NOW(),
-      remark = VALUES(remark)
-    """,
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES (
-      3116, '面板设置保存', 3115, 1, '#', '', '', '', 1, 0, 'F', '0', '0',
-      'personal:internal-power-panel:edit', '#', 'admin', NOW(), '', NULL, ''
-    )
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name),
-      parent_id = VALUES(parent_id),
-      perms = VALUES(perms),
-      update_by = 'admin',
-      update_time = NOW(),
-      remark = VALUES(remark)
-    """,
-    """
-    INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-      (1, 3115), (1, 3116),
-      (2, 3115), (2, 3116)
-    """,
-]
-
-FORMULA_DESIGN_MENU_SQL = [
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES (
-      3140, '公式设计', 1, 13, 'formulaDesign', 'system/formulaDesign/index', '',
-      'SystemFormulaDesign', 1, 0, 'C', '0', '0', 'system:formula-design:list',
-      'edit', 'admin', NOW(), '', NULL, '系统内功PVP收益公式设计菜单'
-    )
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name),
-      parent_id = VALUES(parent_id),
-      order_num = VALUES(order_num),
-      path = VALUES(path),
-      component = VALUES(component),
-      route_name = VALUES(route_name),
-      menu_type = VALUES(menu_type),
-      visible = VALUES(visible),
-      status = VALUES(status),
-      perms = VALUES(perms),
-      icon = VALUES(icon),
-      update_by = 'admin',
-      update_time = NOW(),
-      remark = VALUES(remark)
-    """,
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES
-      (3141, '公式版本查询', 3140, 1, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:formula-design:query', '#', 'admin', NOW(), '', NULL, ''),
-      (3142, '公式版本新增', 3140, 2, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:formula-design:add', '#', 'admin', NOW(), '', NULL, ''),
-      (3143, '公式版本修改', 3140, 3, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:formula-design:edit', '#', 'admin', NOW(), '', NULL, ''),
-      (3144, '公式版本发布', 3140, 4, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:formula-design:publish', '#', 'admin', NOW(), '', NULL, '')
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name),
-      parent_id = VALUES(parent_id),
-      perms = VALUES(perms),
-      update_by = 'admin',
-      update_time = NOW(),
-      remark = VALUES(remark)
-    """,
-    """
-    INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-      (1, 3140), (1, 3141), (1, 3142), (1, 3143), (1, 3144)
-    """,
-]
-
-INTERNAL_POWER_PANEL_TEMPLATE_MENU_SQL = [
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES (
-      3150, '面板模板设置', 1, 14, 'internalPowerPanelTemplate', 'system/internalPowerPanelTemplate/index', '',
-      'SystemInternalPowerPanelTemplate', 1, 0, 'C', '0', '0',
-      'system:internal-power-panel-template:list', 'chart', 'admin', NOW(), '', NULL,
-      '系统内功PVP收益面板模板设置菜单'
-    )
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name),
-      parent_id = VALUES(parent_id),
-      order_num = VALUES(order_num),
-      path = VALUES(path),
-      component = VALUES(component),
-      route_name = VALUES(route_name),
-      menu_type = VALUES(menu_type),
-      visible = VALUES(visible),
-      status = VALUES(status),
-      perms = VALUES(perms),
-      icon = VALUES(icon),
-      update_by = 'admin',
-      update_time = NOW(),
-      remark = VALUES(remark)
-    """,
-    """
-    INSERT INTO sys_menu (
-      menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
-      is_frame, is_cache, menu_type, visible, status, perms, icon,
-      create_by, create_time, update_by, update_time, remark
-    ) VALUES
-      (3151, '面板模板查询', 3150, 1, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:internal-power-panel-template:query', '#', 'admin', NOW(), '', NULL, ''),
-      (3152, '面板模板新增', 3150, 2, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:internal-power-panel-template:add', '#', 'admin', NOW(), '', NULL, ''),
-      (3153, '面板模板修改', 3150, 3, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:internal-power-panel-template:edit', '#', 'admin', NOW(), '', NULL, ''),
-      (3154, '面板模板删除', 3150, 4, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:internal-power-panel-template:remove', '#', 'admin', NOW(), '', NULL, ''),
-      (3155, '面板模板启停', 3150, 5, '#', '', '', '', 1, 0, 'F', '0', '0',
-       'system:internal-power-panel-template:status', '#', 'admin', NOW(), '', NULL, '')
-    ON DUPLICATE KEY UPDATE
-      menu_name = VALUES(menu_name),
-      parent_id = VALUES(parent_id),
-      perms = VALUES(perms),
-      update_by = 'admin',
-      update_time = NOW(),
-      remark = VALUES(remark)
-    """,
-    """
-    INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-      (1, 3150), (1, 3151), (1, 3152), (1, 3153), (1, 3154), (1, 3155)
-    """,
-]
 
 DAMAGE_FORMULA_VERSION_COLUMN_SQL = {
     'mysql': {
@@ -631,15 +341,6 @@ async def ensure_sys_user_vip_sponsor_columns() -> None:
                 logger.info(f'已补齐{SYS_USER_TABLE}.{column_name}字段')
 
 
-async def ensure_sys_user_vip_sponsor_permission_menus() -> None:
-    """
-    补齐用户管理下的VIP、赞助和AI识图次数细分权限按钮。
-    """
-    async with async_engine.begin() as conn:
-        for sql in SYS_USER_VIP_SPONSOR_PERMISSION_SQL:
-            await conn.execute(text(sql))
-
-
 async def ensure_default_ai_recognition_config() -> None:
     """
     补齐新用户默认普通AI识图次数配置，兼容已部署库升级。
@@ -650,24 +351,6 @@ async def ensure_default_ai_recognition_config() -> None:
 
     async with async_engine.begin() as conn:
         await conn.execute(text(sql))
-
-
-async def ensure_personal_defense_calculator_menu() -> None:
-    """
-    补齐个人管理下的防守计算器菜单。
-    """
-    async with async_engine.begin() as conn:
-        for sql in PERSONAL_DEFENSE_CALCULATOR_MENU_SQL:
-            await conn.execute(text(sql))
-
-
-async def ensure_internal_power_panel_setting_menu() -> None:
-    """
-    补齐个人内功PVP收益面板设置菜单，并迁移旧词条换算菜单入口。
-    """
-    async with async_engine.begin() as conn:
-        for sql in INTERNAL_POWER_PANEL_SETTING_MENU_SQL:
-            await conn.execute(text(sql))
 
 
 async def ensure_damage_formula_version_schema() -> None:
@@ -695,24 +378,6 @@ async def ensure_damage_formula_version_schema() -> None:
                 logger.info(f'已升级{DAMAGE_FORMULA_VERSION_TABLE}.formula_package_json字段为LONGTEXT')
 
 
-async def ensure_formula_design_menu() -> None:
-    """
-    补齐系统管理下的公式设计菜单。
-    """
-    async with async_engine.begin() as conn:
-        for sql in FORMULA_DESIGN_MENU_SQL:
-            await conn.execute(text(sql))
-
-
-async def ensure_internal_power_panel_template_menu() -> None:
-    """
-    补齐系统管理下的面板模板设置菜单。
-    """
-    async with async_engine.begin() as conn:
-        for sql in INTERNAL_POWER_PANEL_TEMPLATE_MENU_SQL:
-            await conn.execute(text(sql))
-
-
 async def init_create_table() -> None:
     """
     应用启动时初始化数据库连接
@@ -723,16 +388,13 @@ async def init_create_table() -> None:
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     await ensure_system_roles()
+    async with async_engine.begin() as conn:
+        await run_schema_migrations(conn)
     await ensure_internal_power_entry_limit_columns()
     await ensure_internal_power_lingyun_columns()
     await ensure_sys_user_vip_sponsor_columns()
-    await ensure_sys_user_vip_sponsor_permission_menus()
     await ensure_default_ai_recognition_config()
-    await ensure_personal_defense_calculator_menu()
-    await ensure_internal_power_panel_setting_menu()
     await ensure_damage_formula_version_schema()
-    await ensure_formula_design_menu()
-    await ensure_internal_power_panel_template_menu()
     logger.info('✅️ 数据库连接成功')
 
 
