@@ -7,6 +7,13 @@ export function listDefenseAttackPanels() {
   })
 }
 
+export function listDefenseProfessionBonuses() {
+  return request({
+    url: '/personal/defense-calculator/profession-bonuses',
+    method: 'get'
+  })
+}
+
 export function listPersonalDefenseAttackPanels() {
   return request({
     url: '/personal/defense-calculator/personal-attack-panels',

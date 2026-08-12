@@ -76,10 +76,22 @@ class PersonalDefenseCalculatorService:
         setting = await PersonalDefenseCalculatorDao.get_setting(query_db, current_user.user.user_id)
         if setting is None:
             return DefenseCalculatorSettingModel()
+        stored = cls._json_loads(setting.defender_json)
+        is_versioned = isinstance(stored.get('defender'), dict)
+        defender = stored.get('defender', stored)
+        selected_power_ids = stored.get('selectedInternalPowerIds', []) if is_versioned else []
+        selected_power_ids = await PersonalDefenseCalculatorDao.filter_owned_internal_power_ids(
+            query_db, current_user.user.user_id, cls._normalize_ids(selected_power_ids)
+        )
         return DefenseCalculatorSettingModel(
-            defender=DefenseCalculatorDefenderModel(**cls._json_loads(setting.defender_json)),
+            defender=DefenseCalculatorDefenderModel(**defender),
             selectedPanelSource=setting.selected_panel_source if setting.selected_panel_source in {'system', 'personal'} else 'system',
             selectedPanelId=setting.selected_panel_id or 0,
+            professionId=stored.get('professionId', 0) if is_versioned else 0,
+            professionName=stored.get('professionName', '') if is_versioned else '',
+            professionOverrides=stored.get('professionOverrides', {}) if is_versioned else {},
+            selectedInternalPowerIds=selected_power_ids,
+            recommendationInputs=stored.get('recommendationInputs', {}) if is_versioned else {},
             updateTime=setting.update_time,
         )
 
@@ -93,10 +105,24 @@ class PersonalDefenseCalculatorService:
         user_id = current_user.user.user_id
         if payload.selected_panel_source == 'personal' and payload.selected_panel_id:
             await cls._require_panel(query_db, user_id, payload.selected_panel_id)
+        payload.selected_internal_power_ids = await PersonalDefenseCalculatorDao.filter_owned_internal_power_ids(
+            query_db, user_id, cls._normalize_ids(payload.selected_internal_power_ids)
+        )
         now = datetime.now()
+        stored = {
+            'version': 2,
+            'defender': payload.defender.model_dump(),
+            'professionId': payload.profession_id,
+            'professionName': payload.profession_name,
+            'professionOverrides': {
+                key: value.model_dump() for key, value in payload.profession_overrides.items()
+            },
+            'selectedInternalPowerIds': payload.selected_internal_power_ids,
+            'recommendationInputs': payload.recommendation_inputs,
+        }
         setting = PersonalDefenseCalculatorSetting(
             user_id=user_id,
-            defender_json=cls._json_dumps(payload.defender.model_dump()),
+            defender_json=cls._json_dumps(stored),
             selected_panel_source=payload.selected_panel_source,
             selected_panel_id=payload.selected_panel_id,
             create_time=now,
@@ -135,3 +161,17 @@ class PersonalDefenseCalculatorService:
         except (TypeError, ValueError, json.JSONDecodeError):
             return {}
         return result if isinstance(result, dict) else {}
+
+    @staticmethod
+    def _normalize_ids(values: Any) -> list[int]:
+        result = []
+        for value in values if isinstance(values, list) else []:
+            try:
+                normalized = int(value)
+            except (TypeError, ValueError):
+                continue
+            if normalized > 0 and normalized not in result:
+                result.append(normalized)
+            if len(result) == 6:
+                break
+        return result

@@ -18,13 +18,11 @@ from config.env import AppConfig, JwtConfig
 from config.get_db import get_db
 from exceptions.exception import AuthException, LoginException, ServiceException
 from module_admin.dao.login_dao import login_by_account
-from module_admin.dao.role_dao import RoleDao
 from module_admin.dao.user_dao import UserDao
 from module_admin.entity.do.dept_do import SysDept
 from module_admin.entity.do.menu_do import SysMenu
 from module_admin.entity.do.user_do import SysUser
 from module_admin.entity.vo.login_vo import MenuTreeModel, MetaModel, RouterModel, SmsCode, UserLogin, UserRegister
-from module_admin.entity.vo.role_vo import RoleModel
 from module_admin.entity.vo.user_vo import AddUserModel, CurrentUserModel, ResetUserModel, TokenData, UserInfoModel
 from module_admin.service.user_service import UserService
 from utils.client_ip_util import ClientIPUtil
@@ -70,6 +68,8 @@ class LoginService:
     """
     登录模块服务层
     """
+
+    REGISTER_DEFAULT_ROLE_ID = 100
 
     @classmethod
     async def authenticate_user(
@@ -465,7 +465,7 @@ class LoginService:
                     nickName=user_register.username,
                     password=PwdUtil.get_password_hash(user_register.password),
                     pwdUpdateDate=datetime.now(),
-                    roleIds=await cls.__get_register_role_ids(query_db),
+                    roleIds=[cls.REGISTER_DEFAULT_ROLE_ID],
                     createBy='register',
                     createTime=datetime.now(),
                     updateBy='register',
@@ -475,16 +475,6 @@ class LoginService:
                 return result
             raise ServiceException(message='注册程序已关闭，禁止注册')
         raise ServiceException(message='两次输入的密码不一致')
-
-    @classmethod
-    async def __get_register_role_ids(cls, query_db: AsyncSession) -> list[int]:
-        """
-        Get the default role for self-registered users.
-        """
-        role = await RoleDao.get_role_by_info(query_db, RoleModel(roleKey='user'))
-        if role is None:
-            role = await RoleDao.get_role_by_info(query_db, RoleModel(roleKey='common'))
-        return [role.role_id] if role else []
 
     @classmethod
     async def get_sms_code_services(cls, request: Request, query_db: AsyncSession, user: ResetUserModel) -> SmsCode:

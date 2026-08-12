@@ -21,6 +21,8 @@ from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_admin.service.internal_power_panel_recognition_service import InternalPowerPanelRecognitionService
 from module_admin.service.personal_defense_calculator_service import PersonalDefenseCalculatorService
 from module_admin.service.pvp_attack_panel_service import PvpAttackPanelService
+from module_admin.service.pvp_defense_profession_bonus_service import PvpDefenseProfessionBonusService
+from module_admin.entity.vo.pvp_defense_profession_bonus_vo import ProfessionBonusModel
 from utils.response_util import ResponseUtil
 
 personal_defense_calculator_controller = APIRouterPro(
@@ -29,6 +31,18 @@ personal_defense_calculator_controller = APIRouterPro(
     tags=['个人管理-防守计算器'],
     dependencies=[PreAuthDependency()],
 )
+
+
+@personal_defense_calculator_controller.get(
+    '/profession-bonuses',
+    response_model=DataResponseModel[list[ProfessionBonusModel]],
+    dependencies=[UserInterfaceAuthDependency('personal:defense-calculator:list')],
+)
+async def get_defense_profession_bonuses(
+    request: Request,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+) -> Response:
+    return ResponseUtil.success(data=await PvpDefenseProfessionBonusService.list_services(query_db))
 
 
 @personal_defense_calculator_controller.get(

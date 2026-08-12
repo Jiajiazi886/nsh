@@ -5,6 +5,7 @@ from exceptions.exception import ServiceException
 from module_admin.entity.vo.personal_defense_calculator_vo import (
     DefenseCalculatorSettingModel,
     PersonalPvpAttackPanelPayload,
+    ProfessionBonusOverrideModel,
 )
 from module_admin.service.personal_defense_calculator_service import PersonalDefenseCalculatorService
 
@@ -105,3 +106,72 @@ def test_personal_selection_must_belong_to_current_user(monkeypatch):
     assert captured['panel_id'] == 17
     assert captured['setting'].selected_panel_source == 'personal'
     assert result.selected_panel_id == 17
+
+
+def test_setting_round_trip_keeps_profession_and_internal_power_selection(monkeypatch):
+    db = FakeDb()
+    captured = {}
+
+    async def fake_upsert_setting(cls, db_arg, setting):
+        captured['setting'] = setting
+
+    async def fake_get_setting(cls, db_arg, user_id):
+        return captured['setting']
+
+    async def fake_filter_power_ids(cls, db_arg, user_id, power_ids):
+        assert user_id == 4
+        assert power_ids == [11, 12]
+        return [11, 12]
+
+    monkeypatch.setattr(
+        'module_admin.service.personal_defense_calculator_service.PersonalDefenseCalculatorDao.upsert_setting',
+        classmethod(fake_upsert_setting),
+    )
+    monkeypatch.setattr(
+        'module_admin.service.personal_defense_calculator_service.PersonalDefenseCalculatorDao.get_setting',
+        classmethod(fake_get_setting),
+    )
+    monkeypatch.setattr(
+        'module_admin.service.personal_defense_calculator_service.PersonalDefenseCalculatorDao.filter_owned_internal_power_ids',
+        classmethod(fake_filter_power_ids),
+    )
+
+    payload = DefenseCalculatorSettingModel(
+        professionId=9,
+        professionName='铁衣',
+        professionOverrides={
+            '9': ProfessionBonusOverrideModel(defenseBonusPct=25, hpBonusPct=45),
+        },
+        selectedInternalPowerIds=[11, 12],
+        recommendationInputs={'defense': 10, 'hp': 1000},
+    )
+    result = asyncio.run(PersonalDefenseCalculatorService.save_setting_services(db, make_user(4), payload))
+
+    assert db.commit_count == 1
+    assert result.profession_id == 9
+    assert result.profession_name == '铁衣'
+    assert result.selected_internal_power_ids == [11, 12]
+    assert result.profession_overrides['9'].defense_bonus_pct == 25
+    assert result.recommendation_inputs['hp'] == 1000
+
+
+def test_legacy_flat_defender_setting_is_still_readable(monkeypatch):
+    legacy = SimpleNamespace(
+        defender_json='{"defense": 3333, "hp": 88888}',
+        selected_panel_source='system',
+        selected_panel_id=0,
+        update_time=None,
+    )
+
+    async def fake_get_setting(cls, db_arg, user_id):
+        return legacy
+
+    monkeypatch.setattr(
+        'module_admin.service.personal_defense_calculator_service.PersonalDefenseCalculatorDao.get_setting',
+        classmethod(fake_get_setting),
+    )
+
+    result = asyncio.run(PersonalDefenseCalculatorService.get_setting_services(FakeDb(), make_user(4)))
+    assert result.defender.defense == 3333
+    assert result.defender.hp == 88888
+    assert result.profession_id == 0

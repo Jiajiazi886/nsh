@@ -27,6 +27,12 @@ class RoleService:
     角色管理模块服务层
     """
 
+    SYSTEM_ROLES = {
+        1: {'role_name': '超级管理员', 'role_key': 'admin'},
+        2: {'role_name': '帮会管理', 'role_key': 'common'},
+        100: {'role_name': '帮会成员', 'role_key': 'user'},
+    }
+
     @classmethod
     async def get_role_select_option_services(cls, query_db: AsyncSession) -> list[dict[str, Any]]:
         """
@@ -84,8 +90,8 @@ class RoleService:
         :param check_role: 角色信息
         :return: 校验结果
         """
-        if check_role.admin:
-            raise ServiceException(message='不允许操作超级管理员角色')
+        if check_role.role_id in cls.SYSTEM_ROLES:
+            raise ServiceException(message='系统内置角色不能删除或停用')
         return CrudResponseModel(is_success=True, message='校验通过')
 
     @classmethod
@@ -175,7 +181,19 @@ class RoleService:
         :param page_object: 编辑角色对象
         :return: 编辑角色校验结果
         """
+        system_role = cls.SYSTEM_ROLES.get(page_object.role_id)
+        if system_role and (
+            page_object.role_name != system_role['role_name'] or page_object.role_key != system_role['role_key']
+        ):
+            raise ServiceException(message='系统内置角色仅允许配置菜单权限，不能修改角色名称或权限字符')
+
         edit_role = page_object.model_dump(exclude_unset=True, exclude={'admin'})
+        if system_role:
+            edit_role.update(
+                role_name=system_role['role_name'],
+                role_key=system_role['role_key'],
+                status='0',
+            )
         if page_object.type != 'status':
             del edit_role['menu_ids']
         if page_object.type == 'status':
@@ -280,6 +298,8 @@ class RoleService:
             role_id_list = page_object.role_ids.split(',')
             try:
                 for role_id in role_id_list:
+                    if int(role_id) in cls.SYSTEM_ROLES:
+                        raise ServiceException(message='系统内置角色不能删除')
                     role = await cls.role_detail_services(query_db, int(role_id))
                     if (await RoleDao.count_user_role_dao(query_db, int(role_id))) > 0:
                         raise ServiceException(message=f'角色{role.role_name}已分配,不能删除')

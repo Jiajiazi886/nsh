@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 import cache from '@/plugins/cache'
+import { hasUsableWebCrypto } from '@/utils/webCryptoSupport'
 
 const TRANSPORT_BASE_URL = import.meta.env.VITE_APP_BASE_API
 const EXCLUDED_URL_PATTERNS = [
@@ -132,10 +133,12 @@ function normalizePaths(paths) {
  * @returns {Object} 标准化后的策略对象
  */
 function normalizeTransportPolicy(payload) {
+  const browserCryptoAvailable = hasUsableWebCrypto()
   return {
     transportCryptoEnabled: Boolean(payload?.transportCryptoEnabled),
     transportCryptoMode: String(payload?.transportCryptoMode || 'off'),
-    transportCryptoActive: Boolean(payload?.transportCryptoActive),
+    transportCryptoActive: Boolean(payload?.transportCryptoActive) && browserCryptoAvailable,
+    browserCryptoAvailable,
     envelopeVersion: String(payload?.envelopeVersion || DEFAULT_TRANSPORT_ENVELOPE_VERSION),
     publicKeyUrl: String(payload?.publicKeyUrl || '/transport/crypto/public-key'),
     requestEnvelopeAlgorithm: String(payload?.requestEnvelopeAlgorithm || DEFAULT_REQUEST_ENVELOPE_ALGORITHM),

@@ -6,6 +6,7 @@ import {
   calculateDefense,
   calculateInternalPowerDefenseBenefit,
   calculateInternalPowerDefenseBenefits,
+  calculateInternalPowerUpgrade,
   calculateInnerPowerComparisons,
   calculateRecommendation,
   createDefaultDefender,
@@ -34,11 +35,12 @@ assert.equal(base.critDerivativeCurve[0][0], -1000)
 assert.ok(base.critDerivativeCurve.some(([, value]) => value > 0))
 
 const recommendations = calculateRecommendation(createDefaultDefender(), DEFAULT_ATTACK_PANEL)
-assert.equal(recommendations.length, 2)
-assert.equal(recommendations[0].label, '防御词条（+33 防御）')
-assert.equal(recommendations[1].label, '会心抵抗词条（+66 会心抵抗）')
-assert.ok(recommendations[0].gainPct > 0)
-assert.ok(recommendations[1].gainPct > 0)
+assert.equal(recommendations.length, 11)
+assert.equal(recommendations.find(item => item.key === 'defense').inputValue, 33)
+assert.equal(recommendations.find(item => item.key === 'critResist').inputValue, 66)
+assert.ok(recommendations.find(item => item.key === 'defense').gainPct > 0)
+assert.ok(recommendations.find(item => item.key === 'critResist').gainPct > 0)
+assert.equal(recommendations.find(item => item.key === 'endurance').inputValue, 0)
 
 const entriesA = createEmptyInnerPowerEntries()
 entriesA.defense = 100
@@ -109,3 +111,52 @@ const powerDefenseBenefit = calculateInternalPowerDefenseBenefits({
 }, createDefaultDefender(), DEFAULT_ATTACK_PANEL)
 assert.equal(powerDefenseBenefit.baseGain, 0)
 assert.ok(powerDefenseBenefit.entryGain > 0)
+
+const ironcladBonus = { defenseBonusPct: 20, hpBonusPct: 40 }
+const ironcladDefense = calculateInternalPowerUpgrade(
+  createDefaultDefender(),
+  DEFAULT_ATTACK_PANEL,
+  [{ id: 1, name: '测试内功', entries: [
+    { name: '防御', value: 10 },
+    { name: '耐力', value: 10 },
+    { name: '内功防御', value: 10 },
+    { name: '外功防御', value: 10 },
+    { name: '根骨', value: 10 },
+    { name: '气血上限', value: 1000 },
+    { name: '身法', value: 10 },
+    { name: '抗会心', value: 20 },
+    { name: '抗内功会心', value: 10 },
+    { name: '抗外功会心', value: 10 },
+    { name: '流派抵御', value: '1.2%' },
+    { name: '攻击', value: 999 }
+  ] }],
+  ironcladBonus
+)
+assert.equal(ironcladDefense.total.rawDefense, 47.5)
+assert.equal(ironcladDefense.total.defense, 57)
+assert.equal(ironcladDefense.total.rawHp, 2020)
+assert.equal(ironcladDefense.total.hp, 2828)
+assert.equal(ironcladDefense.total.critResist, 50)
+assert.equal(ironcladDefense.total.resistPct, 1.2)
+assert.equal(ironcladDefense.afterDefender.defense, createDefaultDefender().defense + 57)
+assert.equal(ironcladDefense.afterDefender.hp, createDefaultDefender().hp + 2828)
+assert.ok(ironcladDefense.gainPct > 0)
+assert.equal(ironcladDefense.powers.length, 1)
+assert.equal(ironcladDefense.powers[0].ignoredEntries[0].name, '攻击')
+
+const manualRecommendations = calculateRecommendation(
+  createDefaultDefender(),
+  DEFAULT_ATTACK_PANEL,
+  {
+    defense: 10,
+    endurance: 10,
+    internalDefense: 10,
+    hp: 1000
+  },
+  ironcladBonus
+)
+assert.equal(manualRecommendations.find(item => item.key === 'defense').actualValue, 12)
+assert.equal(manualRecommendations.find(item => item.key === 'endurance').actualValue, 33)
+assert.equal(manualRecommendations.find(item => item.key === 'internalDefense').actualValue, 6)
+assert.equal(manualRecommendations.find(item => item.key === 'hp').actualValue, 1400)
+assert.ok(manualRecommendations.every(item => item.gainPct >= 0))

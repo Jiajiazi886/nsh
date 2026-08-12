@@ -28,6 +28,12 @@ export const INNER_POWER_FIELDS = [
   { key: 'techniqueResist', label: '技巧克制', step: 1 }
 ]
 
+export const RECOMMENDATION_FIELDS = INNER_POWER_FIELDS.filter(field => [
+  'defense', 'critResist', 'endurance', 'agility', 'rootBone',
+  'internalDefense', 'externalDefense', 'internalCritResist',
+  'externalCritResist', 'resistPct', 'hp'
+].includes(field.key))
+
 export const DEFAULT_ATTACK_PANEL = {
   panelId: 0,
   panelName: '默认参考进攻面板',
@@ -174,12 +180,54 @@ export function calculateInternalPowerDefenseBenefits(power = {}, defenderInput,
   }
 }
 
-export function calculateRecommendation(defenderInput, attackPanelInput) {
+export function calculateInternalPowerUpgrade(defenderInput, attackPanelInput, powers = [], professionBonus = {}) {
   const base = calculateDefense(defenderInput, attackPanelInput)
-  return [
-    recommendationItem('防御词条（+33 防御）', base, { defense: 33 }),
-    recommendationItem('会心抵抗词条（+66 会心抵抗）', base, { critResist: 66 })
-  ]
+  const powerItems = (Array.isArray(powers) ? powers : []).slice(0, 6).map(power => {
+    const rawEntries = Array.isArray(power?.entries) ? power.entries : []
+    const raw = rawEntries.reduce((total, entry) => addInternalPowerDefenseEntry(total, entry), createEmptyInnerPowerEntries())
+    const effective = convertInnerPowerEntries(raw, professionBonus)
+    const upgraded = calculateDefense(applyEffectiveDelta(base.defender, effective), base.attackPanel)
+    return {
+      id: power.powerId ?? power.id,
+      name: power.name || '未命名内功',
+      raw,
+      ...effective,
+      gainPct: percentGain(upgraded.durability, base.durability),
+      ignoredEntries: rawEntries
+        .map(entry => normalizeInternalPowerDefenseEntry(entry))
+        .filter(entry => !entry.supported)
+        .map(entry => ({ name: entry.name, note: entry.note }))
+    }
+  })
+  const total = powerItems.reduce((sum, item) => {
+    for (const key of ['rawDefense', 'defense', 'rawHp', 'hp', 'critResist', 'resistPct']) sum[key] += item[key]
+    return sum
+  }, { rawDefense: 0, defense: 0, rawHp: 0, hp: 0, critResist: 0, resistPct: 0 })
+  const afterDefender = applyEffectiveDelta(base.defender, total)
+  const after = calculateDefense(afterDefender, base.attackPanel)
+  return { base, after, afterDefender, powers: powerItems, total, gainPct: percentGain(after.durability, base.durability) }
+}
+
+export function calculateRecommendation(defenderInput, attackPanelInput, inputs, professionBonus = {}) {
+  const base = calculateDefense(defenderInput, attackPanelInput)
+  const values = inputs === undefined ? { defense: 33, critResist: 66 } : normalizeEntries(inputs)
+  return RECOMMENDATION_FIELDS.map(field => {
+    const inputValue = number(values[field.key], 0)
+    const raw = createEmptyInnerPowerEntries()
+    raw[field.key] = inputValue
+    const effective = convertInnerPowerEntries(raw, professionBonus)
+    const upgraded = calculateDefense(applyEffectiveDelta(base.defender, effective), base.attackPanel)
+    const actual = actualRecommendationValue(field.key, effective)
+    return {
+      key: field.key,
+      label: field.label,
+      inputValue,
+      actualValue: actual.value,
+      actualUnit: actual.unit,
+      durability: upgraded.durability,
+      gainPct: percentGain(upgraded.durability, base.durability)
+    }
+  })
 }
 
 function calculateSnapshot(defender, attackPanel) {
@@ -282,6 +330,43 @@ function addEntries(defender, entries, attackPanel = DEFAULT_ATTACK_PANEL) {
   result.critResist += normalized.agility * 2 + normalized.critResist
     + (normalized.internalCritResist + normalized.externalCritResist) * 0.5
   return result
+}
+
+function convertInnerPowerEntries(entries, professionBonus = {}) {
+  const normalized = normalizeEntries(entries)
+  const defenseFactor = 1 + number(professionBonus.defenseBonusPct, 0) / 100
+  const hpFactor = 1 + number(professionBonus.hpBonusPct, 0) / 100
+  const rawDefense = normalized.endurance * 2.75 + normalized.defense
+    + (normalized.internalDefense + normalized.externalDefense) * 0.5
+  const rawHp = normalized.rootBone * 102 + normalized.hp
+  return {
+    rawDefense,
+    defense: rawDefense * defenseFactor,
+    rawHp,
+    hp: rawHp * hpFactor,
+    critResist: normalized.agility * 2 + normalized.critResist
+      + (normalized.internalCritResist + normalized.externalCritResist) * 0.5,
+    resistPct: normalized.resistPct
+  }
+}
+
+function applyEffectiveDelta(defender, delta) {
+  return {
+    ...normalizeDefender(defender),
+    defense: number(defender.defense) + number(delta.defense),
+    hp: number(defender.hp) + number(delta.hp),
+    critResist: number(defender.critResist) + number(delta.critResist),
+    resistPct: number(defender.resistPct) + number(delta.resistPct)
+  }
+}
+
+function actualRecommendationValue(key, effective) {
+  if (['rootBone', 'hp'].includes(key)) return { value: effective.hp, unit: '气血' }
+  if (['agility', 'critResist', 'internalCritResist', 'externalCritResist'].includes(key)) {
+    return { value: effective.critResist, unit: '会心抵抗' }
+  }
+  if (key === 'resistPct') return { value: effective.resistPct, unit: '流派抵御%' }
+  return { value: effective.defense, unit: '防御' }
 }
 
 function normalizeInternalPowerDefenseEntry(entry = {}) {

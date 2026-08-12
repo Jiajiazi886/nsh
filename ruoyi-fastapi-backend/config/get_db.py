@@ -14,6 +14,32 @@ SYS_USER_TABLE = 'sys_user'
 DAMAGE_FORMULA_VERSION_TABLE = 'system_damage_formula_version'
 SYSTEM_INTERNAL_POWER_PANEL_TEMPLATE_TABLE = 'system_internal_power_panel_template'
 PERSONAL_INTERNAL_POWER_PANEL_RECOGNITION_HISTORY_TABLE = 'personal_internal_power_panel_recognition_history'
+SYSTEM_ROLE_SQL = {
+    'mysql': """
+    INSERT INTO sys_role (
+      role_id, role_name, role_key, role_sort, data_scope, menu_check_strictly, dept_check_strictly,
+      status, del_flag, create_by, create_time, update_by, update_time, remark
+    ) VALUES
+      (1, '超级管理员', 'admin', 1, '1', 1, 1, '0', '0', 'system', NOW(), 'system', NOW(), '系统内置超级管理员角色'),
+      (2, '帮会管理', 'common', 2, '2', 1, 1, '0', '0', 'system', NOW(), 'system', NOW(), '系统内置帮会管理角色'),
+      (100, '帮会成员', 'user', 0, '2', 1, 1, '0', '0', 'system', NOW(), 'system', NOW(), '系统内置帮会成员角色')
+    ON DUPLICATE KEY UPDATE
+      role_name = VALUES(role_name), role_key = VALUES(role_key), role_sort = VALUES(role_sort),
+      status = '0', del_flag = '0', update_by = 'system', update_time = NOW(), remark = VALUES(remark)
+    """,
+    'postgresql': """
+    INSERT INTO sys_role (
+      role_id, role_name, role_key, role_sort, data_scope, menu_check_strictly, dept_check_strictly,
+      status, del_flag, create_by, create_time, update_by, update_time, remark
+    ) VALUES
+      (1, '超级管理员', 'admin', 1, '1', 1, 1, '0', '0', 'system', NOW(), 'system', NOW(), '系统内置超级管理员角色'),
+      (2, '帮会管理', 'common', 2, '2', 1, 1, '0', '0', 'system', NOW(), 'system', NOW(), '系统内置帮会管理角色'),
+      (100, '帮会成员', 'user', 0, '2', 1, 1, '0', '0', 'system', NOW(), 'system', NOW(), '系统内置帮会成员角色')
+    ON CONFLICT (role_id) DO UPDATE SET
+      role_name = EXCLUDED.role_name, role_key = EXCLUDED.role_key, role_sort = EXCLUDED.role_sort,
+      status = '0', del_flag = '0', update_by = 'system', update_time = NOW(), remark = EXCLUDED.remark
+    """,
+}
 INTERNAL_POWER_ENTRY_LIMIT_COLUMN_SQL = {
     'mysql': {
         'limit_text': (
@@ -235,7 +261,9 @@ PERSONAL_DEFENSE_CALCULATOR_MENU_SQL = [
       (3161, '进攻方面板查询', 3160, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:query', '#', 'admin', NOW(), '', NULL, ''),
       (3162, '进攻方面板新增', 3160, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:add', '#', 'admin', NOW(), '', NULL, ''),
       (3163, '进攻方面板修改', 3160, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:edit', '#', 'admin', NOW(), '', NULL, ''),
-      (3164, '进攻方面板删除', 3160, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:remove', '#', 'admin', NOW(), '', NULL, '')
+      (3164, '进攻方面板删除', 3160, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:remove', '#', 'admin', NOW(), '', NULL, ''),
+      (3165, '职业加成设置', 1, 15, 'pvpDefenseProfessionBonus', 'system/pvpDefenseProfessionBonus/index', '', 'SystemPvpDefenseProfessionBonus', 1, 0, 'C', '0', '0', 'system:pvp-defense-profession-bonus:list', 'setting', 'admin', NOW(), '', NULL, '管理员维护防守计算器职业默认加成'),
+      (3166, '职业加成修改', 3165, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-defense-profession-bonus:edit', '#', 'admin', NOW(), '', NULL, '')
     ON DUPLICATE KEY UPDATE
       menu_name = VALUES(menu_name), parent_id = VALUES(parent_id), order_num = VALUES(order_num),
       path = VALUES(path), component = VALUES(component), route_name = VALUES(route_name),
@@ -246,13 +274,13 @@ PERSONAL_DEFENSE_CALCULATOR_MENU_SQL = [
     DELETE rm
     FROM sys_role_menu rm
     JOIN sys_role r ON r.role_id = rm.role_id
-    WHERE rm.menu_id IN (3160, 3161, 3162, 3163, 3164) AND r.role_key <> 'admin'
+    WHERE rm.menu_id IN (3160, 3161, 3162, 3163, 3164, 3165, 3166) AND r.role_key <> 'admin'
     """,
     """
     INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
     SELECT r.role_id, m.menu_id
     FROM sys_role r
-    JOIN sys_menu m ON m.menu_id IN (3160, 3161, 3162, 3163, 3164)
+    JOIN sys_menu m ON m.menu_id IN (3160, 3161, 3162, 3163, 3164, 3165, 3166)
     WHERE r.role_key = 'admin'
     """,
 ]
@@ -550,6 +578,22 @@ async def ensure_internal_power_entry_limit_columns() -> None:
         await conn.execute(text(INTERNAL_POWER_ENTRY_LIMIT_BACKFILL_SQL))
 
 
+async def ensure_system_roles() -> None:
+    """补齐并保护项目内置的三种系统角色，不改写管理员配置的菜单权限。"""
+    sql = SYSTEM_ROLE_SQL.get(DataBaseConfig.db_type)
+    if not sql:
+        return
+    async with async_engine.begin() as conn:
+        await conn.execute(text(sql))
+        if DataBaseConfig.db_type == 'postgresql':
+            await conn.execute(
+                text(
+                    "SELECT setval(pg_get_serial_sequence('sys_role', 'role_id'), "
+                    "GREATEST((SELECT COALESCE(MAX(role_id), 100) FROM sys_role), 100), true)"
+                )
+            )
+
+
 async def ensure_internal_power_lingyun_columns() -> None:
     """
     补齐内功灵韵字段，兼容已部署库升级。
@@ -678,6 +722,7 @@ async def init_create_table() -> None:
     logger.info('🔎 初始化数据库连接...')
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await ensure_system_roles()
     await ensure_internal_power_entry_limit_columns()
     await ensure_internal_power_lingyun_columns()
     await ensure_sys_user_vip_sponsor_columns()

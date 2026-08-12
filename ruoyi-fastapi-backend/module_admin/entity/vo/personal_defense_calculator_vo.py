@@ -37,10 +37,22 @@ class PersonalPvpAttackPanelModel(PvpAttackPanelFields):
     update_time: datetime | None = None
 
 
+class ProfessionBonusOverrideModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    defense_bonus_pct: float = Field(default=0, ge=0, le=1000)
+    hp_bonus_pct: float = Field(default=0, ge=0, le=1000)
+
+
 class DefenseCalculatorSettingModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     defender: DefenseCalculatorDefenderModel = Field(default_factory=DefenseCalculatorDefenderModel)
     selected_panel_source: Literal['system', 'personal'] = 'system'
     selected_panel_id: int = Field(default=0, ge=0)
+    profession_id: int = Field(default=0, ge=0)
+    profession_name: str = ''
+    profession_overrides: dict[str, ProfessionBonusOverrideModel] = Field(default_factory=dict)
+    selected_internal_power_ids: list[int] = Field(default_factory=list, max_length=6)
+    recommendation_inputs: dict[str, float] = Field(default_factory=dict)
     update_time: datetime | None = None

@@ -7,6 +7,7 @@ from module_admin.entity.do.personal_defense_calculator_do import (
     PersonalDefenseCalculatorSetting,
     PersonalPvpAttackPanel,
 )
+from module_admin.entity.do.internal_power_do import PersonalInternalPower
 
 
 class PersonalDefenseCalculatorDao:
@@ -67,3 +68,16 @@ class PersonalDefenseCalculatorDao:
     async def upsert_setting(cls, db: AsyncSession, setting: PersonalDefenseCalculatorSetting) -> None:
         await db.merge(setting)
         await db.flush()
+
+    @classmethod
+    async def filter_owned_internal_power_ids(cls, db: AsyncSession, user_id: int, power_ids: list[int]) -> list[int]:
+        if not power_ids:
+            return []
+        result = await db.execute(
+            select(PersonalInternalPower.power_id).where(
+                PersonalInternalPower.user_id == user_id,
+                PersonalInternalPower.power_id.in_(power_ids),
+            )
+        )
+        owned = set(result.scalars().all())
+        return [power_id for power_id in power_ids if power_id in owned]

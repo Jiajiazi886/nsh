@@ -93,7 +93,7 @@
 
       <!-- 表格数据 -->
       <el-table v-loading="loading" :data="roleList" @selection-change="handleSelectionChange">
-         <el-table-column type="selection" width="55" align="center" />
+         <el-table-column type="selection" width="55" align="center" :selectable="row => !isSystemRole(row)" />
          <el-table-column label="角色编号" prop="roleId" width="120" />
          <el-table-column label="角色名称" prop="roleName" :show-overflow-tooltip="true" width="150" />
          <el-table-column label="权限字符" prop="roleKey" :show-overflow-tooltip="true" width="150" />
@@ -104,6 +104,7 @@
                   v-model="scope.row.status"
                   active-value="0"
                   inactive-value="1"
+                  :disabled="isSystemRole(scope.row)"
                   @change="handleStatusChange(scope.row)"
                ></el-switch>
             </template>
@@ -118,7 +119,7 @@
               <el-tooltip content="修改" placement="top">
                 <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['system:role:edit']"></el-button>
               </el-tooltip>
-              <el-tooltip content="删除" placement="top" v-if="scope.row.roleId !== 1">
+              <el-tooltip content="删除" placement="top" v-if="!isSystemRole(scope.row)">
                 <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['system:role:remove']"></el-button>
               </el-tooltip>
               <el-tooltip content="菜单权限" placement="top">
@@ -143,7 +144,7 @@
       <el-dialog :title="title" v-model="open" width="500px" append-to-body>
          <el-form ref="roleRef" :model="form" :rules="rules" label-width="100px">
             <el-form-item label="角色名称" prop="roleName">
-               <el-input v-model="form.roleName" placeholder="请输入角色名称" />
+               <el-input v-model="form.roleName" placeholder="请输入角色名称" :disabled="isSystemRole(form)" />
             </el-form-item>
             <el-form-item prop="roleKey">
                <template #label>
@@ -154,13 +155,13 @@
                      权限字符
                   </span>
                </template>
-               <el-input v-model="form.roleKey" placeholder="请输入权限字符" />
+               <el-input v-model="form.roleKey" placeholder="请输入权限字符" :disabled="isSystemRole(form)" />
             </el-form-item>
             <el-form-item label="角色顺序" prop="roleSort">
                <el-input-number v-model="form.roleSort" controls-position="right" :min="0" />
             </el-form-item>
             <el-form-item label="状态">
-               <el-radio-group v-model="form.status">
+               <el-radio-group v-model="form.status" :disabled="isSystemRole(form)">
                   <el-radio
                      v-for="dict in sys_normal_disable"
                      :key="dict.value"
@@ -258,6 +259,7 @@ const scopeMenuOptions = ref([]);
 const openMenuScope = ref(false);
 const menuRef = ref(null);
 const scopeMenuRef = ref(null);
+const SYSTEM_ROLE_IDS = new Set([1, 2, 100]);
 
 const data = reactive({
   form: {},
@@ -276,6 +278,10 @@ const data = reactive({
 });
 
 const { queryParams, form, rules } = toRefs(data);
+
+function isSystemRole(row) {
+  return SYSTEM_ROLE_IDS.has(Number(row?.roleId));
+}
 
 /** 查询角色列表 */
 function getList() {

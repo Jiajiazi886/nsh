@@ -16,6 +16,28 @@
       </div>
     </section>
 
+    <section class="profession-bar">
+      <div class="profession-field">
+        <span>防守方职业</span>
+        <el-select v-model="professionId" placeholder="选择职业" filterable @change="changeProfession">
+          <el-option v-for="item in professionBonuses" :key="item.professionId" :label="item.professionName" :value="item.professionId" />
+        </el-select>
+      </div>
+      <div class="profession-field">
+        <span>内功防御加成</span>
+        <el-input-number v-model="professionDraft.defenseBonusPct" :min="0" :max="1000" :step="1" :precision="2" controls-position="right"><template #suffix>%</template></el-input-number>
+      </div>
+      <div class="profession-field">
+        <span>内功气血加成</span>
+        <el-input-number v-model="professionDraft.hpBonusPct" :min="0" :max="1000" :step="1" :precision="2" controls-position="right"><template #suffix>%</template></el-input-number>
+      </div>
+      <div class="profession-actions">
+        <el-tag :type="professionIsCustomized ? 'warning' : 'info'">{{ professionIsCustomized ? '个人设置' : '管理员默认' }}</el-tag>
+        <el-button type="primary" @click="saveProfessionOverride">保存个人设置</el-button>
+        <el-button :icon="RefreshLeft" @click="restoreProfessionDefault">恢复默认</el-button>
+      </div>
+    </section>
+
     <el-dialog v-model="recognitionDialogVisible" title="防守面板识别" width="560px" append-to-body destroy-on-close>
       <el-upload
         drag
@@ -72,16 +94,60 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="internalPowerDialogVisible" title="内功防御提升" width="960px" append-to-body>
+      <div class="power-dialog-toolbar">
+        <div>
+          <strong>选择自己的内功</strong>
+          <span>最多选择 6 本，攻击词条不计入坦度收益。</span>
+        </div>
+        <el-select
+          v-model="selectedInternalPowerIds"
+          multiple
+          filterable
+          collapse-tags
+          collapse-tags-tooltip
+          :multiple-limit="6"
+          placeholder="请选择内功"
+          class="power-select"
+          @change="handlePowerSelection"
+        >
+          <el-option v-for="power in internalPowers" :key="power.powerId" :label="power.name" :value="power.powerId" />
+        </el-select>
+      </div>
+      <el-empty v-if="!internalPowers.length" description="内功管理中还没有已保存内功" :image-size="80" />
+      <el-empty v-else-if="!selectedInternalPowerIds.length" description="选择内功后自动计算防御收益" :image-size="80" />
+      <el-table v-else :data="internalPowerUpgrade.powers" class="power-benefit-table">
+        <el-table-column prop="name" label="内功" min-width="140" show-overflow-tooltip />
+        <el-table-column label="实际防御" width="120" align="right"><template #default="{ row }">+{{ formatNumber(row.defense) }}</template></el-table-column>
+        <el-table-column label="实际气血" width="120" align="right"><template #default="{ row }">+{{ formatNumber(row.hp) }}</template></el-table-column>
+        <el-table-column label="会心抵抗" width="120" align="right"><template #default="{ row }">+{{ formatNumber(row.critResist) }}</template></el-table-column>
+        <el-table-column label="流派抵御" width="120" align="right"><template #default="{ row }">+{{ Number(row.resistPct || 0).toFixed(2) }}%</template></el-table-column>
+        <el-table-column label="独立肉度" width="120" align="right"><template #default="{ row }">+{{ formatPercent(row.gainPct / 100) }}</template></el-table-column>
+        <el-table-column label="忽略词条" min-width="150">
+          <template #default="{ row }"><span class="ignored-entry">{{ row.ignoredEntries.map(item => item.name).filter(Boolean).join('、') || '无' }}</span></template>
+        </el-table-column>
+      </el-table>
+      <div v-if="selectedInternalPowerIds.length" class="power-total">
+        <span>共 {{ internalPowerUpgrade.powers.length }} 本</span>
+        <span>实际防御 <b>+{{ formatNumber(internalPowerUpgrade.total.defense) }}</b></span>
+        <span>实际气血 <b>+{{ formatNumber(internalPowerUpgrade.total.hp) }}</b></span>
+        <span>会心抵抗 <b>+{{ formatNumber(internalPowerUpgrade.total.critResist) }}</b></span>
+        <span>流派抵御 <b>+{{ Number(internalPowerUpgrade.total.resistPct || 0).toFixed(2) }}%</b></span>
+        <strong>总坦度 +{{ formatPercent(internalPowerUpgrade.gainPct / 100) }}</strong>
+      </div>
+      <template #footer><el-button type="primary" @click="internalPowerDialogVisible = false">完成</el-button></template>
+    </el-dialog>
+
     <section class="curve-grid">
-      <div class="chart-section"><h2>防御减免曲线</h2><div ref="defenseChartRef" class="chart"></div><div class="curve-point-input"><span>剩余防御</span><el-input-number v-model="curveInputs.defense" :min="0" :max="10000" :step="10" controls-position="right" /></div></div>
-      <div class="chart-section"><h2>会心率曲线</h2><div ref="critChartRef" class="chart"></div><div class="curve-point-input"><span>净会心</span><el-input-number v-model="curveInputs.crit" :min="-1000" :max="2000" :step="10" controls-position="right" /></div></div>
-      <div class="chart-section"><h2>防御边际收益</h2><p>每增加 33 点剩余防御，防御减免的理论增量。</p><div ref="defenseDerivativeChartRef" class="chart"></div><div class="curve-point-input"><span>剩余防御</span><el-input-number v-model="curveInputs.defense" :min="0" :max="10000" :step="10" controls-position="right" /></div></div>
-      <div class="chart-section"><h2>会心边际收益</h2><p>每增加 66 点净会心，会心率的理论增量。</p><div ref="critDerivativeChartRef" class="chart"></div><div class="curve-point-input"><span>净会心</span><el-input-number v-model="curveInputs.crit" :min="-1000" :max="2000" :step="10" controls-position="right" /></div></div>
+      <div class="chart-section"><h2>防御减免曲线</h2><div ref="defenseChartRef" class="chart"></div><div class="curve-point-input"><span>剩余防御</span><el-input-number v-model="curveInputs.defense" :min="0" :max="10000" :step="10" controls-position="right" @change="markCurveInputManual('defense')" /></div></div>
+      <div class="chart-section"><h2>会心率曲线</h2><div ref="critChartRef" class="chart"></div><div class="curve-point-input"><span>净会心</span><el-input-number v-model="curveInputs.crit" :min="-1000" :max="2000" :step="10" controls-position="right" @change="markCurveInputManual('crit')" /></div></div>
+      <div class="chart-section"><h2>防御边际收益</h2><p>每增加 33 点剩余防御，防御减免的理论增量。</p><div ref="defenseDerivativeChartRef" class="chart"></div><div class="curve-point-input"><span>剩余防御</span><el-input-number v-model="curveInputs.defense" :min="0" :max="10000" :step="10" controls-position="right" @change="markCurveInputManual('defense')" /></div></div>
+      <div class="chart-section"><h2>会心边际收益</h2><p>每增加 66 点净会心，会心率的理论增量。</p><div ref="critDerivativeChartRef" class="chart"></div><div class="curve-point-input"><span>净会心</span><el-input-number v-model="curveInputs.crit" :min="-1000" :max="2000" :step="10" controls-position="right" @change="markCurveInputManual('crit')" /></div></div>
     </section>
 
     <section class="calculator-grid">
       <div class="input-section defender-drop-zone" :class="{ 'is-dragging': defenseDropActive }" @dragenter.prevent="defenseDropActive = true" @dragover.prevent="defenseDropActive = true" @dragleave.prevent="defenseDropActive = false" @drop.prevent="handleDefensePanelDrop">
-        <div class="section-title"><h2>防守方面板</h2><span>可将角色防御属性截图拖入此处自动识别</span></div>
+        <div class="section-title"><h2>变动前防守面板</h2><span>内功收益以此面板为计算基准，可拖入截图识别</span></div>
         <div class="field-grid">
           <label v-for="field in defenderCoreFields" :key="field.key" class="number-field">
             <span>{{ field.label }}</span>
@@ -109,27 +175,42 @@
         </div>
       </div>
 
-      <div class="result-section">
-        <h2>承伤结果</h2>
-        <div class="metric-grid">
-          <div><span>伤害期望</span><strong>{{ formatNumber(calculation.expectedDamage) }}</strong></div>
-          <div><span>血量/伤害期望</span><strong>{{ formatNumber(calculation.durability) }}</strong></div>
-          <div><span>防御减免</span><strong>{{ formatPercent(calculation.defenseMitigation) }}</strong></div>
-          <div><span>实际会心率</span><strong>{{ formatPercent(calculation.critRate) }}</strong></div>
+      <div class="input-section after-panel">
+        <div class="section-title"><h2>变动后防守面板</h2><span>根据职业加成与所选内功自动生成</span></div>
+        <div class="field-grid">
+          <label v-for="field in defenderCoreFields" :key="field.key" class="number-field">
+            <span>{{ field.label }}</span>
+            <el-input-number :model-value="afterDefender[field.key]" :precision="field.precision ?? (field.step < 1 ? 1 : 0)" disabled controls-position="right"><template v-if="field.suffix" #suffix>{{ field.suffix }}</template></el-input-number>
+          </label>
         </div>
-        <div class="detail-grid">
-          <span>剩余防御 <b>{{ formatNumber(calculation.remainingDefense) }}</b></span>
-          <span>净会心 <b>{{ formatNumber(calculation.netCrit) }}</b></span>
-          <span>技巧克制差 <b>{{ formatNumber(calculation.techniqueDifference) }}</b></span>
-          <span>未会心伤害 <b>{{ formatNumber(calculation.nonCritDamage) }}</b></span>
+        <div class="after-summary">
+          <span>内功实际防御 <b>+{{ formatNumber(internalPowerUpgrade.total.defense) }}</b></span>
+          <span>内功实际气血 <b>+{{ formatNumber(internalPowerUpgrade.total.hp) }}</b></span>
+          <span>内功会心抵抗 <b>+{{ formatNumber(internalPowerUpgrade.total.critResist) }}</b></span>
+          <span>内功流派抵御 <b>+{{ Number(internalPowerUpgrade.total.resistPct || 0).toFixed(2) }}%</b></span>
         </div>
       </div>
     </section>
 
+    <section class="result-section">
+      <div class="section-title result-heading"><div><h2>承伤结果</h2><span>变动前为基础，变动后包含职业加成后的所选内功词条。</span></div><el-button type="primary" @click="openInternalPowerDialog">内功防御提升</el-button></div>
+      <div class="result-comparison">
+        <div class="result-snapshot"><h3>变动前</h3><div class="metric-grid"><div><span>伤害期望</span><strong>{{ formatNumber(beforeCalculation.expectedDamage) }}</strong></div><div><span>血量/伤害期望</span><strong>{{ formatNumber(beforeCalculation.durability) }}</strong></div><div><span>防御减免</span><strong>{{ formatPercent(beforeCalculation.defenseMitigation) }}</strong></div><div><span>实际会心率</span><strong>{{ formatPercent(beforeCalculation.critRate) }}</strong></div></div><div class="detail-grid"><span>剩余防御 <b>{{ formatNumber(beforeCalculation.remainingDefense) }}</b></span><span>净会心 <b>{{ formatNumber(beforeCalculation.netCrit) }}</b></span></div></div>
+        <div class="result-snapshot result-after"><h3>变动后</h3><div class="metric-grid"><div><span>伤害期望</span><strong>{{ formatNumber(calculation.expectedDamage) }}</strong></div><div><span>血量/伤害期望</span><strong>{{ formatNumber(calculation.durability) }}</strong></div><div><span>防御减免</span><strong>{{ formatPercent(calculation.defenseMitigation) }}</strong></div><div><span>实际会心率</span><strong>{{ formatPercent(calculation.critRate) }}</strong></div></div><div class="detail-grid"><span>剩余防御 <b>{{ formatNumber(calculation.remainingDefense) }}</b></span><span>净会心 <b>{{ formatNumber(calculation.netCrit) }}</b></span></div></div>
+      </div>
+      <div class="durability-gain"><span>总体坦度提升</span><strong>+{{ formatPercent(internalPowerUpgrade.gainPct / 100) }}</strong></div>
+    </section>
+
     <section class="advice-section">
-      <h2>内功词条提升建议</h2>
-      <div class="recommendations">
-        <div v-for="item in recommendations" :key="item.label"><span>{{ item.label }}</span><strong>肉度 +{{ formatPercent(item.gainPct / 100) }}</strong><small>血量/伤害期望 {{ formatNumber(item.durability) }}</small></div>
+      <div class="section-title"><div><h2>内功词条提升建议</h2><span>输入原始内功词条，分别计算职业乘区后的实际提升与独立收益。</span></div></div>
+      <div class="recommendations recommendation-editor">
+        <div v-for="item in recommendations" :key="item.key">
+          <span>{{ item.label }}</span>
+          <el-input-number v-model="recommendationInputs[item.key]" :min="0" :step="RECOMMENDATION_FIELDS.find(field => field.key === item.key)?.step || 1" :precision="RECOMMENDATION_FIELDS.find(field => field.key === item.key)?.precision || 0" controls-position="right"><template v-if="RECOMMENDATION_FIELDS.find(field => field.key === item.key)?.suffix" #suffix>{{ RECOMMENDATION_FIELDS.find(field => field.key === item.key)?.suffix }}</template></el-input-number>
+          <small>实际提升 +{{ formatNumber(item.actualValue) }} {{ item.actualUnit }}</small>
+          <strong>肉度 +{{ formatPercent(item.gainPct / 100) }}</strong>
+          <small>血量/伤害期望 {{ formatNumber(item.durability) }}</small>
+        </div>
       </div>
     </section>
 
@@ -166,23 +247,27 @@
 import * as echarts from 'echarts'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Edit, Loading, Picture, Plus, UploadFilled } from '@element-plus/icons-vue'
+import { Delete, Edit, Loading, Picture, Plus, RefreshLeft, UploadFilled } from '@element-plus/icons-vue'
 import {
   addPersonalDefenseAttackPanel,
   deletePersonalDefenseAttackPanel,
   getDefenseCalculatorSetting,
   listDefenseAttackPanels,
+  listDefenseProfessionBonuses,
   listPersonalDefenseAttackPanels,
   recognizeDefensePanelImage,
   recognizeInternalPowerBenefitsImage,
   saveDefenseCalculatorSetting,
   updatePersonalDefenseAttackPanel
 } from '@/api/personal/defenseCalculator'
+import { listInternalPowers } from '@/api/personal/internalPower'
 import {
   DEFAULT_ATTACK_PANEL,
   DEFENDER_FIELDS,
   INNER_POWER_FIELDS,
+  RECOMMENDATION_FIELDS,
   calculateDefense,
+  calculateInternalPowerUpgrade,
   calculateInnerPowerComparisons,
   calculateRecommendation,
   createDefaultDefender,
@@ -194,6 +279,15 @@ import {
 const route = useRoute()
 const isDefenseCalculator = computed(() => route.path.includes('defense-calculator') || route.name === 'PersonalDefenseCalculator')
 const defender = reactive(createDefaultDefender())
+const professionBonuses = ref([])
+const internalPowers = ref([])
+const professionId = ref(0)
+const professionName = ref('')
+const professionOverrides = reactive({})
+const professionDraft = reactive({ defenseBonusPct: 0, hpBonusPct: 0 })
+const selectedInternalPowerIds = ref([])
+const recommendationInputs = reactive(createRecommendationInputs())
+const internalPowerDialogVisible = ref(false)
 const systemAttackPanels = ref([])
 const personalAttackPanels = ref([])
 const selectedPanelKey = ref(panelKey('system', 0))
@@ -213,6 +307,7 @@ const critChartRef = ref()
 const defenseDerivativeChartRef = ref()
 const critDerivativeChartRef = ref()
 const curveInputs = reactive({ defense: 2550, crit: 0 })
+const curveInputManual = reactive({ defense: false, crit: false })
 const comparePlans = reactive([createComparisonPlan(1), createComparisonPlan(2)])
 const defenderCoreFields = DEFENDER_FIELDS.filter(field => !field.key.endsWith('Reduction'))
 const defenderReductionFields = DEFENDER_FIELDS.filter(field => field.key.endsWith('Reduction'))
@@ -228,13 +323,29 @@ const activePanel = computed(() => {
   const panels = selected.source === 'personal' ? personalAttackPanels.value : systemAttackPanels.value
   return panels.find(item => item.panelId === selected.panelId) || DEFAULT_ATTACK_PANEL
 })
-const calculation = computed(() => calculateDefense(defender, activePanel.value))
-const recommendations = computed(() => calculateRecommendation(defender, activePanel.value))
+const selectedProfession = computed(() => professionBonuses.value.find(item => item.professionId === professionId.value) || null)
+const activeProfessionBonus = computed(() => ({
+  defenseBonusPct: Number(professionDraft.defenseBonusPct || 0),
+  hpBonusPct: Number(professionDraft.hpBonusPct || 0)
+}))
+const selectedInternalPowers = computed(() => internalPowers.value.filter(power => selectedInternalPowerIds.value.includes(Number(power.powerId || power.id))))
+const internalPowerUpgrade = computed(() => calculateInternalPowerUpgrade(
+  defender,
+  activePanel.value,
+  selectedInternalPowers.value,
+  activeProfessionBonus.value
+))
+const calculation = computed(() => internalPowerUpgrade.value.after)
+const beforeCalculation = computed(() => internalPowerUpgrade.value.base)
+const afterDefender = computed(() => internalPowerUpgrade.value.afterDefender)
+const recommendations = computed(() => calculateRecommendation(defender, activePanel.value, recommendationInputs, activeProfessionBonus.value))
 const comparison = computed(() => calculateInnerPowerComparisons(defender, activePanel.value, comparePlans))
+const professionIsCustomized = computed(() => Boolean(professionOverrides[String(professionId.value)]))
 
 onMounted(async () => {
   await loadCalculatorData()
   initCharts()
+  syncCurveInputsFromResult()
   window.addEventListener('resize', resizeCharts)
 })
 onBeforeUnmount(() => {
@@ -245,8 +356,11 @@ onBeforeUnmount(() => {
   critDerivativeChart?.dispose()
   window.clearTimeout(settingSaveTimer)
 })
-watch(calculation, updateCharts, { deep: true })
-watch([defender, selectedPanelKey], () => {
+watch(calculation, () => {
+  updateCharts()
+  syncCurveInputsFromResult()
+}, { deep: true })
+watch([defender, selectedPanelKey, professionId, selectedInternalPowerIds, recommendationInputs], () => {
   scheduleSettingSave()
 }, { deep: true })
 watch(() => curveInputs.defense, () => syncDefenseCurvePointers())
@@ -255,24 +369,38 @@ watch(() => curveInputs.crit, () => syncCritCurvePointers())
 async function loadCalculatorData() {
   const legacySetting = loadDefenseCalculatorPanelSetting()
   try {
-    const [settingResponse, systemResponse, personalResponse] = await Promise.all([
+    const [settingResponse, systemResponse, personalResponse, professionResponse, powerResponse] = await Promise.all([
       getDefenseCalculatorSetting(),
       listDefenseAttackPanels(),
-      listPersonalDefenseAttackPanels()
+      listPersonalDefenseAttackPanels(),
+      listDefenseProfessionBonuses(),
+      listInternalPowers()
     ])
     const setting = settingResponse.data || settingResponse || {}
     systemAttackPanels.value = systemResponse.data?.length ? systemResponse.data : [DEFAULT_ATTACK_PANEL]
     personalAttackPanels.value = personalResponse.data || []
+    professionBonuses.value = professionResponse.data || []
+    internalPowers.value = (powerResponse.powers || powerResponse.data?.powers || []).map(normalizeInternalPower)
     Object.assign(defender, createDefaultDefender(), setting.defender || {})
+    Object.assign(professionOverrides, setting.professionOverrides || {})
+    Object.assign(recommendationInputs, createRecommendationInputs(), setting.recommendationInputs || {})
+    selectedInternalPowerIds.value = normalizeSelectedPowerIds(setting.selectedInternalPowerIds)
+    professionId.value = Number(setting.professionId || professionBonuses.value[0]?.professionId || 0)
+    professionName.value = setting.professionName || selectedProfession.value?.professionName || ''
+    loadProfessionDraft()
     selectedPanelKey.value = panelKey(setting.selectedPanelSource, setting.selectedPanelId)
     await migrateLegacyCustomPanel(legacySetting)
   } catch {
     systemAttackPanels.value = [DEFAULT_ATTACK_PANEL]
     personalAttackPanels.value = []
+    professionBonuses.value = []
+    internalPowers.value = []
     Object.assign(defender, legacySetting.defender || createDefaultDefender())
     selectedPanelKey.value = panelKey('system', 0)
   }
   ensureSelectedPanel()
+  cleanSelectedPowerIds()
+  await nextTick()
   settingLoaded.value = true
   await saveCurrentSetting()
 }
@@ -382,11 +510,90 @@ async function saveCurrentSetting() {
     await saveDefenseCalculatorSetting({
       defender,
       selectedPanelSource: selected.source,
-      selectedPanelId: selected.panelId
+      selectedPanelId: selected.panelId,
+      professionId: professionId.value,
+      professionName: selectedProfession.value?.professionName || professionName.value,
+      professionOverrides,
+      selectedInternalPowerIds: selectedInternalPowerIds.value,
+      recommendationInputs
     })
   } catch {
     ElMessage.warning('防守计算器设置暂未同步到账号')
   }
+}
+
+function createRecommendationInputs() {
+  return Object.fromEntries(RECOMMENDATION_FIELDS.map(field => [field.key, field.key === 'defense' ? 33 : (field.key === 'critResist' ? 66 : 0)]))
+}
+
+function normalizeInternalPower(power = {}) {
+  return {
+    ...power,
+    powerId: Number(power.powerId || power.id || 0),
+    name: String(power.name || '未命名内功'),
+    entries: Array.isArray(power.entries) ? power.entries : []
+  }
+}
+
+function normalizeSelectedPowerIds(values) {
+  const available = new Set(internalPowers.value.map(item => item.powerId))
+  return [...new Set((Array.isArray(values) ? values : []).map(Number).filter(id => id > 0 && available.has(id)))].slice(0, 6)
+}
+
+function cleanSelectedPowerIds() {
+  selectedInternalPowerIds.value = normalizeSelectedPowerIds(selectedInternalPowerIds.value)
+}
+
+function loadProfessionDraft() {
+  const defaults = selectedProfession.value || { defenseBonusPct: 0, hpBonusPct: 0 }
+  const override = professionOverrides[String(professionId.value)]
+  professionName.value = defaults.professionName || professionName.value
+  professionDraft.defenseBonusPct = Number(override?.defenseBonusPct ?? defaults.defenseBonusPct ?? 0)
+  professionDraft.hpBonusPct = Number(override?.hpBonusPct ?? defaults.hpBonusPct ?? 0)
+}
+
+function changeProfession() {
+  professionName.value = selectedProfession.value?.professionName || ''
+  loadProfessionDraft()
+  scheduleSettingSave()
+}
+
+async function saveProfessionOverride() {
+  if (!professionId.value) return
+  professionOverrides[String(professionId.value)] = {
+    defenseBonusPct: Number(professionDraft.defenseBonusPct || 0),
+    hpBonusPct: Number(professionDraft.hpBonusPct || 0)
+  }
+  await saveCurrentSetting()
+  ElMessage.success(`${professionName.value || '当前职业'}个人加成已保存`)
+}
+
+async function restoreProfessionDefault() {
+  delete professionOverrides[String(professionId.value)]
+  loadProfessionDraft()
+  await saveCurrentSetting()
+  ElMessage.success('已恢复管理员默认职业加成')
+}
+
+function handlePowerSelection(values) {
+  selectedInternalPowerIds.value = values.slice(0, 6)
+}
+
+function openInternalPowerDialog() {
+  internalPowerDialogVisible.value = true
+}
+
+function markCurveInputManual(type) {
+  curveInputManual[type] = true
+  if (type === 'defense') syncDefenseCurvePointers()
+  else syncCritCurvePointers()
+}
+
+function syncCurveInputsFromResult() {
+  curveInputManual.defense = false
+  curveInputManual.crit = false
+  curveInputs.defense = clampCurveInput(calculation.value.remainingDefense, 0, 10000)
+  curveInputs.crit = clampCurveInput(calculation.value.netCrit, -1000, 2000)
 }
 
 function panelKey(source, panelId) {
@@ -676,6 +883,10 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .page-header p, .section-title span { margin: 8px 0 0; color: #6c7b8d; font-size: 14px; }
 .panel-select { width: 240px; }
 .header-actions { display: flex; align-items: center; gap: 10px; }
+.profession-bar { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(160px, .8fr)) auto; align-items: end; gap: 14px; padding: 16px 18px; border: 1px solid #dbe3ed; border-radius: 8px; background: #fff; }
+.profession-field { display: grid; gap: 7px; color: #526176; font-size: 13px; }
+.profession-field :deep(.el-select), .profession-field :deep(.el-input-number) { width: 100%; }
+.profession-actions { display: flex; align-items: center; gap: 8px; }
 .attack-panel-description { margin: 0 0 18px; color: #68788c; font-size: 13px; line-height: 1.7; }
 .template-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
 .template-select { flex: 1; min-width: 0; }
@@ -694,6 +905,9 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .curve-point-input { display: grid; grid-template-columns: auto minmax(120px, 1fr); align-items: center; gap: 10px; margin-top: 10px; color: #526176; font-size: 13px; }
 .curve-point-input :deep(.el-input-number) { width: 100%; }
 .input-section, .result-section { padding: 20px; }
+.after-panel { background: #f9fbfd; }
+.after-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #e4e9ef; color: #69788b; font-size: 13px; }
+.after-summary b { margin-left: 6px; color: #16634e; }
 .defender-drop-zone, .plan-drop-zone { transition: border-color .18s ease, background-color .18s ease; }
 .defender-drop-zone.is-dragging, .plan-drop-zone.is-dragging { border-color: #3c7bb2; background: #f0f7fd; box-shadow: inset 0 0 0 1px #3c7bb2; }
 .inline-recognition { grid-column: 1 / -1; }
@@ -706,11 +920,29 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .metric-grid strong { display: block; margin-top: 10px; color: #173a62; font-size: 22px; font-variant-numeric: tabular-nums; }
 .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
 .detail-grid b { margin-left: 8px; color: #26394f; font-variant-numeric: tabular-nums; }
+.result-heading { align-items: center; }
+.result-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
+.result-snapshot { padding: 16px; border: 1px solid #e1e7ef; background: #fbfcfe; }
+.result-snapshot h3 { color: #526176; font-size: 15px; }
+.result-snapshot .metric-grid { margin-top: 12px; }
+.result-after { border-color: #a9cbb7; background: #f5faf7; }
+.durability-gain { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 16px; padding: 15px 18px; border-left: 4px solid #2f8467; background: #edf8f3; }
+.durability-gain span { color: #45675b; }
+.durability-gain strong { color: #16634e; font-size: 24px; }
 .advice-section, .comparison-section { padding: 20px; }
 .recommendations, .comparison-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
 .recommendations div, .comparison-results div { padding: 16px; border-left: 4px solid #3c7bb2; background: #f6f9fc; }
 .recommendations strong, .comparison-results strong { display: block; margin-top: 8px; color: #16634e; font-size: 18px; }
 .recommendations small, .comparison-results small { display: block; margin-top: 7px; color: #69788b; }
+.recommendation-editor { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.recommendation-editor :deep(.el-input-number) { width: 100%; margin-top: 10px; }
+.power-dialog-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.power-dialog-toolbar div { display: grid; gap: 6px; }
+.power-dialog-toolbar span, .ignored-entry { color: #718096; font-size: 12px; }
+.power-select { width: min(460px, 100%); }
+.power-total { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 16px; padding: 16px; border-left: 4px solid #2f8467; background: #f2f8f5; color: #526176; }
+.power-total b, .power-total strong { color: #16634e; }
+.power-total strong { margin-left: auto; font-size: 18px; }
 .section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .section-title > div { min-width: 0; }
 .comparison-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
@@ -721,6 +953,7 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .entry-actions :deep(.el-upload) { display: inline-flex; }
 .plan-drop-hint { grid-column: 1 / -1; padding: 9px 10px; border: 1px dashed #cbd9e6; background: #f8fafc; color: #708196; font-size: 12px; }
 .empty-calculator { display: grid; min-height: 360px; place-items: center; }
-@media (max-width: 980px) { .curve-grid, .calculator-grid, .comparison-inputs { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .page-header, .section-title, .template-toolbar { align-items: stretch; flex-direction: column; } .header-actions { align-items: stretch; flex-direction: column; } .panel-select { width: 100%; } .curve-point-input, .field-grid, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } }
+@media (max-width: 1180px) { .profession-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } .profession-actions { grid-column: 1 / -1; } .recommendation-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 980px) { .curve-grid, .calculator-grid, .comparison-inputs, .result-comparison { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .page-header, .section-title, .template-toolbar, .power-dialog-toolbar { align-items: stretch; flex-direction: column; } .header-actions, .profession-actions { align-items: stretch; flex-direction: column; } .panel-select, .power-select { width: 100%; } .profession-bar, .curve-point-input, .field-grid, .after-summary, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } .profession-actions { grid-column: auto; } .power-total strong { margin-left: 0; } }
 </style>

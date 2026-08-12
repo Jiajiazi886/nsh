@@ -149,8 +149,9 @@ create table sys_role (
 -- ----------------------------
 -- 初始化-角色信息表数据
 -- ----------------------------
-insert into sys_role values('1', '超级管理员',  'admin',  1, 1, 1, 1, '0', '0', 'admin', sysdate(), '', null, '超级管理员');
-insert into sys_role values('2', '普通角色',    'common', 2, 2, 1, 1, '0', '0', 'admin', sysdate(), '', null, '普通角色');
+insert into sys_role values('1', '超级管理员',  'admin',  1, 1, 1, 1, '0', '0', 'system', sysdate(), '', null, '系统内置超级管理员角色');
+insert into sys_role values('2', '帮会管理',    'common', 2, 2, 1, 1, '0', '0', 'system', sysdate(), '', null, '系统内置帮会管理角色');
+insert into sys_role values('100', '帮会成员',  'user',   0, 2, 1, 1, '0', '0', 'system', sysdate(), '', null, '系统内置帮会成员角色');
 
 
 -- ----------------------------
