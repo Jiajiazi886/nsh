@@ -170,7 +170,8 @@ REDIS_IMAGE=redis:7
 $envContent = Get-Content -LiteralPath $prodEnv -Raw
 $envContent = [regex]::Replace($envContent, '(?m)^APP_IMAGE_TAG=.*$', "APP_IMAGE_TAG=$Tag")
 if ($envContent -notmatch '(?m)^APP_IMAGE_TAG=') { $envContent += "`nAPP_IMAGE_TAG=$Tag`n" }
-$envContent | Set-Content -LiteralPath (Join-Path $releaseDirectory 'prod.env') -Encoding utf8NoBOM
+$utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText((Join-Path $releaseDirectory 'prod.env'), $envContent, $utf8WithoutBom)
 
 Write-Host 'Exporting Docker images. This can create a large images.tar file.' -ForegroundColor Cyan
 Invoke-Docker save --output (Join-Path $releaseDirectory 'images.tar') "nsh-frontend:$Tag" "nsh-backend-my:$Tag" redis:7
