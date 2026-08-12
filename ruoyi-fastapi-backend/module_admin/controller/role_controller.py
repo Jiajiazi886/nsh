@@ -170,6 +170,37 @@ async def edit_system_role_datascope(
     return ResponseUtil.success(msg=role_data_scope_result.message)
 
 
+@role_controller.put(
+    '/menuScope',
+    summary='编辑角色菜单权限接口',
+    description='用于编辑角色可访问的左侧菜单和菜单内功能权限',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:role:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.ROLE_PERMISSION_MUTATION)
+@Log(title='角色管理', business_type=BusinessType.GRANT)
+async def edit_system_role_menu_scope(
+    request: Request,
+    role_menu_scope: AddRoleModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+    data_scope_sql: Annotated[ColumnElement, DataScopeDependency(SysDept)],
+) -> Response:
+    if not current_user.user.admin:
+        await RoleService.check_role_data_scope_services(query_db, str(role_menu_scope.role_id), data_scope_sql)
+    edit_role = AddRoleModel(
+        roleId=role_menu_scope.role_id,
+        menuIds=role_menu_scope.menu_ids,
+        menuCheckStrictly=role_menu_scope.menu_check_strictly,
+        updateBy=current_user.user.user_name,
+        updateTime=datetime.now(),
+    )
+    result = await RoleService.role_menu_scope_services(query_db, edit_role)
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
 @role_controller.delete(
     '/{role_ids}',
     summary='删除角色接口',

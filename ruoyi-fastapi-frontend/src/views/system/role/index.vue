@@ -121,8 +121,8 @@
               <el-tooltip content="删除" placement="top" v-if="scope.row.roleId !== 1">
                 <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['system:role:remove']"></el-button>
               </el-tooltip>
-              <el-tooltip content="数据权限" placement="top" v-if="scope.row.roleId !== 1">
-                <el-button link type="primary" icon="CircleCheck" @click="handleDataScope(scope.row)" v-hasPermi="['system:role:edit']"></el-button>
+              <el-tooltip content="菜单权限" placement="top">
+                <el-button link type="primary" icon="CircleCheck" @click="handleMenuScope(scope.row)" v-hasPermi="['system:role:edit']"></el-button>
               </el-tooltip>
               <el-tooltip content="分配用户" placement="top" v-if="scope.row.roleId !== 1">
                 <el-button link type="primary" icon="User" @click="handleAuthUser(scope.row)" v-hasPermi="['system:role:edit']"></el-button>
@@ -195,8 +195,8 @@
          </template>
       </el-dialog>
 
-      <!-- 分配角色数据权限对话框 -->
-      <el-dialog :title="title" v-model="openDataScope" width="500px" append-to-body>
+      <!-- 分配角色菜单权限对话框 -->
+      <el-dialog :title="title" v-model="openMenuScope" width="520px" append-to-body>
          <el-form :model="form" label-width="80px">
             <el-form-item label="角色名称">
                <el-input v-model="form.roleName" :disabled="true" />
@@ -204,28 +204,18 @@
             <el-form-item label="权限字符">
                <el-input v-model="form.roleKey" :disabled="true" />
             </el-form-item>
-            <el-form-item label="权限范围">
-               <el-select v-model="form.dataScope" @change="dataScopeSelectChange">
-                  <el-option
-                     v-for="item in dataScopeOptions"
-                     :key="item.value"
-                     :label="item.label"
-                     :value="item.value"
-                  ></el-option>
-               </el-select>
-            </el-form-item>
-            <el-form-item label="数据权限" v-show="form.dataScope == 2">
-               <el-checkbox v-model="deptExpand" @change="handleCheckedTreeExpand($event, 'dept')">展开/折叠</el-checkbox>
-               <el-checkbox v-model="deptNodeAll" @change="handleCheckedTreeNodeAll($event, 'dept')">全选/全不选</el-checkbox>
-               <el-checkbox v-model="form.deptCheckStrictly" @change="handleCheckedTreeConnect($event, 'dept')">父子联动</el-checkbox>
+            <el-form-item label="菜单权限">
+               <el-checkbox v-model="scopeMenuExpand" @change="handleScopeMenuExpand">展开/折叠</el-checkbox>
+               <el-checkbox v-model="scopeMenuNodeAll" @change="handleScopeMenuNodeAll">全选/全不选</el-checkbox>
+               <el-checkbox v-model="form.menuCheckStrictly">父子联动</el-checkbox>
                <el-tree
                   class="tree-border"
-                  :data="deptOptions"
+                  :data="scopeMenuOptions"
                   show-checkbox
                   default-expand-all
-                  ref="deptRef"
+                  ref="scopeMenuRef"
                   node-key="id"
-                  :check-strictly="!form.deptCheckStrictly"
+                  :check-strictly="!form.menuCheckStrictly"
                   empty-text="加载中，请稍候"
                   :props="{ label: 'label', children: 'children' }"
                ></el-tree>
@@ -233,8 +223,8 @@
          </el-form>
          <template #footer>
             <div class="dialog-footer">
-               <el-button type="primary" @click="submitDataScope">确 定</el-button>
-               <el-button @click="cancelDataScope">取 消</el-button>
+               <el-button type="primary" @click="submitMenuScope">确 定</el-button>
+               <el-button @click="cancelMenuScope">取 消</el-button>
             </div>
          </template>
       </el-dialog>
@@ -242,7 +232,7 @@
 </template>
 
 <script setup name="Role">
-import { addRole, changeRoleStatus, dataScope, delRole, getRole, listRole, updateRole, deptTreeSelect } from "@/api/system/role";
+import { addRole, changeRoleStatus, delRole, getRole, listRole, menuScope, updateRole } from "@/api/system/role";
 import { roleMenuTreeselect, treeselect as menuTreeselect } from "@/api/system/menu";
 
 const router = useRouter();
@@ -262,21 +252,12 @@ const dateRange = ref([]);
 const menuOptions = ref([]);
 const menuExpand = ref(false);
 const menuNodeAll = ref(false);
-const deptExpand = ref(true);
-const deptNodeAll = ref(false);
-const deptOptions = ref([]);
-const openDataScope = ref(false);
+const scopeMenuExpand = ref(true);
+const scopeMenuNodeAll = ref(false);
+const scopeMenuOptions = ref([]);
+const openMenuScope = ref(false);
 const menuRef = ref(null);
-const deptRef = ref(null);
-
-/** 数据范围选项*/
-const dataScopeOptions = ref([
-  { value: "1", label: "全部数据权限" },
-  { value: "2", label: "自定数据权限" },
-  { value: "3", label: "本部门数据权限" },
-  { value: "4", label: "本部门及以下数据权限" },
-  { value: "5", label: "仅本人数据权限" }
-]);
+const scopeMenuRef = ref(null);
 
 const data = reactive({
   form: {},
@@ -352,8 +333,8 @@ function handleStatusChange(row) {
 /** 更多操作 */
 function handleCommand(command, row) {
   switch (command) {
-    case "handleDataScope":
-      handleDataScope(row);
+    case "handleMenuScope":
+      handleMenuScope(row);
       break;
     case "handleAuthUser":
       handleAuthUser(row);
@@ -372,15 +353,6 @@ function getMenuTreeselect() {
     menuOptions.value = response.data;
   });
 }
-/** 所有部门节点数据 */
-function getDeptAllCheckedKeys() {
-  // 目前被选中的部门节点
-  let checkedKeys = deptRef.value.getCheckedKeys();
-  // 半选中的部门节点
-  let halfCheckedKeys = deptRef.value.getHalfCheckedKeys();
-  checkedKeys.unshift.apply(checkedKeys, halfCheckedKeys);
-  return checkedKeys;
-}
 /** 重置新增的表单以及其他数据  */
 function reset() {
   if (menuRef.value != undefined) {
@@ -388,8 +360,8 @@ function reset() {
   }
   menuExpand.value = false;
   menuNodeAll.value = false;
-  deptExpand.value = true;
-  deptNodeAll.value = false;
+  scopeMenuExpand.value = true;
+  scopeMenuNodeAll.value = false;
   form.value = {
     roleId: undefined,
     roleName: undefined,
@@ -397,9 +369,7 @@ function reset() {
     roleSort: 0,
     status: "0",
     menuIds: [],
-    deptIds: [],
     menuCheckStrictly: true,
-    deptCheckStrictly: true,
     remark: undefined
   };
   proxy.resetForm("roleRef");
@@ -440,13 +410,6 @@ function getRoleMenuTreeselect(roleId) {
     return response;
   });
 }
-/** 根据角色ID查询部门树结构 */
-function getDeptTree(roleId) {
-  return deptTreeSelect(roleId).then(response => {
-    deptOptions.value = response.depts;
-    return response;
-  });
-}
 /** 树权限（展开/折叠）*/
 function handleCheckedTreeExpand(value, type) {
   if (type == "menu") {
@@ -454,27 +417,18 @@ function handleCheckedTreeExpand(value, type) {
     for (let i = 0; i < treeList.length; i++) {
       menuRef.value.store.nodesMap[treeList[i].id].expanded = value;
     }
-  } else if (type == "dept") {
-    let treeList = deptOptions.value;
-    for (let i = 0; i < treeList.length; i++) {
-      deptRef.value.store.nodesMap[treeList[i].id].expanded = value;
-    }
   }
 }
 /** 树权限（全选/全不选） */
 function handleCheckedTreeNodeAll(value, type) {
   if (type == "menu") {
     menuRef.value.setCheckedNodes(value ? menuOptions.value : []);
-  } else if (type == "dept") {
-    deptRef.value.setCheckedNodes(value ? deptOptions.value : []);
   }
 }
 /** 树权限（父子联动） */
 function handleCheckedTreeConnect(value, type) {
   if (type == "menu") {
     form.value.menuCheckStrictly = value ? true : false;
-  } else if (type == "dept") {
-    form.value.deptCheckStrictly = value ? true : false;
   }
 }
 /** 所有菜单节点数据 */
@@ -513,45 +467,58 @@ function cancel() {
   open.value = false;
   reset();
 }
-/** 选择角色权限范围触发 */
-function dataScopeSelectChange(value) {
-  if (value !== "2") {
-    deptRef.value.setCheckedKeys([]);
-  }
-}
-/** 分配数据权限操作 */
-function handleDataScope(row) {
+/** 分配菜单权限操作 */
+function handleMenuScope(row) {
   reset();
-  const deptTreeSelect = getDeptTree(row.roleId);
+  const roleMenu = getRoleMenuTreeselect(row.roleId);
   getRole(row.roleId).then(response => {
     form.value = response.data;
-    openDataScope.value = true;
+    scopeMenuOptions.value = [];
+    openMenuScope.value = true;
     nextTick(() => {
-      deptTreeSelect.then(res => {
+      roleMenu.then(res => {
+        scopeMenuOptions.value = res.menus || [];
         nextTick(() => {
-          if (deptRef.value) {
-            deptRef.value.setCheckedKeys(res.checkedKeys);
+          if (scopeMenuRef.value) {
+            scopeMenuRef.value.setCheckedKeys(res.checkedKeys || []);
           }
         });
       });
     });
   });
-  title.value = "分配数据权限";
+  title.value = "配置菜单权限";
 }
-/** 提交按钮（数据权限） */
-function submitDataScope() {
+/** 菜单权限树（展开/折叠） */
+function handleScopeMenuExpand(value) {
+  const nodes = scopeMenuRef.value?.store?.nodesMap || {};
+  Object.values(nodes).forEach(node => {
+    node.expanded = value;
+  });
+}
+/** 菜单权限树（全选/全不选） */
+function handleScopeMenuNodeAll(value) {
+  scopeMenuRef.value?.setCheckedNodes(value ? scopeMenuOptions.value : []);
+}
+/** 提交按钮（菜单权限） */
+function submitMenuScope() {
   if (form.value.roleId != undefined) {
-    form.value.deptIds = getDeptAllCheckedKeys();
-    dataScope(form.value).then(response => {
+    const checkedKeys = scopeMenuRef.value?.getCheckedKeys() || [];
+    const halfCheckedKeys = scopeMenuRef.value?.getHalfCheckedKeys() || [];
+    form.value.menuIds = [...new Set([...checkedKeys, ...halfCheckedKeys])];
+    menuScope({
+      roleId: form.value.roleId,
+      menuIds: form.value.menuIds,
+      menuCheckStrictly: form.value.menuCheckStrictly
+    }).then(() => {
       proxy.$modal.msgSuccess("修改成功");
-      openDataScope.value = false;
+      openMenuScope.value = false;
       getList();
     });
   }
 }
-/** 取消按钮（数据权限）*/
-function cancelDataScope() {
-  openDataScope.value = false;
+/** 取消按钮（菜单权限）*/
+function cancelMenuScope() {
+  openMenuScope.value = false;
   reset();
 }
 

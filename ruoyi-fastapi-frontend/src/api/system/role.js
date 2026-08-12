@@ -35,10 +35,10 @@ export function updateRole(data) {
   })
 }
 
-// 角色数据权限
-export function dataScope(data) {
+// 角色菜单和按钮权限
+export function menuScope(data) {
   return request({
-    url: '/system/role/dataScope',
+    url: '/system/role/menuScope',
     method: 'put',
     data: data
   })
@@ -107,13 +107,5 @@ export function authUserSelectAll(data) {
     url: '/system/role/authUser/selectAll',
     method: 'put',
     params: data
-  })
-}
-
-// 根据角色ID查询部门树结构
-export function deptTreeSelect(roleId) {
-  return request({
-    url: '/system/role/deptTree/' + roleId,
-    method: 'get'
   })
 }

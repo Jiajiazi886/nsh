@@ -233,6 +233,41 @@ class RoleService:
             raise ServiceException(message='角色不存在')
 
     @classmethod
+    async def role_menu_scope_services(cls, query_db: AsyncSession, page_object: AddRoleModel) -> CrudResponseModel:
+        """
+        单独更新角色的菜单和按钮权限，不修改角色其他资料。
+
+        :param query_db: orm对象
+        :param page_object: 角色菜单权限对象
+        :return: 分配角色菜单权限结果
+        """
+        role_info = await cls.role_detail_services(query_db, page_object.role_id)
+        if not role_info.role_id:
+            raise ServiceException(message='角色不存在')
+
+        try:
+            await RoleDao.edit_role_dao(
+                query_db,
+                {
+                    'role_id': page_object.role_id,
+                    'menu_check_strictly': page_object.menu_check_strictly,
+                    'update_by': page_object.update_by,
+                    'update_time': page_object.update_time,
+                },
+            )
+            await RoleDao.delete_role_menu_dao(query_db, RoleMenuModel(roleId=page_object.role_id))
+            for menu_id in dict.fromkeys(page_object.menu_ids):
+                await RoleDao.add_role_menu_dao(
+                    query_db,
+                    RoleMenuModel(roleId=page_object.role_id, menuId=menu_id),
+                )
+            await query_db.commit()
+            return CrudResponseModel(is_success=True, message='菜单权限配置成功')
+        except Exception as e:
+            await query_db.rollback()
+            raise e
+
+    @classmethod
     async def delete_role_services(cls, query_db: AsyncSession, page_object: DeleteRoleModel) -> CrudResponseModel:
         """
         删除角色信息service
