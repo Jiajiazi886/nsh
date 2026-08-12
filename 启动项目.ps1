@@ -9,6 +9,7 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir = Join-Path $Root 'ruoyi-fastapi-backend'
 $FrontendDir = Join-Path $Root 'ruoyi-fastapi-frontend'
 $PythonExe = Join-Path $BackendDir '.venv\Scripts\python.exe'
+$RegistrationScript = Join-Path $BackendDir 'enable_local_registration.py'
 $LogDir = Join-Path $Root 'logs\startup'
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 
@@ -45,6 +46,37 @@ function Wait-HttpOk {
     try {
       $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 5
       if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+        return $true
+      }
+    } catch {
+      Start-Sleep -Seconds 2
+    }
+  } while ((Get-Date) -lt $deadline)
+
+  return $false
+}
+
+function Enable-LocalRegistration {
+  Write-Host 'Enabling local self-registration...'
+  Push-Location $BackendDir
+  try {
+    & $PythonExe $RegistrationScript
+    if ($LASTEXITCODE -ne 0) {
+      throw 'Failed to enable local self-registration in MySQL and Redis.'
+    }
+  } finally {
+    Pop-Location
+  }
+}
+
+function Wait-RegistrationReady {
+  param([int]$TimeoutSeconds = 60)
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    try {
+      $response = Invoke-RestMethod -Uri 'http://127.0.0.1:9100/authConfig' -TimeoutSec 5
+      if ($response.code -eq 200 -and $response.registerEnabled -eq $true) {
         return $true
       }
     } catch {
@@ -99,6 +131,8 @@ if (-not $SkipDependencyCheck) {
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 
+Enable-LocalRegistration
+
 if (Test-Port -Port 9100) {
   $pids = (Get-ListeningPids -Port 9100) -join ', '
   Write-Host "Backend already listening on 9100. PID: $pids"
@@ -131,12 +165,15 @@ Write-Host 'Checking services...'
 $BackendOk = Wait-HttpOk -Url 'http://127.0.0.1:9100/docs' -TimeoutSeconds 75
 $FrontendOk = Wait-HttpOk -Url 'http://127.0.0.1/' -TimeoutSeconds 75
 $AnalysisOk = Wait-HttpOk -Url 'http://127.0.0.1/guild/analysis' -TimeoutSeconds 75
+$RegistrationConfigOk = Wait-RegistrationReady -TimeoutSeconds 75
+$RegistrationPageOk = Wait-HttpOk -Url 'http://127.0.0.1/register' -TimeoutSeconds 75
 
 Write-Host ''
 Write-Host 'Startup result:'
 Write-Host "  Backend docs:   http://127.0.0.1:9100/docs        $(Format-Status $BackendOk)"
 Write-Host "  Frontend:       http://127.0.0.1/                 $(Format-Status $FrontendOk)"
 Write-Host "  Analysis page:  http://127.0.0.1/guild/analysis  $(Format-Status $AnalysisOk)"
+Write-Host "  Registration:   http://127.0.0.1/register        $(Format-Status ($RegistrationConfigOk -and $RegistrationPageOk))"
 Write-Host ''
 Write-Host "Backend stdout:  $BackendOut"
 Write-Host "Backend stderr:  $BackendErr"
@@ -147,6 +184,6 @@ if ($Open -and $FrontendOk) {
   Start-Process 'http://127.0.0.1/'
 }
 
-if (-not ($BackendOk -and $FrontendOk -and $AnalysisOk)) {
+if (-not ($BackendOk -and $FrontendOk -and $AnalysisOk -and $RegistrationConfigOk -and $RegistrationPageOk)) {
   exit 1
 }

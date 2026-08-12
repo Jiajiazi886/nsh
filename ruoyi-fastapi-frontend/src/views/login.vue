@@ -139,7 +139,8 @@ const loginRules = {
 };
 
 const loading = ref(false);
-const register = ref(false);
+// 本地启动时注册功能会由启动脚本确保开启；配置请求尚未完成时也先展示入口。
+const register = ref(true);
 const redirect = ref(undefined);
 const showPassword = ref(false);
 const isTyping = ref(false);
