@@ -136,11 +136,16 @@ mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/ruoyi-fastapi.sql
 ```bash
 sudo systemctl enable --now docker
 docker load -i images.tar
+docker network inspect ruoyi-network >/dev/null 2>&1 || docker network create --subnet 172.28.0.0/16 ruoyi-network
+docker volume inspect nsh-redis-data >/dev/null 2>&1 || docker volume create nsh-redis-data
+docker volume inspect nsh-backend-logs >/dev/null 2>&1 || docker volume create nsh-backend-logs
+docker volume inspect nsh-backend-vf-admin >/dev/null 2>&1 || docker volume create nsh-backend-vf-admin
 docker compose --env-file prod.env -f docker-compose.yml up -d --remove-orphans
 docker compose --env-file prod.env -f docker-compose.yml ps
 ```
 
 `systemctl is-enabled docker` 必须返回 `enabled`。三个服务均使用 `restart: always`，Docker 服务和服务器重新启动后都会自动恢复。
+固定网络和三个数据卷使用外部共享声明，因此切换到新的发布目录时不会因 Compose 项目名变化而重建或产生同名冲突。
 
 等待约 30 秒后检查：
 

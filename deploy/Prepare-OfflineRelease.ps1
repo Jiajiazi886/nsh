@@ -76,6 +76,14 @@ if ((Get-Content -LiteralPath $prodEnv -Raw) -match 'CHANGE_ME') {
     throw "Replace every CHANGE_ME value in $prodEnv before packaging."
 }
 
+foreach ($resource in @('ruoyi-network', 'nsh-redis-data', 'nsh-backend-logs', 'nsh-backend-vf-admin')) {
+    $resourceKind = if ($resource -eq 'ruoyi-network') { 'network' } else { 'volume' }
+    & docker $resourceKind inspect $resource *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Required shared Docker $resourceKind was not found: $resource"
+    }
+}
+
 $dockerOs = (& docker info --format '{{.OSType}}').Trim()
 if ($LASTEXITCODE -ne 0 -or $dockerOs -ne 'linux') {
     throw 'Docker must be running in Linux container mode to build images for Aliyun Linux.'
