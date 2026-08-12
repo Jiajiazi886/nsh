@@ -353,7 +353,7 @@ async def get_system_user_default_ai_recognition_count(
 ) -> Response:
     count = await UserService.get_default_ai_recognition_count_services(query_db)
 
-    return ResponseUtil.success(model_content={'aiImageRecognitionCount': count})
+    return ResponseUtil.success(data={'aiImageRecognitionCount': count})
 
 
 @user_controller.put(

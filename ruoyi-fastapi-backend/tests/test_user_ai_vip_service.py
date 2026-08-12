@@ -1,9 +1,11 @@
+import json
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
 
 from module_admin.entity.vo.user_vo import AddUserModel
+from module_admin.controller.user_controller import get_system_user_default_ai_recognition_count
 from module_admin.service.user_service import UserService
 
 
@@ -29,6 +31,20 @@ class FakeRedis:
 
 def make_request():
     return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(redis=FakeRedis())))
+
+
+@pytest.mark.asyncio
+async def test_default_ai_count_controller_returns_data_payload(monkeypatch):
+    async def fake_default_count(db):
+        return 8
+
+    monkeypatch.setattr(UserService, 'get_default_ai_recognition_count_services', fake_default_count)
+
+    response = await get_system_user_default_ai_recognition_count(request=make_request(), query_db=FakeDb())
+    payload = json.loads(response.body)
+
+    assert payload['code'] == 200
+    assert payload['data'] == {'aiImageRecognitionCount': 8}
 
 
 @pytest.mark.asyncio

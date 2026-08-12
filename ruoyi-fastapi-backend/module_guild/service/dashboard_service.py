@@ -23,15 +23,20 @@ class DashboardService:
         membership = await DashboardDao.get_active_member_by_user(db, user_id) if scope == 'user' else None
 
         owner_user_id = cls._get_owner_user_id(scope, user_id)
+        member_owner_user_id = cls._get_member_owner_user_id(scope, user_id)
         guild = await cls._build_guild_payload(db, current_user, scope, membership)
-        member_summary = await cls._build_member_summary(db, scope, owner_user_id, user_id, profession_names)
-        class_distribution = await cls._build_class_distribution(db, owner_user_id, user_id if scope == 'user' else None, profession_names)
+        member_summary = await cls._build_member_summary(
+            db, scope, member_owner_user_id, user_id, profession_names
+        )
+        class_distribution = await cls._build_class_distribution(
+            db, member_owner_user_id, user_id if scope == 'user' else None, profession_names
+        )
         battle_summary, latest_battles, latest_record_summary, top_records = await cls._build_battle_payload(
             db, scope, owner_user_id
         )
         review_summary = await cls._build_review_summary(db, scope, owner_user_id, user_id)
         schedule_summary = await cls._build_schedule_summary(db, scope, owner_user_id, membership)
-        invite_owner_user_id = owner_user_id
+        invite_owner_user_id = member_owner_user_id
         if scope == 'user' and membership:
             invite_owner_user_id = membership.user_id
         active_invite_summary = await cls._build_active_invite_summary(
@@ -78,6 +83,13 @@ class DashboardService:
     @classmethod
     def _get_owner_user_id(cls, scope: str, user_id: int) -> int | None:
         if scope == 'common':
+            return user_id
+        return None
+
+    @classmethod
+    def _get_member_owner_user_id(cls, scope: str, user_id: int) -> int | None:
+        """Use the same owner scope as Guild Management > Member Management."""
+        if scope in {'admin', 'common'}:
             return user_id
         return None
 

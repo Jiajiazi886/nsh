@@ -20,11 +20,12 @@ def make_current_user(user_id=1, roles=None, admin=False):
     )
 
 
-def test_dashboard_scope_admin_uses_global_data():
+def test_dashboard_scope_admin_uses_own_member_management_roster():
     current_user = make_current_user(user_id=1, roles=['admin'], admin=True)
 
     assert DashboardService._get_role_scope(current_user) == 'admin'
     assert DashboardService._get_owner_user_id('admin', current_user.user.user_id) is None
+    assert DashboardService._get_member_owner_user_id('admin', current_user.user.user_id) == 1
 
 
 def test_dashboard_scope_common_uses_own_guild():
@@ -32,6 +33,7 @@ def test_dashboard_scope_common_uses_own_guild():
 
     assert DashboardService._get_role_scope(current_user) == 'common'
     assert DashboardService._get_owner_user_id('common', current_user.user.user_id) == 101
+    assert DashboardService._get_member_owner_user_id('common', current_user.user.user_id) == 101
 
 
 def test_dashboard_scope_user_does_not_use_global_battle_data():
@@ -39,6 +41,58 @@ def test_dashboard_scope_user_does_not_use_global_battle_data():
 
     assert DashboardService._get_role_scope(current_user) == 'user'
     assert DashboardService._get_owner_user_id('user', current_user.user.user_id) is None
+    assert DashboardService._get_member_owner_user_id('user', current_user.user.user_id) is None
+
+
+@pytest.mark.asyncio
+async def test_admin_dashboard_member_widgets_use_current_users_member_management_scope(monkeypatch):
+    current_user = make_current_user(user_id=1, roles=['admin'], admin=True)
+    calls = []
+
+    async def fake_list_enabled_professions(db):
+        return []
+
+    async def fake_build_guild_payload(db, current_user, scope, membership):
+        return {}
+
+    async def fake_build_member_summary(db, scope, owner_user_id, current_user_id, profession_names):
+        calls.append(('member_summary', owner_user_id))
+        return {}
+
+    async def fake_build_class_distribution(db, owner_user_id, member_user_id, profession_names):
+        calls.append(('class_distribution', owner_user_id))
+        return []
+
+    async def fake_build_battle_payload(db, scope, owner_user_id):
+        return {}, [], None, []
+
+    async def fake_build_review_summary(db, scope, owner_user_id, current_user_id):
+        return {}
+
+    async def fake_build_schedule_summary(db, scope, owner_user_id, membership):
+        return {}
+
+    async def fake_build_active_invite_summary(db, scope, owner_user_id, profession_names):
+        calls.append(('active_invite', owner_user_id))
+        return None
+
+    monkeypatch.setattr(
+        'module_guild.service.dashboard_service.DashboardDao.list_enabled_professions',
+        fake_list_enabled_professions,
+    )
+    monkeypatch.setattr(DashboardService, '_build_guild_payload', fake_build_guild_payload)
+    monkeypatch.setattr(DashboardService, '_build_member_summary', fake_build_member_summary)
+    monkeypatch.setattr(DashboardService, '_build_class_distribution', fake_build_class_distribution)
+    monkeypatch.setattr(DashboardService, '_build_battle_payload', fake_build_battle_payload)
+    monkeypatch.setattr(DashboardService, '_build_review_summary', fake_build_review_summary)
+    monkeypatch.setattr(DashboardService, '_build_schedule_summary', fake_build_schedule_summary)
+    monkeypatch.setattr(DashboardService, '_build_active_invite_summary', fake_build_active_invite_summary)
+
+    await DashboardService.get_summary_service(db=None, current_user=current_user)
+
+    assert ('member_summary', 1) in calls
+    assert ('class_distribution', 1) in calls
+    assert ('active_invite', 1) in calls
 
 
 @pytest.mark.asyncio
