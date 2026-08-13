@@ -121,39 +121,57 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="internalPowerDialogVisible" title="内功防御提升" width="960px" append-to-body>
+    <el-dialog v-model="internalPowerDialogVisible" title="内功防御提升" width="1180px" append-to-body class="internal-power-picker-dialog">
       <div class="power-dialog-toolbar">
         <div>
           <strong>选择自己的内功</strong>
           <span>最多选择 6 本，攻击词条不计入坦度收益。</span>
         </div>
-        <el-select
-          v-model="selectedInternalPowerIds"
-          multiple
-          filterable
-          collapse-tags
-          collapse-tags-tooltip
-          :multiple-limit="6"
-          placeholder="请选择内功"
-          class="power-select"
-          @change="handlePowerSelection"
-        >
-          <el-option v-for="power in internalPowers" :key="power.powerId" :label="power.name" :value="power.powerId" />
-        </el-select>
+        <div class="power-picker-actions">
+          <el-input v-model="internalPowerKeyword" clearable placeholder="搜索内功或词条" class="power-search" />
+          <el-tag type="primary">已选 {{ selectedInternalPowerIds.length }} / 6</el-tag>
+          <el-button v-if="selectedInternalPowerIds.length" plain @click="clearInternalPowerSelection">清空选择</el-button>
+        </div>
       </div>
       <el-empty v-if="!internalPowers.length" description="内功管理中还没有已保存内功" :image-size="80" />
-      <el-empty v-else-if="!selectedInternalPowerIds.length" description="选择内功后自动计算防御收益" :image-size="80" />
-      <el-table v-else :data="internalPowerUpgrade.powers" class="power-benefit-table">
-        <el-table-column prop="name" label="内功" min-width="140" show-overflow-tooltip />
-        <el-table-column label="实际防御" width="120" align="right"><template #default="{ row }">+{{ formatNumber(row.defense) }}</template></el-table-column>
-        <el-table-column label="实际气血" width="120" align="right"><template #default="{ row }">+{{ formatNumber(row.hp) }}</template></el-table-column>
-        <el-table-column label="会心抵抗" width="120" align="right"><template #default="{ row }">+{{ formatNumber(row.critResist) }}</template></el-table-column>
-        <el-table-column label="流派抵御" width="120" align="right"><template #default="{ row }">+{{ Number(row.resistPct || 0).toFixed(2) }}%</template></el-table-column>
-        <el-table-column label="独立肉度" width="120" align="right"><template #default="{ row }">+{{ formatPercent(row.gainPct / 100) }}</template></el-table-column>
-        <el-table-column label="忽略词条" min-width="150">
-          <template #default="{ row }"><span class="ignored-entry">{{ row.ignoredEntries.map(item => item.name).filter(Boolean).join('、') || '无' }}</span></template>
-        </el-table-column>
-      </el-table>
+      <el-empty v-else-if="!filteredInternalPowers.length" description="没有匹配的内功或词条" :image-size="80" />
+      <div v-else class="internal-power-picker-grid">
+        <button
+          v-for="power in filteredInternalPowers"
+          :key="power.powerId"
+          type="button"
+          class="internal-power-picker-card"
+          :class="{ selected: isInternalPowerSelected(power.powerId) }"
+          :aria-pressed="isInternalPowerSelected(power.powerId)"
+          @click="toggleInternalPower(power.powerId)"
+        >
+          <span class="power-selected-mark">{{ isInternalPowerSelected(power.powerId) ? '已选择' : '选择' }}</span>
+          <div class="picker-power-media" :class="{ empty: !resolveInternalPowerImage(power) }">
+            <img v-if="resolveInternalPowerImage(power)" :src="resolveInternalPowerImage(power)" :alt="`${power.name}图片`" />
+            <span v-else>内功图片</span>
+          </div>
+          <div class="picker-power-heading">
+            <strong>{{ power.name }}</strong>
+            <span>{{ formatInternalPowerElements(power.elements) }}</span>
+          </div>
+          <div class="picker-entry-list">
+            <span
+              v-for="(entry, entryIndex) in power.entries"
+              :key="entry.id || `${power.powerId}-${entryIndex}`"
+              :class="{ ignored: isIgnoredInternalPowerEntry(entry) }"
+              :title="getInternalPowerEntryTitle(entry)"
+            >{{ formatInternalPowerEntryWithGain(entry) }}</span>
+            <span v-if="!power.entries.length" class="empty-entry">暂无词条</span>
+          </div>
+          <div class="picker-power-benefit">
+            <span>防御 +{{ formatNumber(getInternalPowerUpgrade(power.powerId).defense) }}</span>
+            <span>气血 +{{ formatNumber(getInternalPowerUpgrade(power.powerId).hp) }}</span>
+            <span>抗会心 +{{ formatNumber(getInternalPowerUpgrade(power.powerId).critResist) }}</span>
+            <span>流派抵御 +{{ Number(getInternalPowerUpgrade(power.powerId).resistPct || 0).toFixed(2) }}%</span>
+          </div>
+          <div class="picker-power-gain">独立坦度 +{{ formatPercent(getInternalPowerUpgrade(power.powerId).gainPct / 100) }}</div>
+        </button>
+      </div>
       <div v-if="selectedInternalPowerIds.length" class="power-total">
         <span>共 {{ internalPowerUpgrade.powers.length }} 本</span>
         <span>实际防御 <b>+{{ formatNumber(internalPowerUpgrade.total.defense) }}</b></span>
@@ -292,13 +310,15 @@ import {
   saveDefenseCalculatorSetting,
   updatePersonalDefenseAttackPanel
 } from '@/api/personal/defenseCalculator'
-import { listInternalPowers } from '@/api/personal/internalPower'
+import { listInternalPowerPresets, listInternalPowers } from '@/api/personal/internalPower'
+import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
 import {
   DEFAULT_ATTACK_PANEL,
   DEFENDER_FIELDS,
   INNER_POWER_FIELDS,
   RECOMMENDATION_FIELDS,
   calculateDefense,
+  calculateInternalPowerDefenseBenefit,
   calculateInternalPowerUpgrade,
   calculateInnerPowerComparisons,
   calculateRecommendation,
@@ -317,6 +337,9 @@ const isDefenseCalculator = computed(() => route.path.includes('defense-calculat
 const defender = reactive(createDefaultDefender())
 const professionBonuses = ref([])
 const internalPowers = ref([])
+const internalPowerPresets = ref([])
+const internalPowerImageVisible = ref(true)
+const internalPowerKeyword = ref('')
 const professionId = ref(0)
 const professionName = ref('')
 const professionOverrides = reactive({})
@@ -378,6 +401,19 @@ const internalPowerUpgrade = computed(() => calculateInternalPowerUpgrade(
   selectedInternalPowers.value,
   activeProfessionBonus.value
 ))
+const availableInternalPowerUpgradeMap = computed(() => new Map(internalPowers.value.map(power => {
+  const upgrade = calculateInternalPowerUpgrade(defender, activePanel.value, [power], activeProfessionBonus.value).powers[0]
+  return [power.powerId, upgrade]
+})))
+const filteredInternalPowers = computed(() => {
+  const keyword = internalPowerKeyword.value.trim().toLowerCase()
+  if (!keyword) return internalPowers.value
+  return internalPowers.value.filter(power => [
+    power.name,
+    power.category,
+    ...power.entries.flatMap(entry => [entry.name, entry.value])
+  ].some(value => String(value || '').toLowerCase().includes(keyword)))
+})
 const autoAfterDefender = computed(() => internalPowerUpgrade.value.afterDefender)
 const afterDefender = computed(() => resolveAfterDefender(
   autoAfterDefender.value,
@@ -429,18 +465,22 @@ watch(() => curveInputs.crit, () => syncCritCurvePointers())
 async function loadCalculatorData() {
   const legacySetting = loadDefenseCalculatorPanelSetting()
   try {
-    const [settingResponse, systemResponse, personalResponse, professionResponse, powerResponse] = await Promise.all([
+    const [settingResponse, systemResponse, personalResponse, professionResponse, powerResponse, presetResponse, imageDisplayResponse] = await Promise.all([
       getDefenseCalculatorSetting(),
       listDefenseAttackPanels(),
       listPersonalDefenseAttackPanels(),
       listDefenseProfessionBonuses(),
-      listInternalPowers()
+      listInternalPowers(),
+      listInternalPowerPresets().catch(() => ({ presets: [] })),
+      getInternalPowerImageDisplayStatus().catch(() => ({ data: { enabled: true } }))
     ])
     const setting = settingResponse.data || settingResponse || {}
     systemAttackPanels.value = systemResponse.data?.length ? systemResponse.data : [DEFAULT_ATTACK_PANEL]
     personalAttackPanels.value = personalResponse.data || []
     professionBonuses.value = professionResponse.data || []
     internalPowers.value = (powerResponse.powers || powerResponse.data?.powers || []).map(normalizeInternalPower)
+    internalPowerPresets.value = presetResponse.presets || presetResponse.data || []
+    internalPowerImageVisible.value = imageDisplayResponse.data?.enabled !== false
     Object.assign(defender, createDefaultDefender(), setting.defender || {})
     Object.assign(professionOverrides, setting.professionOverrides || {})
     Object.assign(recommendationInputs, createRecommendationInputs(), setting.recommendationInputs || {})
@@ -460,6 +500,8 @@ async function loadCalculatorData() {
     personalAttackPanels.value = []
     professionBonuses.value = []
     internalPowers.value = []
+    internalPowerPresets.value = []
+    internalPowerImageVisible.value = true
     Object.assign(defender, legacySetting.defender || createDefaultDefender())
     selectedPanelKey.value = panelKey('system', 0)
   }
@@ -673,6 +715,88 @@ function normalizeInternalPower(power = {}) {
   }
 }
 
+function isInternalPowerSelected(powerId) {
+  return selectedInternalPowerIds.value.includes(Number(powerId))
+}
+
+function toggleInternalPower(powerId) {
+  const normalizedId = Number(powerId)
+  if (isInternalPowerSelected(normalizedId)) {
+    selectedInternalPowerIds.value = selectedInternalPowerIds.value.filter(id => id !== normalizedId)
+    return
+  }
+  if (selectedInternalPowerIds.value.length >= 6) {
+    ElMessage.warning('最多选择 6 本内功')
+    return
+  }
+  selectedInternalPowerIds.value = [...selectedInternalPowerIds.value, normalizedId]
+}
+
+function clearInternalPowerSelection() {
+  selectedInternalPowerIds.value = []
+}
+
+function getInternalPowerUpgrade(powerId) {
+  return availableInternalPowerUpgradeMap.value.get(Number(powerId)) || {
+    defense: 0,
+    hp: 0,
+    critResist: 0,
+    resistPct: 0,
+    gainPct: 0,
+    ignoredEntries: []
+  }
+}
+
+function isIgnoredInternalPowerEntry(entry) {
+  return Boolean(calculateInternalPowerDefenseBenefit(entry, defender, activePanel.value).note)
+}
+
+function getInternalPowerEntryTitle(entry) {
+  const benefit = calculateInternalPowerDefenseBenefit(entry, defender, activePanel.value)
+  if (benefit.note) return `${formatInternalPowerEntry(entry)}：${benefit.note}，坦度收益为 0`
+  return `${formatInternalPowerEntry(entry)}：坦度 +${formatPercent(benefit.gain)}`
+}
+
+function formatInternalPowerEntry(entry = {}) {
+  const name = String(entry.name || entry.entryName || entry.词条 || '').trim() || '未命名词条'
+  const rawValue = entry.value ?? entry.entryValue ?? entry.数值
+  if (rawValue === undefined || rawValue === null || rawValue === '') return name
+  const value = String(rawValue).trim()
+  return `${name} ${value}`
+}
+
+function formatInternalPowerEntryWithGain(entry = {}) {
+  const benefit = calculateInternalPowerDefenseBenefit(entry, defender, activePanel.value)
+  return `${formatInternalPowerEntry(entry)} · ${formatPercent(benefit.gain)}`
+}
+
+function formatInternalPowerElements(elements = {}) {
+  const labels = [
+    ['metal', '金'],
+    ['wood', '木'],
+    ['water', '水'],
+    ['fire', '火'],
+    ['earth', '土']
+  ]
+  const sequence = labels.flatMap(([key, label]) => Array.from({ length: Math.max(0, Number(elements?.[key] || 0)) }, () => label)).join('')
+  return sequence || '未配置元素'
+}
+
+function resolveInternalPowerImage(power = {}) {
+  if (!internalPowerImageVisible.value) return ''
+  const category = String(power.category || '').trim()
+  const preset = internalPowerPresets.value.find(item => [item.name, item.displayName, item.value].some(value => String(value || '').trim() === category))
+  return resolveInternalPowerImagePath(power.imageUrl || preset?.imageUrl || '')
+}
+
+function resolveInternalPowerImagePath(value = '') {
+  const path = String(value || '').trim()
+  if (!path) return ''
+  if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path
+  if (path.startsWith('/profile/')) return `${import.meta.env.VITE_APP_BASE_API}${path}`
+  return path
+}
+
 function normalizeSelectedPowerIds(values) {
   const available = new Set(internalPowers.value.map(item => item.powerId))
   return [...new Set((Array.isArray(values) ? values : []).map(Number).filter(id => id > 0 && available.has(id)))].slice(0, 6)
@@ -713,11 +837,8 @@ async function restoreProfessionDefault() {
   ElMessage.success('已恢复管理员默认职业加成')
 }
 
-function handlePowerSelection(values) {
-  selectedInternalPowerIds.value = values.slice(0, 6)
-}
-
 function openInternalPowerDialog() {
+  internalPowerKeyword.value = ''
   internalPowerDialogVisible.value = true
 }
 
@@ -1085,7 +1206,26 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .power-dialog-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .power-dialog-toolbar div { display: grid; gap: 6px; }
 .power-dialog-toolbar span, .ignored-entry { color: #718096; font-size: 12px; }
-.power-select { width: min(460px, 100%); }
+.power-picker-actions { display: flex !important; grid-template-columns: minmax(220px, 340px) auto auto; align-items: center; gap: 10px !important; }
+.power-search { width: min(340px, 100%); }
+.internal-power-picker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-height: min(58vh, 620px); overflow-y: auto; padding: 2px 4px 12px 2px; }
+.internal-power-picker-card { position: relative; display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 10px 12px; min-width: 0; min-height: 250px; border: 2px solid #d8e3ee; border-radius: 8px; padding: 16px 12px 12px; background: #fff; color: #1f2f43; cursor: pointer; font: inherit; text-align: left; transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease; }
+.internal-power-picker-card:hover { border-color: #72aef0; box-shadow: 0 10px 24px rgba(47, 123, 178, 0.12); transform: translateY(-1px); }
+.internal-power-picker-card.selected { border-color: #6c46ff; background: linear-gradient(180deg, rgba(108, 70, 255, 0.07), #fff 42%); box-shadow: 0 10px 26px rgba(108, 70, 255, 0.16); }
+.power-selected-mark { position: absolute; top: 8px; right: 8px; z-index: 1; border: 1px solid #cfd8e3; border-radius: 999px; padding: 3px 8px; background: rgba(255, 255, 255, 0.94); color: #7a8797; font-size: 11px; font-weight: 700; }
+.internal-power-picker-card.selected .power-selected-mark { border-color: #6c46ff; background: #6c46ff; color: #fff; }
+.picker-power-media { grid-row: 1 / span 2; width: 82px; aspect-ratio: 1; align-self: start; border: 1px solid #d7e4f2; border-radius: 8px; background: linear-gradient(135deg, #f4f7fb, #fff); display: grid; place-items: center; overflow: hidden; }
+.picker-power-media img { width: 100%; height: 100%; object-fit: cover; }
+.picker-power-media.empty span { color: #8a9aae; font-size: 11px; font-weight: 700; }
+.picker-power-heading { align-self: end; min-width: 0; padding-right: 54px; }
+.picker-power-heading strong { display: block; overflow: hidden; color: #14283f; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.picker-power-heading span { display: block; margin-top: 6px; overflow: hidden; color: #60748b; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.picker-entry-list { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; min-height: 62px; }
+.picker-entry-list span { border-radius: 4px; padding: 5px 7px; background: #edf4ff; color: #324b68; font-size: 12px; font-weight: 700; line-height: 1.25; }
+.picker-entry-list span.ignored { background: #f2f3f5; color: #8a94a2; text-decoration: line-through; }
+.picker-entry-list span.empty-entry { color: #97a4b4; text-decoration: none; }
+.picker-power-benefit { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; padding-top: 10px; border-top: 1px solid #e5ebf1; color: #536b82; font-size: 11px; font-variant-numeric: tabular-nums; }
+.picker-power-gain { grid-column: 1 / -1; color: #17664f; font-size: 14px; font-weight: 800; text-align: right; }
 .power-total { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 16px; padding: 16px; border-left: 4px solid #2f8467; background: #f2f8f5; color: #526176; }
 .power-total b, .power-total strong { color: #16634e; }
 .power-total strong { margin-left: auto; font-size: 18px; }
@@ -1099,7 +1239,7 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .entry-actions :deep(.el-upload) { display: inline-flex; }
 .plan-drop-hint { grid-column: 1 / -1; padding: 9px 10px; border: 1px dashed #cbd9e6; background: #f8fafc; color: #708196; font-size: 12px; }
 .empty-calculator { display: grid; min-height: 360px; place-items: center; }
-@media (max-width: 1180px) { .profession-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } .profession-actions { grid-column: 1 / -1; } .recommendation-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1180px) { .profession-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } .profession-actions { grid-column: 1 / -1; } .recommendation-editor, .internal-power-picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 980px) { .curve-grid, .calculator-grid, .comparison-inputs, .result-comparison { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .page-header, .section-title, .template-toolbar, .power-dialog-toolbar { align-items: stretch; flex-direction: column; } .header-actions, .profession-actions { align-items: stretch; flex-direction: column; } .json-toolbar { display: grid; grid-template-columns: 1fr; } .json-toolbar :deep(.el-button) { margin-left: 0; } .panel-select, .power-select { width: 100%; } .profession-bar, .curve-point-input, .field-grid, .after-summary, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } .profession-actions { grid-column: auto; } .power-total strong { margin-left: 0; } .recommendation-heading, .recommendation-result { align-items: flex-start; flex-direction: column; gap: 4px; } }
+@media (max-width: 640px) { .page-header, .section-title, .template-toolbar, .power-dialog-toolbar { align-items: stretch; flex-direction: column; } .header-actions, .profession-actions { align-items: stretch; flex-direction: column; } .json-toolbar, .power-picker-actions { display: grid !important; grid-template-columns: 1fr; } .json-toolbar :deep(.el-button), .power-picker-actions :deep(.el-button) { margin-left: 0; } .panel-select, .power-search { width: 100%; } .profession-bar, .curve-point-input, .field-grid, .after-summary, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set, .internal-power-picker-grid { grid-template-columns: 1fr; } .profession-actions { grid-column: auto; } .power-total strong { margin-left: 0; } .recommendation-heading, .recommendation-result { align-items: flex-start; flex-direction: column; gap: 4px; } }
 </style>
