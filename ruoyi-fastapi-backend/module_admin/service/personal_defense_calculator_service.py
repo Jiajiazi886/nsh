@@ -19,6 +19,8 @@ from module_admin.entity.vo.personal_defense_calculator_vo import (
 )
 from module_admin.entity.vo.user_vo import CurrentUserModel
 
+MAX_INTERNAL_POWER_SELECTION = 6
+
 
 class PersonalDefenseCalculatorService:
     @classmethod
@@ -44,8 +46,9 @@ class PersonalDefenseCalculatorService:
             update_time=now,
         )
         await PersonalDefenseCalculatorDao.add_panel(query_db, panel)
+        result = cls._panel_to_model(panel).model_dump(by_alias=True)
         await query_db.commit()
-        return CrudResponseModel(is_success=True, message='攻击方面板已新增', result=cls._panel_to_model(panel).model_dump(by_alias=True))
+        return CrudResponseModel(is_success=True, message='攻击方面板已新增', result=result)
 
     @classmethod
     async def update_panel_services(
@@ -92,6 +95,8 @@ class PersonalDefenseCalculatorService:
             professionOverrides=stored.get('professionOverrides', {}) if is_versioned else {},
             selectedInternalPowerIds=selected_power_ids,
             recommendationInputs=stored.get('recommendationInputs', {}) if is_versioned else {},
+            afterDefenderOverride=stored.get('afterDefenderOverride') if is_versioned else None,
+            afterDefenderAutoBaseline=stored.get('afterDefenderAutoBaseline') if is_versioned else None,
             updateTime=setting.update_time,
         )
 
@@ -110,7 +115,7 @@ class PersonalDefenseCalculatorService:
         )
         now = datetime.now()
         stored = {
-            'version': 2,
+            'version': 3,
             'defender': payload.defender.model_dump(),
             'professionId': payload.profession_id,
             'professionName': payload.profession_name,
@@ -119,6 +124,14 @@ class PersonalDefenseCalculatorService:
             },
             'selectedInternalPowerIds': payload.selected_internal_power_ids,
             'recommendationInputs': payload.recommendation_inputs,
+            'afterDefenderOverride': (
+                payload.after_defender_override.model_dump() if payload.after_defender_override else None
+            ),
+            'afterDefenderAutoBaseline': (
+                payload.after_defender_auto_baseline.model_dump()
+                if payload.after_defender_auto_baseline
+                else None
+            ),
         }
         setting = PersonalDefenseCalculatorSetting(
             user_id=user_id,
@@ -172,6 +185,6 @@ class PersonalDefenseCalculatorService:
                 continue
             if normalized > 0 and normalized not in result:
                 result.append(normalized)
-            if len(result) == 6:
+            if len(result) == MAX_INTERNAL_POWER_SELECTION:
                 break
         return result

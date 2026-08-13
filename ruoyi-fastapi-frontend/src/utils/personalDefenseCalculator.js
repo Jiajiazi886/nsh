@@ -87,6 +87,23 @@ export function createDefaultDefender() {
   }
 }
 
+export function normalizeDefenderPanel(value = {}) {
+  return normalizeDefender(value)
+}
+
+export function areDefenderPanelsEqual(left, right) {
+  if (!left || !right) return false
+  const normalizedLeft = normalizeDefender(left)
+  const normalizedRight = normalizeDefender(right)
+  return DEFENDER_FIELDS.every(field => Math.abs(normalizedLeft[field.key] - normalizedRight[field.key]) < 1e-9)
+}
+
+export function resolveAfterDefender(autoDefender, override, baseline) {
+  return override && areDefenderPanelsEqual(autoDefender, baseline)
+    ? normalizeDefender(override)
+    : normalizeDefender(autoDefender)
+}
+
 export function createEmptyInnerPowerEntries() {
   return Object.fromEntries(INNER_POWER_FIELDS.map(field => [field.key, 0]))
 }

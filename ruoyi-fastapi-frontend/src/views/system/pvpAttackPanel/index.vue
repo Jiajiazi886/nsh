@@ -20,6 +20,9 @@
       <el-button v-hasPermi="['system:pvp-attack-panel:add']" type="primary" icon="Plus" @click="handleAdd">新增面板</el-button>
       <el-button v-hasPermi="['system:pvp-attack-panel:edit']" :disabled="selectedRows.length !== 1" icon="Edit" @click="handleEdit()">编辑</el-button>
       <el-button v-hasPermi="['system:pvp-attack-panel:remove']" :disabled="!selectedRows.length" type="danger" plain icon="Delete" @click="handleDelete()">删除</el-button>
+      <el-button v-hasPermi="['system:pvp-attack-panel:add']" icon="Upload" @click="openJsonDialog('import')">导入 JSON</el-button>
+      <el-button :disabled="selectedRows.length !== 1" icon="Download" @click="openJsonDialog('export')">导出 JSON</el-button>
+      <el-button icon="DocumentCopy" @click="openJsonDialog('example')">示例 JSON</el-button>
     </div>
 
     <el-table v-loading="loading" :data="rows" @selection-change="selectedRows = $event">
@@ -70,6 +73,16 @@
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="submitForm">保存</el-button></template>
     </el-dialog>
+
+    <el-dialog v-model="jsonDialog.visible" :title="jsonDialog.title" width="720px" append-to-body>
+      <p class="json-help">{{ jsonDialog.mode === 'import' ? '粘贴单个中文字段面板对象，校验后将回填新增表单。' : 'JSON 中的百分比数值按面板当前值原样输出。' }}</p>
+      <el-input v-model="jsonDialog.text" type="textarea" :rows="20" resize="vertical" :readonly="jsonDialog.mode !== 'import'" spellcheck="false" />
+      <template #footer>
+        <el-button @click="jsonDialog.visible = false">关闭</el-button>
+        <el-button v-if="jsonDialog.mode !== 'import'" v-copyText="jsonDialog.text" v-copyText:callback="copyJsonSuccess" icon="DocumentCopy">复制</el-button>
+        <el-button v-else type="primary" icon="Check" @click="applyJsonImport">校验并回填</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -82,6 +95,7 @@ import {
   listPvpAttackPanels,
   updatePvpAttackPanel
 } from '@/api/system/pvpAttackPanel'
+import { formatAttackPanelJson, formatAttackPanelJsonExample, parseAttackPanelJson } from '@/utils/pvpAttackPanelJson'
 
 const { proxy } = getCurrentInstance()
 const formRef = ref()
@@ -92,6 +106,7 @@ const dialogTitle = ref('')
 const rows = ref([])
 const total = ref(0)
 const selectedRows = ref([])
+const jsonDialog = reactive({ visible: false, mode: 'example', title: '', text: '' })
 const queryParams = reactive({ pageNum: 1, pageSize: 10, panelName: '', status: undefined })
 const form = reactive(createForm())
 const rules = { panelName: [{ required: true, message: '请输入面板名称', trigger: 'blur' }] }
@@ -120,6 +135,40 @@ async function getList() {
 function handleQuery() { queryParams.pageNum = 1; getList() }
 function resetQuery() { queryParams.panelName = ''; queryParams.status = undefined; handleQuery() }
 function handleAdd() { resetForm(); dialogTitle.value = '新增进攻方面板'; dialogVisible.value = true }
+
+function openJsonDialog(mode) {
+  jsonDialog.mode = mode
+  if (mode === 'import') {
+    jsonDialog.title = '导入进攻方面板 JSON'
+    jsonDialog.text = formatAttackPanelJsonExample()
+  } else if (mode === 'export') {
+    const panel = selectedRows.value[0]
+    if (!panel) return
+    jsonDialog.title = `导出 ${panel.panelName}`
+    jsonDialog.text = formatAttackPanelJson(panel)
+  } else {
+    jsonDialog.title = '进攻方面板示例 JSON'
+    jsonDialog.text = formatAttackPanelJsonExample()
+  }
+  jsonDialog.visible = true
+}
+
+function applyJsonImport() {
+  try {
+    const imported = parseAttackPanelJson(jsonDialog.text)
+    resetForm(imported)
+    dialogTitle.value = '新增进攻方面板'
+    jsonDialog.visible = false
+    dialogVisible.value = true
+    proxy.$modal.msgSuccess('JSON 校验通过，请确认后保存')
+  } catch (error) {
+    proxy.$modal.msgError(error.message || 'JSON 导入失败')
+  }
+}
+
+function copyJsonSuccess() {
+  proxy.$modal.msgSuccess('JSON 已复制')
+}
 
 async function handleEdit(row) {
   const target = row || selectedRows.value[0]
@@ -175,4 +224,6 @@ function createForm() {
 .attack-panel-page { display: grid; gap: 14px; }
 .query-bar { margin-bottom: 0; }
 .toolbar { display: flex; gap: 8px; }
+.json-help { margin: 0 0 12px; color: #68788c; font-size: 13px; }
+.toolbar { flex-wrap: wrap; }
 </style>

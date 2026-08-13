@@ -55,4 +55,6 @@ class DefenseCalculatorSettingModel(BaseModel):
     profession_overrides: dict[str, ProfessionBonusOverrideModel] = Field(default_factory=dict)
     selected_internal_power_ids: list[int] = Field(default_factory=list, max_length=6)
     recommendation_inputs: dict[str, float] = Field(default_factory=dict)
+    after_defender_override: DefenseCalculatorDefenderModel | None = None
+    after_defender_auto_baseline: DefenseCalculatorDefenderModel | None = None
     update_time: datetime | None = None

@@ -51,8 +51,9 @@ class PvpAttackPanelService:
             update_time=now,
         )
         await PvpAttackPanelDao.add(query_db, panel)
+        panel_id = panel.panel_id
         await query_db.commit()
-        return CrudResponseModel(is_success=True, message='进攻方面板已新增', result={'panelId': panel.panel_id})
+        return CrudResponseModel(is_success=True, message='进攻方面板已新增', result={'panelId': panel_id})
 
     @classmethod
     async def edit_services(

@@ -60,37 +60,64 @@
     </el-dialog>
 
     <el-dialog v-model="customAttackPanelDialogVisible" title="攻击方面板设置" width="820px" append-to-body destroy-on-close>
-      <p class="attack-panel-description">模板仅属于当前登录用户，系统参考面板不会被修改。模板名称由系统按创建顺序自动生成。</p>
-      <div class="template-toolbar">
-        <el-select v-model="editingPersonalPanelId" class="template-select" placeholder="选择我的模板" @change="selectPersonalPanel">
-          <el-option v-for="panel in personalAttackPanels" :key="panel.panelId" :label="panel.panelName" :value="panel.panelId" />
-        </el-select>
-        <el-button type="primary" plain :icon="Plus" :loading="templateSaving" @click="addPersonalPanel">新增模板</el-button>
-        <el-button v-if="editingPersonalPanelId" type="danger" plain :icon="Delete" :loading="templateSaving" @click="removePersonalPanel">删除模板</el-button>
-      </div>
-      <el-empty v-if="!editingPersonalPanelId" description="还没有个人攻击方面板，请新增一套模板" :image-size="90" />
-      <el-form v-else :model="personalPanelDraft" label-width="108px" class="attack-panel-form" @submit.prevent>
-        <el-row :gutter="16">
-          <el-col :span="24"><el-form-item label="面板名称"><el-input :model-value="personalPanelDraft.panelName" disabled /></el-form-item></el-col>
-          <el-col v-for="field in attackPanelCoreFields" :key="field.key" :span="8">
-            <el-form-item :label="field.label"><el-input-number v-model="personalPanelDraft[field.key]" :min="0" :step="field.step || 1" :precision="field.precision || 0" controls-position="right" style="width: 100%"><template v-if="field.suffix" #suffix>{{ field.suffix }}</template></el-input-number></el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-collapse class="attack-panel-advanced">
-              <el-collapse-item title="额外伤害乘区" name="advanced">
-                <el-row :gutter="16">
-                  <el-col v-for="field in attackPanelAdvancedFields" :key="field.key" :span="8">
-                    <el-form-item :label="field.label"><el-input-number v-model="personalPanelDraft[field.key]" :min="0" :step="0.01" :precision="3" controls-position="right" style="width: 100%"><template #suffix>%</template></el-input-number></el-form-item>
-                  </el-col>
-                </el-row>
-              </el-collapse-item>
-            </el-collapse>
-          </el-col>
-        </el-row>
-      </el-form>
+      <p class="attack-panel-description">管理员提供系统预设供所有用户直接使用；个人模板仅属于当前账号，名称按创建顺序自动生成。</p>
+      <el-tabs v-model="attackPanelTab" class="attack-panel-tabs">
+        <el-tab-pane label="系统预设" name="system">
+          <div class="template-toolbar">
+            <el-select v-model="selectedSystemPanelId" class="template-select" placeholder="选择系统预设">
+              <el-option v-for="panel in systemAttackPanels" :key="panel.panelId" :label="panel.panelName" :value="panel.panelId" />
+            </el-select>
+            <el-button :icon="Download" @click="openAttackJsonDialog('export-system')">导出 JSON</el-button>
+            <el-button type="primary" :icon="Check" @click="useSystemPreset">使用此预设</el-button>
+          </div>
+          <el-form :model="selectedSystemPanel" label-width="108px" class="attack-panel-form readonly-panel" @submit.prevent>
+            <el-row :gutter="16">
+              <el-col :span="24"><el-form-item label="面板名称"><el-input :model-value="selectedSystemPanel.panelName" disabled /></el-form-item></el-col>
+              <el-col v-for="field in attackPanelCoreFields" :key="field.key" :span="8"><el-form-item :label="field.label"><el-input-number :model-value="selectedSystemPanel[field.key]" disabled style="width: 100%" /></el-form-item></el-col>
+              <el-col :span="24"><el-collapse class="attack-panel-advanced"><el-collapse-item title="额外伤害乘区" name="system-advanced"><el-row :gutter="16"><el-col v-for="field in attackPanelAdvancedFields" :key="field.key" :span="8"><el-form-item :label="field.label"><el-input-number :model-value="selectedSystemPanel[field.key]" disabled :precision="3" style="width: 100%"><template #suffix>%</template></el-input-number></el-form-item></el-col></el-row></el-collapse-item></el-collapse></el-col>
+            </el-row>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="我的模板" name="personal">
+          <div class="template-toolbar">
+            <el-select v-model="editingPersonalPanelId" class="template-select" placeholder="选择我的模板" @change="selectPersonalPanel">
+              <el-option v-for="panel in personalAttackPanels" :key="panel.panelId" :label="panel.panelName" :value="panel.panelId" />
+            </el-select>
+            <el-button type="primary" plain :icon="Plus" :loading="templateSaving" @click="addPersonalPanel">新增模板</el-button>
+            <el-button v-if="editingPersonalPanelId" type="danger" plain :icon="Delete" :loading="templateSaving" @click="removePersonalPanel">删除模板</el-button>
+          </div>
+          <div class="json-toolbar">
+            <el-button :icon="Upload" :disabled="!editingPersonalPanelId" @click="openAttackJsonDialog('import-personal')">导入 JSON</el-button>
+            <el-button :icon="Download" :disabled="!editingPersonalPanelId" @click="openAttackJsonDialog('export-personal')">导出 JSON</el-button>
+            <el-button :icon="DocumentCopy" @click="openAttackJsonDialog('example')">示例 JSON</el-button>
+          </div>
+          <el-empty v-if="!editingPersonalPanelId" description="还没有个人攻击方面板，请新增一套模板" :image-size="90" />
+          <el-form v-else :model="personalPanelDraft" label-width="108px" class="attack-panel-form" @submit.prevent>
+            <el-row :gutter="16">
+              <el-col :span="24"><el-form-item label="面板名称"><el-input :model-value="personalPanelDraft.panelName" disabled /></el-form-item></el-col>
+              <el-col v-for="field in attackPanelCoreFields" :key="field.key" :span="8">
+                <el-form-item :label="field.label"><el-input-number v-model="personalPanelDraft[field.key]" :min="0" :step="field.step || 1" :precision="field.precision || 0" controls-position="right" style="width: 100%"><template v-if="field.suffix" #suffix>{{ field.suffix }}</template></el-input-number></el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-collapse class="attack-panel-advanced"><el-collapse-item title="额外伤害乘区" name="advanced"><el-row :gutter="16"><el-col v-for="field in attackPanelAdvancedFields" :key="field.key" :span="8"><el-form-item :label="field.label"><el-input-number v-model="personalPanelDraft[field.key]" :min="0" :step="0.01" :precision="3" controls-position="right" style="width: 100%"><template #suffix>%</template></el-input-number></el-form-item></el-col></el-row></el-collapse-item></el-collapse>
+              </el-col>
+            </el-row>
+          </el-form>
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="customAttackPanelDialogVisible = false">取消</el-button>
-        <el-button type="primary" :disabled="!editingPersonalPanelId" :loading="templateSaving" @click="savePersonalPanel">保存并使用</el-button>
+        <el-button v-if="attackPanelTab === 'personal'" type="primary" :disabled="!editingPersonalPanelId" :loading="templateSaving" @click="savePersonalPanel">保存并使用</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="attackJsonDialog.visible" :title="attackJsonDialog.title" width="720px" append-to-body>
+      <p class="json-help">{{ attackJsonDialog.mode === 'import-personal' ? '粘贴后只覆盖当前模板草稿，点击“保存并使用”后才会写入。' : 'JSON 百分比字段按当前面板值原样显示。' }}</p>
+      <el-input v-model="attackJsonDialog.text" type="textarea" :rows="20" resize="vertical" :readonly="attackJsonDialog.mode !== 'import-personal'" spellcheck="false" />
+      <template #footer>
+        <el-button @click="attackJsonDialog.visible = false">关闭</el-button>
+        <el-button v-if="attackJsonDialog.mode !== 'import-personal'" v-copyText="attackJsonDialog.text" v-copyText:callback="copyAttackJsonSuccess" :icon="DocumentCopy">复制</el-button>
+        <el-button v-else type="primary" :icon="Check" @click="applyPersonalJsonImport">校验并回填</el-button>
       </template>
     </el-dialog>
 
@@ -176,13 +203,14 @@
       </div>
 
       <div class="input-section after-panel">
-        <div class="section-title"><h2>变动后防守面板</h2><span>根据职业加成与所选内功自动生成</span></div>
+        <div class="section-title"><div><h2>变动后防守面板</h2><span>{{ afterDefenderOverrideActive ? '当前使用手动面板；基础条件变化后自动恢复计算' : '根据职业加成与所选内功自动生成，可手动调整' }}</span></div><el-button v-if="afterDefenderOverrideActive" :icon="RefreshLeft" @click="resetAfterDefenderToAuto">恢复自动计算</el-button></div>
         <div class="field-grid">
           <label v-for="field in defenderCoreFields" :key="field.key" class="number-field">
             <span>{{ field.label }}</span>
-            <el-input-number :model-value="afterDefender[field.key]" :precision="field.precision ?? (field.step < 1 ? 1 : 0)" disabled controls-position="right"><template v-if="field.suffix" #suffix>{{ field.suffix }}</template></el-input-number>
+            <el-input-number :model-value="afterDefender[field.key]" :min="0" :step="field.step" :precision="field.precision ?? (field.step < 1 ? 1 : 0)" controls-position="right" @update:model-value="value => updateAfterDefenderField(field.key, value)"><template v-if="field.suffix" #suffix>{{ field.suffix }}</template></el-input-number>
           </label>
         </div>
+        <el-collapse class="defender-advanced"><el-collapse-item title="额外减伤乘区" name="after-reduction"><div class="field-grid defender-reduction-grid"><label v-for="field in defenderReductionFields" :key="field.key" class="number-field"><span>{{ field.label }}</span><el-input-number :model-value="afterDefender[field.key]" :min="0" :step="field.step" :precision="field.precision ?? 3" controls-position="right" @update:model-value="value => updateAfterDefenderField(field.key, value)"><template v-if="field.suffix" #suffix>{{ field.suffix }}</template></el-input-number></label></div></el-collapse-item></el-collapse>
         <div class="after-summary">
           <span>内功实际防御 <b>+{{ formatNumber(internalPowerUpgrade.total.defense) }}</b></span>
           <span>内功实际气血 <b>+{{ formatNumber(internalPowerUpgrade.total.hp) }}</b></span>
@@ -198,7 +226,7 @@
         <div class="result-snapshot"><h3>变动前</h3><div class="metric-grid"><div><span>伤害期望</span><strong>{{ formatNumber(beforeCalculation.expectedDamage) }}</strong></div><div><span>血量/伤害期望</span><strong>{{ formatNumber(beforeCalculation.durability) }}</strong></div><div><span>防御减免</span><strong>{{ formatPercent(beforeCalculation.defenseMitigation) }}</strong></div><div><span>实际会心率</span><strong>{{ formatPercent(beforeCalculation.critRate) }}</strong></div></div><div class="detail-grid"><span>剩余防御 <b>{{ formatNumber(beforeCalculation.remainingDefense) }}</b></span><span>净会心 <b>{{ formatNumber(beforeCalculation.netCrit) }}</b></span></div></div>
         <div class="result-snapshot result-after"><h3>变动后</h3><div class="metric-grid"><div><span>伤害期望</span><strong>{{ formatNumber(calculation.expectedDamage) }}</strong></div><div><span>血量/伤害期望</span><strong>{{ formatNumber(calculation.durability) }}</strong></div><div><span>防御减免</span><strong>{{ formatPercent(calculation.defenseMitigation) }}</strong></div><div><span>实际会心率</span><strong>{{ formatPercent(calculation.critRate) }}</strong></div></div><div class="detail-grid"><span>剩余防御 <b>{{ formatNumber(calculation.remainingDefense) }}</b></span><span>净会心 <b>{{ formatNumber(calculation.netCrit) }}</b></span></div></div>
       </div>
-      <div class="durability-gain"><span>总体坦度提升</span><strong>+{{ formatPercent(internalPowerUpgrade.gainPct / 100) }}</strong></div>
+      <div class="durability-gain"><span>总体坦度提升</span><strong>{{ afterGainPct >= 0 ? '+' : '' }}{{ formatPercent(afterGainPct / 100) }}</strong></div>
     </section>
 
     <section class="advice-section">
@@ -251,7 +279,7 @@
 import * as echarts from 'echarts'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Edit, Loading, Picture, Plus, RefreshLeft, UploadFilled } from '@element-plus/icons-vue'
+import { Check, Delete, DocumentCopy, Download, Edit, Loading, Picture, Plus, RefreshLeft, Upload, UploadFilled } from '@element-plus/icons-vue'
 import {
   addPersonalDefenseAttackPanel,
   deletePersonalDefenseAttackPanel,
@@ -274,11 +302,15 @@ import {
   calculateInternalPowerUpgrade,
   calculateInnerPowerComparisons,
   calculateRecommendation,
+  areDefenderPanelsEqual,
   createDefaultDefender,
   createEmptyInnerPowerEntries,
   loadDefenseCalculatorPanelSetting,
+  normalizeDefenderPanel,
+  resolveAfterDefender,
   saveDefenseCalculatorPanelSetting
 } from '@/utils/personalDefenseCalculator'
+import { formatAttackPanelJson, formatAttackPanelJsonExample, parseAttackPanelJson } from '@/utils/pvpAttackPanelJson'
 
 const route = useRoute()
 const isDefenseCalculator = computed(() => route.path.includes('defense-calculator') || route.name === 'PersonalDefenseCalculator')
@@ -296,10 +328,16 @@ const systemAttackPanels = ref([])
 const personalAttackPanels = ref([])
 const selectedPanelKey = ref(panelKey('system', 0))
 const customAttackPanelDialogVisible = ref(false)
+const attackPanelTab = ref('system')
+const selectedSystemPanelId = ref(0)
 const editingPersonalPanelId = ref(0)
 const personalPanelDraft = reactive(createPersonalPanelDraft())
+const attackJsonDialog = reactive({ visible: false, mode: 'example', title: '', text: '' })
 const templateSaving = ref(false)
 const settingLoaded = ref(false)
+const afterDefenderDraft = reactive(createDefaultDefender())
+const afterDefenderOverrideActive = ref(false)
+const afterDefenderAutoBaseline = ref(null)
 const recognitionDialogVisible = ref(false)
 const recognitionFile = ref(null)
 const recognizing = ref(false)
@@ -327,6 +365,7 @@ const activePanel = computed(() => {
   const panels = selected.source === 'personal' ? personalAttackPanels.value : systemAttackPanels.value
   return panels.find(item => item.panelId === selected.panelId) || DEFAULT_ATTACK_PANEL
 })
+const selectedSystemPanel = computed(() => systemAttackPanels.value.find(item => item.panelId === selectedSystemPanelId.value) || systemAttackPanels.value[0] || DEFAULT_ATTACK_PANEL)
 const selectedProfession = computed(() => professionBonuses.value.find(item => item.professionId === professionId.value) || null)
 const activeProfessionBonus = computed(() => ({
   defenseBonusPct: Number(professionDraft.defenseBonusPct || 0),
@@ -339,9 +378,17 @@ const internalPowerUpgrade = computed(() => calculateInternalPowerUpgrade(
   selectedInternalPowers.value,
   activeProfessionBonus.value
 ))
-const calculation = computed(() => internalPowerUpgrade.value.after)
+const autoAfterDefender = computed(() => internalPowerUpgrade.value.afterDefender)
+const afterDefender = computed(() => resolveAfterDefender(
+  autoAfterDefender.value,
+  afterDefenderOverrideActive.value ? afterDefenderDraft : null,
+  afterDefenderAutoBaseline.value
+))
+const calculation = computed(() => calculateDefense(afterDefender.value, activePanel.value))
 const beforeCalculation = computed(() => internalPowerUpgrade.value.base)
-const afterDefender = computed(() => internalPowerUpgrade.value.afterDefender)
+const afterGainPct = computed(() => beforeCalculation.value.durability > 0
+  ? (calculation.value.durability / beforeCalculation.value.durability - 1) * 100
+  : 0)
 const recommendations = computed(() => calculateRecommendation(defender, activePanel.value, recommendationInputs, activeProfessionBonus.value))
 const comparison = computed(() => calculateInnerPowerComparisons(defender, activePanel.value, comparePlans))
 const professionIsCustomized = computed(() => Boolean(professionOverrides[String(professionId.value)]))
@@ -364,7 +411,16 @@ watch(calculation, () => {
   updateCharts()
   syncCurveInputsFromResult()
 }, { deep: true })
-watch([defender, selectedPanelKey, professionId, selectedInternalPowerIds, recommendationInputs], () => {
+watch(autoAfterDefender, value => {
+  if (!settingLoaded.value) return
+  if (afterDefenderOverrideActive.value && !areDefenderPanelsEqual(value, afterDefenderAutoBaseline.value)) {
+    resetAfterDefenderToAuto(false)
+    ElMessage.info('基础条件已变化，变动后面板已恢复自动计算')
+  } else if (!afterDefenderOverrideActive.value) {
+    Object.assign(afterDefenderDraft, normalizeDefenderPanel(value))
+  }
+}, { deep: true })
+watch([defender, selectedPanelKey, professionId, professionDraft, selectedInternalPowerIds, recommendationInputs], () => {
   scheduleSettingSave()
 }, { deep: true })
 watch(() => curveInputs.defense, () => syncDefenseCurvePointers())
@@ -394,6 +450,11 @@ async function loadCalculatorData() {
     loadProfessionDraft()
     selectedPanelKey.value = panelKey(setting.selectedPanelSource, setting.selectedPanelId)
     await migrateLegacyCustomPanel(legacySetting)
+    afterDefenderAutoBaseline.value = setting.afterDefenderAutoBaseline || null
+    if (setting.afterDefenderOverride && setting.afterDefenderAutoBaseline) {
+      Object.assign(afterDefenderDraft, normalizeDefenderPanel(setting.afterDefenderOverride))
+      afterDefenderOverrideActive.value = true
+    }
   } catch {
     systemAttackPanels.value = [DEFAULT_ATTACK_PANEL]
     personalAttackPanels.value = []
@@ -405,14 +466,67 @@ async function loadCalculatorData() {
   ensureSelectedPanel()
   cleanSelectedPowerIds()
   await nextTick()
+  if (!afterDefenderOverrideActive.value || !areDefenderPanelsEqual(autoAfterDefender.value, afterDefenderAutoBaseline.value)) {
+    resetAfterDefenderToAuto(false)
+  }
   settingLoaded.value = true
   await saveCurrentSetting()
 }
 
 function openCustomAttackPanelDialog() {
+  const current = parsePanelKey(selectedPanelKey.value)
+  attackPanelTab.value = current.source
+  selectedSystemPanelId.value = current.source === 'system'
+    ? current.panelId
+    : (systemAttackPanels.value[0]?.panelId || 0)
   if (editingPersonalPanelId.value) selectPersonalPanel(editingPersonalPanelId.value)
   else if (personalAttackPanels.value.length) selectPersonalPanel(personalAttackPanels.value[0].panelId)
   customAttackPanelDialogVisible.value = true
+}
+
+async function useSystemPreset() {
+  const panel = selectedSystemPanel.value
+  if (!panel?.panelId && panel !== DEFAULT_ATTACK_PANEL) return
+  selectedPanelKey.value = panelKey('system', panel.panelId)
+  customAttackPanelDialogVisible.value = false
+  await saveCurrentSetting()
+  ElMessage.success(`已使用系统预设“${panel.panelName}”`)
+}
+
+function openAttackJsonDialog(mode) {
+  attackJsonDialog.mode = mode
+  if (mode === 'import-personal') {
+    if (!editingPersonalPanelId.value) {
+      ElMessage.warning('请先新增或选择一个个人模板')
+      return
+    }
+    attackJsonDialog.title = '导入个人进攻面板 JSON'
+    attackJsonDialog.text = formatAttackPanelJsonExample()
+  } else if (mode === 'export-system') {
+    attackJsonDialog.title = `导出 ${selectedSystemPanel.value.panelName}`
+    attackJsonDialog.text = formatAttackPanelJson(selectedSystemPanel.value)
+  } else if (mode === 'export-personal') {
+    attackJsonDialog.title = `导出 ${personalPanelDraft.panelName}`
+    attackJsonDialog.text = formatAttackPanelJson({ ...personalPanelDraft, status: '0', remark: '' })
+  } else {
+    attackJsonDialog.title = '进攻方面板示例 JSON'
+    attackJsonDialog.text = formatAttackPanelJsonExample()
+  }
+  attackJsonDialog.visible = true
+}
+
+function applyPersonalJsonImport() {
+  try {
+    Object.assign(personalPanelDraft, parseAttackPanelJson(attackJsonDialog.text, { requireMetadata: false }))
+    attackJsonDialog.visible = false
+    ElMessage.success('JSON 校验通过，请点击“保存并使用”')
+  } catch (error) {
+    ElMessage.error(error.message || 'JSON 导入失败')
+  }
+}
+
+function copyAttackJsonSuccess() {
+  ElMessage.success('JSON 已复制')
 }
 
 async function addPersonalPanel() {
@@ -519,11 +633,31 @@ async function saveCurrentSetting() {
       professionName: selectedProfession.value?.professionName || professionName.value,
       professionOverrides,
       selectedInternalPowerIds: selectedInternalPowerIds.value,
-      recommendationInputs
+      recommendationInputs,
+      afterDefenderOverride: afterDefenderOverrideActive.value ? afterDefenderDraft : null,
+      afterDefenderAutoBaseline: afterDefenderOverrideActive.value ? afterDefenderAutoBaseline.value : null
     })
   } catch {
     ElMessage.warning('坦度计算器设置暂未同步到账号')
   }
+}
+
+function updateAfterDefenderField(key, value) {
+  if (!afterDefenderOverrideActive.value) {
+    Object.assign(afterDefenderDraft, normalizeDefenderPanel(autoAfterDefender.value))
+    afterDefenderAutoBaseline.value = normalizeDefenderPanel(autoAfterDefender.value)
+    afterDefenderOverrideActive.value = true
+  }
+  afterDefenderDraft[key] = Math.max(Number(value) || 0, 0)
+  scheduleSettingSave()
+}
+
+function resetAfterDefenderToAuto(showMessage = true) {
+  Object.assign(afterDefenderDraft, normalizeDefenderPanel(autoAfterDefender.value))
+  afterDefenderOverrideActive.value = false
+  afterDefenderAutoBaseline.value = null
+  scheduleSettingSave()
+  if (showMessage) ElMessage.success('已恢复职业与内功自动计算')
 }
 
 function createRecommendationInputs() {
@@ -892,7 +1026,10 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .profession-field :deep(.el-select), .profession-field :deep(.el-input-number) { width: 100%; }
 .profession-actions { display: flex; align-items: center; gap: 8px; }
 .attack-panel-description { margin: 0 0 18px; color: #68788c; font-size: 13px; line-height: 1.7; }
+.attack-panel-tabs :deep(.el-tabs__header) { margin-bottom: 16px; }
 .template-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.json-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 18px; }
+.json-help { margin: 0 0 12px; color: #68788c; font-size: 13px; }
 .template-select { flex: 1; min-width: 0; }
 .attack-panel-form :deep(.el-form-item) { margin-bottom: 16px; }
 .attack-panel-advanced { width: 100%; }
@@ -964,5 +1101,5 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .empty-calculator { display: grid; min-height: 360px; place-items: center; }
 @media (max-width: 1180px) { .profession-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } .profession-actions { grid-column: 1 / -1; } .recommendation-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 980px) { .curve-grid, .calculator-grid, .comparison-inputs, .result-comparison { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .page-header, .section-title, .template-toolbar, .power-dialog-toolbar { align-items: stretch; flex-direction: column; } .header-actions, .profession-actions { align-items: stretch; flex-direction: column; } .panel-select, .power-select { width: 100%; } .profession-bar, .curve-point-input, .field-grid, .after-summary, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } .profession-actions { grid-column: auto; } .power-total strong { margin-left: 0; } .recommendation-heading, .recommendation-result { align-items: flex-start; flex-direction: column; gap: 4px; } }
+@media (max-width: 640px) { .page-header, .section-title, .template-toolbar, .power-dialog-toolbar { align-items: stretch; flex-direction: column; } .header-actions, .profession-actions { align-items: stretch; flex-direction: column; } .json-toolbar { display: grid; grid-template-columns: 1fr; } .json-toolbar :deep(.el-button) { margin-left: 0; } .panel-select, .power-select { width: 100%; } .profession-bar, .curve-point-input, .field-grid, .after-summary, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } .profession-actions { grid-column: auto; } .power-total strong { margin-left: 0; } .recommendation-heading, .recommendation-result { align-items: flex-start; flex-direction: column; gap: 4px; } }
 </style>

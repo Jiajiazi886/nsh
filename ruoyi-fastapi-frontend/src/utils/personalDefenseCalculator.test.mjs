@@ -9,8 +9,10 @@ import {
   calculateInternalPowerUpgrade,
   calculateInnerPowerComparisons,
   calculateRecommendation,
+  areDefenderPanelsEqual,
   createDefaultDefender,
-  createEmptyInnerPowerEntries
+  createEmptyInnerPowerEntries,
+  resolveAfterDefender
 } from './personalDefenseCalculator.js'
 
 const base = calculateDefense(createDefaultDefender(), DEFAULT_ATTACK_PANEL)
@@ -143,6 +145,12 @@ assert.equal(ironcladDefense.afterDefender.hp, createDefaultDefender().hp + 2828
 assert.ok(ironcladDefense.gainPct > 0)
 assert.equal(ironcladDefense.powers.length, 1)
 assert.equal(ironcladDefense.powers[0].ignoredEntries[0].name, '攻击')
+
+const manualAfter = { ...ironcladDefense.afterDefender, defense: 3200, internalReduction: 1.25 }
+assert.equal(resolveAfterDefender(ironcladDefense.afterDefender, manualAfter, ironcladDefense.afterDefender).defense, 3200)
+assert.equal(resolveAfterDefender(ironcladDefense.afterDefender, manualAfter, ironcladDefense.afterDefender).internalReduction, 1.25)
+assert.equal(resolveAfterDefender({ ...ironcladDefense.afterDefender, defense: 3100 }, manualAfter, ironcladDefense.afterDefender).defense, 3100)
+assert.equal(areDefenderPanelsEqual(ironcladDefense.afterDefender, { ...ironcladDefense.afterDefender }), true)
 
 const manualRecommendations = calculateRecommendation(
   createDefaultDefender(),
