@@ -11,6 +11,7 @@ from utils.log_util import logger
 BASELINE_PATH = Path(__file__).with_name('project_menu_baseline.json')
 LEGACY_MENU_IDS = (4, 99, 118, 119, 1061, 1062, 1063, 1064)
 BUILTIN_ROLE_IDS = (1, 2, 100)
+DEFENSE_CALCULATOR_RENAME_VERSION = '20260813_rename_defense_calculator'
 MENU_COLUMNS = (
     'menu_id',
     'menu_name',
@@ -106,14 +107,33 @@ async def run_schema_migrations(conn: AsyncConnection) -> None:
         text('SELECT 1 FROM app_schema_migration WHERE version = :version'),
         {'version': version},
     )
-    if already_applied:
-        return
+    if not already_applied:
+        await _apply_local_parity_menu_baseline(conn, baseline)
+        await conn.execute(
+            text('INSERT INTO app_schema_migration (version, description) VALUES (:version, :description)'),
+            {'version': version, 'description': 'Align menus and built-in role permissions with the project baseline'},
+        )
+        # MySQL DDL commits implicitly. Record the completed data migration before dropping the obsolete table.
+        await conn.execute(text('DROP TABLE IF EXISTS ai_chat_config'))
+        logger.info(f'已应用数据库迁移：{version}')
 
-    await _apply_local_parity_menu_baseline(conn, baseline)
-    await conn.execute(
-        text('INSERT INTO app_schema_migration (version, description) VALUES (:version, :description)'),
-        {'version': version, 'description': 'Align menus and built-in role permissions with the project baseline'},
+    rename_applied = await conn.scalar(
+        text('SELECT 1 FROM app_schema_migration WHERE version = :version'),
+        {'version': DEFENSE_CALCULATOR_RENAME_VERSION},
     )
-    # MySQL DDL commits implicitly. Record the completed data migration before dropping the obsolete table.
-    await conn.execute(text('DROP TABLE IF EXISTS ai_chat_config'))
-    logger.info(f'已应用数据库迁移：{version}')
+    if not rename_applied:
+        await conn.execute(
+            text(
+                "UPDATE sys_menu SET menu_name = :menu_name, remark = :remark "
+                "WHERE menu_id = :menu_id"
+            ),
+            {'menu_id': 3005, 'menu_name': '坦度计算器', 'remark': '坦度计算器菜单'},
+        )
+        await conn.execute(
+            text('INSERT INTO app_schema_migration (version, description) VALUES (:version, :description)'),
+            {
+                'version': DEFENSE_CALCULATOR_RENAME_VERSION,
+                'description': 'Rename the personal defense calculator menu without resetting role permissions',
+            },
+        )
+        logger.info(f'已应用数据库迁移：{DEFENSE_CALCULATOR_RENAME_VERSION}')

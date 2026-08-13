@@ -975,7 +975,7 @@ const filters = reactive({
 })
 
 const benefitModeOptions = [
-  { value: 'defense', label: '坦度收益', help: '读取防守计算器的防守方面板和进攻方面板计算' }
+  { value: 'defense', label: '坦度收益', help: '读取坦度计算器的防守方面板和进攻方面板计算' }
 ]
 
 const elementOptions = [
@@ -1305,7 +1305,7 @@ async function loadPanelSetting() {
     panelSetting.value = { defender: { ...createDefaultDefender(), ...(setting.defender || {}) }, attackPanel }
   } catch {
     panelSetting.value = { defender: createDefaultDefender(), attackPanel: DEFAULT_ATTACK_PANEL }
-    console.warn('防守计算器进攻方面板加载失败，已使用默认面板计算坦度收益')
+    console.warn('坦度计算器进攻方面板加载失败，已使用默认面板计算坦度收益')
   }
 }
 

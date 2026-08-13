@@ -1,7 +1,7 @@
 <template>
   <div v-if="isDefenseCalculator" class="app-container defense-page">
     <section class="page-header">
-      <div><h1>防守计算器</h1><p>基于 PVP 计算器 4.1.1 的防御减免、会心率与伤害期望公式。</p></div>
+      <div><h1>坦度计算器</h1><p>基于 PVP 计算器 4.1.1 的防御减免、会心率与伤害期望公式。</p></div>
       <div class="header-actions">
         <el-button :icon="Edit" @click="openCustomAttackPanelDialog">攻击方面板设置</el-button>
         <el-button :icon="Picture" @click="openRecognitionDialog">面板识别</el-button>
@@ -204,12 +204,16 @@
     <section class="advice-section">
       <div class="section-title"><div><h2>内功词条提升建议</h2><span>输入原始内功词条，分别计算职业乘区后的实际提升与独立收益。</span></div></div>
       <div class="recommendations recommendation-editor">
-        <div v-for="item in recommendations" :key="item.key">
-          <span>{{ item.label }}</span>
+        <div v-for="item in recommendations" :key="item.key" class="recommendation-card">
+          <div class="recommendation-heading">
+            <span class="recommendation-name">{{ item.label }}</span>
+            <small class="recommendation-actual">实际提升 +{{ formatNumber(item.actualValue) }} {{ item.actualUnit }}</small>
+          </div>
           <el-input-number v-model="recommendationInputs[item.key]" :min="0" :step="RECOMMENDATION_FIELDS.find(field => field.key === item.key)?.step || 1" :precision="RECOMMENDATION_FIELDS.find(field => field.key === item.key)?.precision || 0" controls-position="right"><template v-if="RECOMMENDATION_FIELDS.find(field => field.key === item.key)?.suffix" #suffix>{{ RECOMMENDATION_FIELDS.find(field => field.key === item.key)?.suffix }}</template></el-input-number>
-          <small>实际提升 +{{ formatNumber(item.actualValue) }} {{ item.actualUnit }}</small>
-          <strong>肉度 +{{ formatPercent(item.gainPct / 100) }}</strong>
-          <small>血量/伤害期望 {{ formatNumber(item.durability) }}</small>
+          <div class="recommendation-result">
+            <strong>肉度 +{{ formatPercent(item.gainPct / 100) }}</strong>
+            <small>血量/伤害期望 {{ formatNumber(item.durability) }}</small>
+          </div>
         </div>
       </div>
     </section>
@@ -518,7 +522,7 @@ async function saveCurrentSetting() {
       recommendationInputs
     })
   } catch {
-    ElMessage.warning('防守计算器设置暂未同步到账号')
+    ElMessage.warning('坦度计算器设置暂未同步到账号')
   }
 }
 
@@ -931,11 +935,16 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .durability-gain strong { color: #16634e; font-size: 24px; }
 .advice-section, .comparison-section { padding: 20px; }
 .recommendations, .comparison-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
-.recommendations div, .comparison-results div { padding: 16px; border-left: 4px solid #3c7bb2; background: #f6f9fc; }
-.recommendations strong, .comparison-results strong { display: block; margin-top: 8px; color: #16634e; font-size: 18px; }
-.recommendations small, .comparison-results small { display: block; margin-top: 7px; color: #69788b; }
+.recommendations > div, .comparison-results > div { padding: 16px; border-left: 4px solid #3c7bb2; background: #f6f9fc; }
+.comparison-results strong { display: block; margin-top: 8px; color: #16634e; font-size: 18px; }
+.comparison-results small { display: block; margin-top: 7px; color: #69788b; }
 .recommendation-editor { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.recommendation-editor :deep(.el-input-number) { width: 100%; margin-top: 10px; }
+.recommendation-card { display: grid; gap: 10px; min-width: 0; }
+.recommendation-editor :deep(.el-input-number) { width: 100%; }
+.recommendation-heading, .recommendation-result { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; }
+.recommendation-name { color: #314b67 !important; font-size: 17px !important; font-weight: 700; }
+.recommendation-actual, .recommendation-result small { margin: 0; color: #69788b; font-size: 12px; white-space: nowrap; }
+.recommendation-result strong { color: #16634e; font-size: 14px; font-weight: 700; white-space: nowrap; }
 .power-dialog-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .power-dialog-toolbar div { display: grid; gap: 6px; }
 .power-dialog-toolbar span, .ignored-entry { color: #718096; font-size: 12px; }
@@ -955,5 +964,5 @@ function clampCurveInput(value, min, max) { return Math.min(Math.max(Number(valu
 .empty-calculator { display: grid; min-height: 360px; place-items: center; }
 @media (max-width: 1180px) { .profession-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } .profession-actions { grid-column: 1 / -1; } .recommendation-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 980px) { .curve-grid, .calculator-grid, .comparison-inputs, .result-comparison { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .page-header, .section-title, .template-toolbar, .power-dialog-toolbar { align-items: stretch; flex-direction: column; } .header-actions, .profession-actions { align-items: stretch; flex-direction: column; } .panel-select, .power-select { width: 100%; } .profession-bar, .curve-point-input, .field-grid, .after-summary, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } .profession-actions { grid-column: auto; } .power-total strong { margin-left: 0; } }
+@media (max-width: 640px) { .page-header, .section-title, .template-toolbar, .power-dialog-toolbar { align-items: stretch; flex-direction: column; } .header-actions, .profession-actions { align-items: stretch; flex-direction: column; } .panel-select, .power-select { width: 100%; } .profession-bar, .curve-point-input, .field-grid, .after-summary, .metric-grid, .detail-grid, .recommendations, .comparison-results, .entry-set { grid-template-columns: 1fr; } .profession-actions { grid-column: auto; } .power-total strong { margin-left: 0; } .recommendation-heading, .recommendation-result { align-items: flex-start; flex-direction: column; gap: 4px; } }
 </style>

@@ -4,13 +4,13 @@
       <div>
         <p class="eyebrow">Personal · PVP 收益面板</p>
         <h1>面板设置</h1>
-        <p>读取防守计算器的防守方面板和系统进攻方面板，内功页会使用同一套坦度公式。</p>
+        <p>读取坦度计算器的防守方面板和系统进攻方面板，内功页会使用同一套坦度公式。</p>
       </div>
       <div class="toolbar-actions">
         <el-tag effect="plain" type="info">公式来源 PVP 计算器 4.1</el-tag>
         <el-button plain icon="Refresh" :loading="loading" @click="loadData">刷新</el-button>
         <el-button plain icon="RefreshLeft" @click="resetDefaults">恢复默认</el-button>
-        <el-button type="primary" icon="Check" :loading="saving" @click="saveData">保存到防守计算器</el-button>
+        <el-button type="primary" icon="Check" :loading="saving" @click="saveData">保存到坦度计算器</el-button>
       </div>
     </section>
 
@@ -109,7 +109,7 @@
       <div class="setting-panel">
         <div class="panel-heading">
           <strong>防守方面板</strong>
-          <span>与防守计算器共用，修改后会同步用于内功坦度收益。</span>
+          <span>与坦度计算器共用，修改后会同步用于内功坦度收益。</span>
         </div>
         <div class="field-grid">
           <label v-for="field in targetFields" :key="field.key" class="field-item">
@@ -295,7 +295,7 @@ async function loadData() {
     selectedAttackPanelKey.value = panelKey('system', DEFAULT_ATTACK_PANEL.panelId)
     form.targetPanel = createDefaultDefender()
     form.attackPanel = { ...DEFAULT_ATTACK_PANEL }
-    ElMessage.error('防守计算器面板加载失败，已使用默认面板')
+    ElMessage.error('坦度计算器面板加载失败，已使用默认面板')
   } finally {
     loading.value = false
   }
@@ -325,7 +325,7 @@ async function saveData() {
       selectedPanelSource: selected.source,
       selectedPanelId: selected.panelId
     })
-    ElMessage.success('已保存到防守计算器，内功页会按同一面板计算坦度收益')
+    ElMessage.success('已保存到坦度计算器，内功页会按同一面板计算坦度收益')
   } catch {
     ElMessage.error('保存失败，请检查面板数值')
   } finally {

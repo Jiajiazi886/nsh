@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div>
         <h2>职业加成设置</h2>
-        <p>设置防守计算器中各职业对内功新增防御与气血的默认加成，用户可在个人设置中覆盖。</p>
+        <p>设置坦度计算器中各职业对内功新增防御与气血的默认加成，用户可在个人设置中覆盖。</p>
       </div>
       <el-button :icon="Refresh" @click="loadRows">刷新</el-button>
     </div>

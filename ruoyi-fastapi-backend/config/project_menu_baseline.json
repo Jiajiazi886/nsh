@@ -1749,7 +1749,7 @@
     },
     {
       "menu_id": 3005,
-      "menu_name": "防守计算器",
+      "menu_name": "坦度计算器",
       "parent_id": 3000,
       "order_num": 4,
       "path": "defense-calculator",
@@ -1763,7 +1763,7 @@
       "status": "0",
       "perms": "personal:defense-calculator:list",
       "icon": "shield",
-      "remark": "防守计算器菜单"
+      "remark": "坦度计算器菜单"
     },
     {
       "menu_id": 3006,
