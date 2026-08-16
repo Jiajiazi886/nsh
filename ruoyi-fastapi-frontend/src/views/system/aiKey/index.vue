@@ -3,8 +3,8 @@
     <section class="setting-panel">
       <div class="panel-heading">
         <div>
-          <h2>内功图片识别 API Key</h2>
-          <p>此密钥仅用于个人管理中的内功新增与图片识别。</p>
+          <h2>AI 图片识别 API Key</h2>
+          <p>项目中的内功图片、玩家面板和内功词条截图识别统一使用此密钥。</p>
         </div>
         <el-tag :type="status.apiKeyConfigured ? 'success' : 'info'" effect="plain">
           {{ status.apiKeyConfigured ? '已配置' : '未配置' }}
@@ -20,7 +20,7 @@
             autocomplete="new-password"
             maxlength="128"
             :disabled="form.clearApiKey"
-            :placeholder="status.apiKeyConfigured ? '输入新密钥即可替换当前密钥' : '请输入内功图片识别所需的 API Key'"
+            :placeholder="status.apiKeyConfigured ? '输入新密钥即可替换当前密钥' : '请输入项目 AI 图片识别所需的 API Key'"
           />
         </el-form-item>
         <el-form-item v-if="status.apiKeyConfigured" label="密钥操作">
@@ -74,7 +74,7 @@ function submitForm() {
     saving.value = true
     try {
       await updateInternalPowerAiKey({ ...form })
-      proxy.$modal.msgSuccess(form.clearApiKey ? '内功识别 API Key 已清除' : '内功识别 API Key 已保存')
+      proxy.$modal.msgSuccess(form.clearApiKey ? 'AI 图片识别 API Key 已清除' : 'AI 图片识别 API Key 已保存')
       form.apiKey = ''
       form.clearApiKey = false
       await loadStatus()

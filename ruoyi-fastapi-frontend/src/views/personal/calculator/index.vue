@@ -331,8 +331,11 @@ import {
   saveDefenseCalculatorPanelSetting
 } from '@/utils/personalDefenseCalculator'
 import { formatAttackPanelJson, formatAttackPanelJsonExample, parseAttackPanelJson } from '@/utils/pvpAttackPanelJson'
+import useUserStore from '@/store/modules/user'
+import { applyAiRecognitionQuota } from '@/utils/aiRecognitionQuota'
 
 const route = useRoute()
+const userStore = useUserStore()
 const isDefenseCalculator = computed(() => route.path.includes('defense-calculator') || route.name === 'PersonalDefenseCalculator')
 const defender = reactive(createDefaultDefender())
 const professionBonuses = ref([])
@@ -931,6 +934,7 @@ async function recognizeDefensePanelFile(file, showDialog = false) {
   try {
     const response = await recognizeDefensePanelImage(file)
     const result = response.data || response
+    applyAiRecognitionQuota(userStore, result, Number(result?.consumedCount || 0))
     if (!result?.success || !result.parsed) {
       const message = result?.error || '图片识别失败'
       recognitionError.value = message
@@ -1021,6 +1025,7 @@ async function recognizePlanFile(file, plan) {
   try {
     const response = await recognizeInternalPowerBenefitsImage(file)
     const result = response.data || response
+    applyAiRecognitionQuota(userStore, result, Number(result?.consumedCount || 0))
     if (!result?.success || !result.parsed) {
       plan.recognition.error = result?.error || '图片识别失败'
       return

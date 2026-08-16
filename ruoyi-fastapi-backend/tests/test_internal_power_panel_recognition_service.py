@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from exceptions.exception import ServiceException
 from module_admin.service.internal_power_mimo_service import InternalPowerMimoResult
 from module_admin.service.internal_power_panel_recognition_service import InternalPowerPanelRecognitionService
 
@@ -295,3 +296,42 @@ async def test_recognize_uses_cached_history_id_after_initial_commit(monkeypatch
     assert result.record_id == 77
     assert updates[-1][0] == 77
     assert db.commit_count == 2
+
+
+@pytest.mark.asyncio
+async def test_recognize_does_not_call_ai_when_normal_and_vip_counts_are_empty(monkeypatch):
+    db = FakeDb()
+    ai_called = False
+    user = SimpleNamespace(
+        user_id=2,
+        ai_image_recognition_count=0,
+        vip_ai_image_recognition_count=0,
+    )
+
+    async def fake_get_user_detail_by_id(db_arg, user_id):
+        return {'user_basic_info': user}
+
+    async def fake_recognize(*args, **kwargs):
+        nonlocal ai_called
+        ai_called = True
+        raise AssertionError('AI must not be called without recognition quota')
+
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_panel_recognition_service.UserDao.get_user_detail_by_id',
+        fake_get_user_detail_by_id,
+    )
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_panel_recognition_service.InternalPowerMimoService.recognize_image_json',
+        fake_recognize,
+    )
+
+    with pytest.raises(ServiceException) as exc_info:
+        await InternalPowerPanelRecognitionService.recognize_image_services(
+            db,
+            make_user(user_id=2),
+            FakeUploadFile(),
+        )
+
+    assert exc_info.value.message == 'AI识图次数不足，普通剩余0次，VIP剩余0次'
+    assert ai_called is False
+    assert db.commit_count == 0

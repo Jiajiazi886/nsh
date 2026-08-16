@@ -66,7 +66,7 @@ class InternalPowerMimoService:
         """
         api_key = await cls._get_api_key(query_db)
         if not api_key:
-            raise ServiceException(message='内功识别 API Key 未配置，请在系统管理的 AIKey管理中配置')
+            raise ServiceException(message='AI图片识别 API Key 未配置，请在系统管理的 AIKey管理中配置')
         if not prompt or not prompt.strip():
             raise ServiceException(message='识别提示词不能为空')
 

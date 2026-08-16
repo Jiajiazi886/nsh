@@ -36,18 +36,22 @@ async def test_change_sponsor_updates_switch_and_syncs_members(monkeypatch):
     async def fake_change_sponsor_enabled(db, user_id, enabled, update_by):
         calls.append(('switch', user_id, enabled, update_by))
 
-    async def fake_sync_sponsored_members(db, user_id, enabled, update_by):
-        calls.append(('sync', user_id, enabled, update_by))
+    async def fake_grant_count(db):
+        return 7
+
+    async def fake_sync_sponsored_members(db, user_id, enabled, update_by, grant_count):
+        calls.append(('sync', user_id, enabled, update_by, grant_count))
 
     monkeypatch.setattr('module_admin.service.user_service.UserDao.change_sponsor_enabled', fake_change_sponsor_enabled)
     monkeypatch.setattr('module_admin.service.user_service.UserDao.sync_sponsored_members', fake_sync_sponsored_members)
+    monkeypatch.setattr(UserService, 'get_vip_ai_recognition_grant_count_services', fake_grant_count)
 
     db = FakeDb()
     result = await UserService.change_sponsor_services(db, 200, '1', 'admin')
 
     assert result.is_success is True
     assert db.committed is True
-    assert calls == [('switch', 200, '1', 'admin'), ('sync', 200, True, 'admin')]
+    assert calls == [('switch', 200, '1', 'admin'), ('sync', 200, True, 'admin', 7)]
 
 
 @pytest.mark.asyncio
@@ -65,3 +69,4 @@ async def test_sync_sponsored_members_only_targets_active_members():
     combined_sql = '\n'.join(db.statements)
     assert 'guild_member.is_active' in combined_sql
     assert 'guild_member.member_user_id >' in combined_sql
+    assert 'vip_ai_image_recognition_count' in combined_sql

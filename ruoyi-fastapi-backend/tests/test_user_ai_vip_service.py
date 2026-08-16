@@ -4,8 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from module_admin.controller.user_controller import (
+    get_system_user_default_ai_recognition_count,
+    get_system_user_vip_ai_recognition_grant_count,
+)
 from module_admin.entity.vo.user_vo import AddUserModel
-from module_admin.controller.user_controller import get_system_user_default_ai_recognition_count
 from module_admin.service.user_service import UserService
 
 
@@ -45,6 +48,20 @@ async def test_default_ai_count_controller_returns_data_payload(monkeypatch):
 
     assert payload['code'] == 200
     assert payload['data'] == {'aiImageRecognitionCount': 8}
+
+
+@pytest.mark.asyncio
+async def test_vip_ai_grant_count_controller_returns_data_payload(monkeypatch):
+    async def fake_grant_count(db):
+        return 12
+
+    monkeypatch.setattr(UserService, 'get_vip_ai_recognition_grant_count_services', fake_grant_count)
+
+    response = await get_system_user_vip_ai_recognition_grant_count(request=make_request(), query_db=FakeDb())
+    payload = json.loads(response.body)
+
+    assert payload['code'] == 200
+    assert payload['data'] == {'vipAiImageRecognitionGrantCount': 12}
 
 
 @pytest.mark.asyncio
@@ -112,21 +129,114 @@ async def test_add_user_uses_default_ai_count_when_not_explicitly_set(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_batch_change_vip_updates_all_selected_users(monkeypatch):
-    edits = []
+async def test_batch_change_vip_grants_only_users_who_newly_become_vip(monkeypatch):
+    changes = []
 
-    async def fake_edit_user(db, payload):
-        edits.append(payload)
+    async def fake_grant_count(db):
+        return 5
 
-    monkeypatch.setattr('module_admin.service.user_service.UserDao.edit_user_dao', fake_edit_user)
+    async def fake_user_detail(db, user_id):
+        if user_id == 2:
+            user = SimpleNamespace(is_vip='0', vip_expire_time=None, sponsored_vip='0')
+        else:
+            user = SimpleNamespace(
+                is_vip='1',
+                vip_expire_time=datetime.now() + timedelta(days=1),
+                sponsored_vip='0',
+            )
+        return {'user_basic_info': user}
+
+    async def fake_change_manual_vip(db, user_id, is_vip, expire_time, grant_count, update_by):
+        changes.append((user_id, is_vip, expire_time, grant_count, update_by))
+
+    monkeypatch.setattr(UserService, 'get_vip_ai_recognition_grant_count_services', fake_grant_count)
+    monkeypatch.setattr('module_admin.service.user_service.UserDao.get_user_detail_by_id', fake_user_detail)
+    monkeypatch.setattr('module_admin.service.user_service.UserDao.change_manual_vip', fake_change_manual_vip)
 
     expire_time = datetime.now() + timedelta(days=7)
     db = FakeDb()
-    result = await UserService.batch_change_vip_services(db, [2, 3], '1', expire_time, 5, 'admin')
+    result = await UserService.batch_change_vip_services(db, [2, 3], '1', expire_time, 'admin')
 
     assert result.is_success is True
     assert db.committed is True
-    assert [edit['user_id'] for edit in edits] == [2, 3]
-    assert all(edit['is_vip'] == '1' for edit in edits)
-    assert all(edit['vip_expire_time'] == expire_time for edit in edits)
-    assert all(edit['vip_ai_image_recognition_count'] == 5 for edit in edits)
+    assert [change[0] for change in changes] == [2, 3]
+    assert [change[3] for change in changes] == [5, 0]
+    assert '已向1名新VIP各赠送5次识图次数' in result.message
+
+
+@pytest.mark.asyncio
+async def test_change_vip_grants_once_and_renewal_does_not_repeat(monkeypatch):
+    current_user = SimpleNamespace(is_vip='0', vip_expire_time=None, sponsored_vip='0')
+    changes = []
+
+    async def fake_user_detail(db, user_id):
+        return {'user_basic_info': current_user}
+
+    async def fake_grant_count(db):
+        return 9
+
+    async def fake_change_manual_vip(db, user_id, is_vip, expire_time, grant_count, update_by):
+        changes.append(grant_count)
+
+    monkeypatch.setattr('module_admin.service.user_service.UserDao.get_user_detail_by_id', fake_user_detail)
+    monkeypatch.setattr(UserService, 'get_vip_ai_recognition_grant_count_services', fake_grant_count)
+    monkeypatch.setattr('module_admin.service.user_service.UserDao.change_manual_vip', fake_change_manual_vip)
+
+    db = FakeDb()
+    expire_time = datetime.now() + timedelta(days=7)
+    first_result = await UserService.change_vip_services(db, 2, '1', expire_time, 'admin')
+    current_user.is_vip = '1'
+    current_user.vip_expire_time = expire_time
+    renewal_result = await UserService.change_vip_services(
+        db, 2, '1', datetime.now() + timedelta(days=30), 'admin'
+    )
+
+    assert changes == [9, 0]
+    assert '已赠送9次VIP识图次数' in first_result.message
+    assert '赠送' not in renewal_result.message
+
+
+@pytest.mark.asyncio
+async def test_cancel_vip_keeps_recognition_balance_untouched(monkeypatch):
+    current_user = SimpleNamespace(
+        is_vip='1',
+        vip_expire_time=datetime.now() + timedelta(days=7),
+        sponsored_vip='0',
+    )
+    captured = {}
+
+    async def fake_user_detail(db, user_id):
+        return {'user_basic_info': current_user}
+
+    async def fake_change_manual_vip(db, user_id, is_vip, expire_time, grant_count, update_by):
+        captured.update(is_vip=is_vip, expire_time=expire_time, grant_count=grant_count)
+
+    monkeypatch.setattr('module_admin.service.user_service.UserDao.get_user_detail_by_id', fake_user_detail)
+    monkeypatch.setattr('module_admin.service.user_service.UserDao.change_manual_vip', fake_change_manual_vip)
+
+    result = await UserService.change_vip_services(FakeDb(), 2, '0', None, 'admin')
+
+    assert result.is_success is True
+    assert captured == {'is_vip': '0', 'expire_time': None, 'grant_count': 0}
+
+
+@pytest.mark.asyncio
+async def test_expire_vip_does_not_clear_recognition_balance():
+    class ExecuteResult:
+        rowcount = 2
+
+    class CaptureDb(FakeDb):
+        def __init__(self):
+            super().__init__()
+            self.statement = ''
+
+        async def execute(self, statement):
+            self.statement = str(statement)
+            return ExecuteResult()
+
+    db = CaptureDb()
+    expired_count = await UserService.expire_vip_users_services(db)
+
+    assert expired_count == 2
+    assert db.committed is True
+    assert 'vip_ai_image_recognition_count' not in db.statement

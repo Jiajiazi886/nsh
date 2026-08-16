@@ -290,6 +290,14 @@ class DefaultAiRecognitionCountModel(BaseModel):
     ai_image_recognition_count: int = Field(default=0, ge=0, description='新用户默认AI识图剩余次数')
 
 
+class VipAiRecognitionGrantCountModel(BaseModel):
+    """VIP开通时自动赠送的AI识图次数。"""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    vip_ai_image_recognition_grant_count: int = Field(default=0, ge=0, description='VIP开通赠送识图次数')
+
+
 class BatchVipModel(BaseModel):
     """
     批量修改用户VIP授权模型

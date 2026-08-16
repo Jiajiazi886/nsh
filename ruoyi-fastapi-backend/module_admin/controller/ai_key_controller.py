@@ -27,7 +27,7 @@ ai_key_controller = APIRouterPro(
 
 @ai_key_controller.get(
     '/internal-power',
-    summary='获取内功图片识别 API Key 配置状态',
+    summary='获取项目AI图片识别 API Key 配置状态',
     response_model=DataResponseModel[InternalPowerAiKeyModel],
     dependencies=[UserInterfaceAuthDependency('system:aikey:edit')],
 )
@@ -42,13 +42,13 @@ async def get_internal_power_key(
 
 @ai_key_controller.put(
     '/internal-power',
-    summary='更新内功图片识别 API Key',
+    summary='更新项目AI图片识别 API Key',
     response_model=ResponseBaseModel,
     dependencies=[UserInterfaceAuthDependency('system:aikey:edit')],
 )
 @ValidateFields(validate_model='edit_ai_key')
 @Log(
-    title='内功识别 API Key',
+    title='AI图片识别 API Key',
     business_type=BusinessType.UPDATE,
     request_log_mode='exclude',
     request_exclude_fields=(RequestLogFieldRoot.JSON_BODY.field('api_key'),),

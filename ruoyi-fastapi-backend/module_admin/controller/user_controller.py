@@ -24,8 +24,8 @@ from config.env import UploadConfig
 from module_admin.entity.do.dept_do import SysDept
 from module_admin.entity.do.user_do import SysUser
 from module_admin.entity.vo.user_vo import (
-    AiRecognitionCountModel,
     AddUserModel,
+    AiRecognitionCountModel,
     AvatarModel,
     BatchVipModel,
     ChangeSponsorModel,
@@ -48,6 +48,7 @@ from module_admin.entity.vo.user_vo import (
     UserRoleResponseModel,
     UserRowModel,
     VipAiRecognitionCountModel,
+    VipAiRecognitionGrantCountModel,
 )
 from module_admin.service.role_service import RoleService
 from module_admin.service.user_service import UserService
@@ -192,15 +193,13 @@ async def change_system_user_vip(
     ):
         return ResponseUtil.failure(msg='VIP到期时间必须晚于当前时间')
     await UserService.check_user_allowed_services(UserModel(userId=change_user.user_id))
-    edit_user = EditUserModel(
-        userId=change_user.user_id,
-        isVip=change_user.is_vip,
-        vipExpireTime=change_user.vip_expire_time if change_user.is_vip == '1' else None,
-        updateBy=current_user.user.user_name,
-        updateTime=datetime.now(),
-        type='vip',
+    edit_user_result = await UserService.change_vip_services(
+        query_db,
+        change_user.user_id,
+        change_user.is_vip,
+        change_user.vip_expire_time,
+        current_user.user.user_name,
     )
-    edit_user_result = await UserService.edit_user_services(query_db, edit_user)
     logger.info(edit_user_result.message)
 
     return ResponseUtil.success(msg=edit_user_result.message)
@@ -209,7 +208,7 @@ async def change_system_user_vip(
 @user_controller.put(
     '/batchVip',
     summary='批量修改用户VIP状态接口',
-    description='用于批量修改用户VIP状态和VIP AI识图次数',
+    description='用于批量修改用户VIP状态，并为新VIP自动赠送配置的识图次数',
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:user:vip:edit'),
@@ -239,7 +238,6 @@ async def batch_change_system_user_vip(
         change_user.user_ids,
         change_user.is_vip,
         change_user.vip_expire_time,
-        change_user.vip_ai_image_recognition_count,
         current_user.user.user_name,
     )
     logger.info(result.message)
@@ -377,6 +375,50 @@ async def update_system_user_default_ai_recognition_count(
         request,
         query_db,
         change_count.ai_image_recognition_count,
+        current_user.user.user_name,
+    )
+    logger.info(result.message)
+
+    return ResponseUtil.success(msg=result.message)
+
+
+@user_controller.get(
+    '/vip-ai-recognition-grant-count',
+    summary='查询VIP开通赠送识图次数接口',
+    description='用于查询用户成为VIP时自动增加的VIP AI识图次数',
+    response_model=DataResponseModel[dict],
+    dependencies=[UserInterfaceAuthDependency('system:user:ai:edit')],
+)
+async def get_system_user_vip_ai_recognition_grant_count(
+    request: Request,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+) -> Response:
+    count = await UserService.get_vip_ai_recognition_grant_count_services(query_db)
+
+    return ResponseUtil.success(data={'vipAiImageRecognitionGrantCount': count})
+
+
+@user_controller.put(
+    '/vip-ai-recognition-grant-count',
+    summary='修改VIP开通赠送识图次数接口',
+    description='仅影响以后从非VIP变为有效VIP的用户，不覆盖现有VIP识图余额',
+    response_model=ResponseBaseModel,
+    dependencies=[UserInterfaceAuthDependency('system:user:ai:edit')],
+)
+@ApiCacheEvict(namespaces=ApiGroup.USER_INFO_MUTATION)
+@Log(title='用户管理', business_type=BusinessType.UPDATE)
+async def update_system_user_vip_ai_recognition_grant_count(
+    request: Request,
+    change_count: VipAiRecognitionGrantCountModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()],
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
+) -> Response:
+    if not UserService.is_admin_role(current_user):
+        return ResponseUtil.failure(msg='无权修改VIP识图赠送次数')
+    result = await UserService.set_vip_ai_recognition_grant_count_services(
+        request,
+        query_db,
+        change_count.vip_ai_image_recognition_grant_count,
         current_user.user.user_name,
     )
     logger.info(result.message)

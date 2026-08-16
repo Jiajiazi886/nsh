@@ -8,7 +8,7 @@ INSERT INTO sys_menu (
   is_frame, is_cache, menu_type, visible, status, perms, icon,
   create_by, create_time, update_by, update_time, remark
 ) VALUES
-  (3050, 'AIKey管理', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'admin', CURRENT_TIMESTAMP, '', NULL, '维护内功图片识别 API Key')
+  (3050, 'AIKey管理', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'admin', CURRENT_TIMESTAMP, '', NULL, '维护项目AI图片识别共用 API Key')
 ON CONFLICT (menu_id) DO UPDATE SET
   menu_name = EXCLUDED.menu_name, parent_id = EXCLUDED.parent_id, order_num = EXCLUDED.order_num,
   path = EXCLUDED.path, component = EXCLUDED.component, route_name = EXCLUDED.route_name,

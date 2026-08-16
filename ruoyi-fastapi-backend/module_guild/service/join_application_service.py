@@ -6,6 +6,7 @@ from common.vo import CrudResponseModel
 from exceptions.exception import ServiceException
 from module_admin.dao.user_dao import UserDao
 from module_admin.entity.vo.user_vo import CurrentUserModel
+from module_admin.service.user_service import UserService
 from module_guild.dao.join_application_dao import JoinApplicationDao
 from module_guild.dao.member_dao import MemberDao
 from module_guild.entity.do.join_application_do import GuildJoinApplication
@@ -169,7 +170,7 @@ class JoinApplicationService:
             await MemberDao.create_member(db, member_payload)
         guild = await JoinApplicationDao.get_guild_by_id(db, application.guild_id)
         if application.applicant_user_id and getattr(guild, 'sponsor_enabled', '0') == '1':
-            await UserDao.grant_sponsored_vip(
+            await UserService.grant_sponsored_vip_services(
                 db,
                 application.applicant_user_id,
                 application.guild_id,

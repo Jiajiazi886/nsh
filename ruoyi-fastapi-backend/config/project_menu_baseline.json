@@ -2087,7 +2087,7 @@
       "status": "0",
       "perms": "system:aikey:edit",
       "icon": "lock",
-      "remark": "维护内功图片识别 API Key"
+      "remark": "维护项目AI图片识别共用 API Key"
     },
     {
       "menu_id": 3100,

@@ -143,6 +143,15 @@
           </el-col>
           <el-col v-if="canManageVip" :span="1.5">
             <el-button
+              type="success"
+              plain
+              icon="PictureRounded"
+              @click="openVipAiGrantDialog"
+              v-hasPermi="['system:user:ai:edit']"
+            >VIP识图次数设置</el-button>
+          </el-col>
+          <el-col v-if="canManageVip" :span="1.5">
+            <el-button
               type="warning"
               plain
               icon="Medal"
@@ -639,6 +648,32 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="vipAiGrantDialog.open" title="VIP识图次数设置" width="440px" append-to-body>
+      <el-form label-width="158px">
+        <el-form-item label="成为VIP赠送次数">
+          <el-input-number
+            v-model="vipAiGrantDialog.vipAiImageRecognitionGrantCount"
+            :min="0"
+            :precision="0"
+            controls-position="right"
+            style="width: 180px"
+          />
+        </el-form-item>
+        <el-alert
+          title="用户从非VIP变为有效VIP时自动追加一次。续期不会重复赠送；VIP取消或到期后，剩余次数不会清零。"
+          type="info"
+          :closable="false"
+          show-icon
+        />
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="vipAiGrantDialog.open = false">取 消</el-button>
+          <el-button type="primary" :loading="vipAiGrantDialog.loading" @click="submitVipAiGrantDialog">确 定</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="batchVipDialog.open" title="批量设置 VIP" width="480px" append-to-body>
       <el-form label-width="112px">
         <el-form-item label="目标用户">
@@ -669,15 +704,13 @@
             />
           </el-form-item>
         </template>
-        <el-form-item label="VIP AI次数">
-          <el-input-number
-            v-model="batchVipDialog.vipAiImageRecognitionCount"
-            :min="0"
-            :precision="0"
-            controls-position="right"
-            style="width: 180px"
-          />
-        </el-form-item>
+        <el-alert
+          v-if="batchVipDialog.isVip === '1'"
+          title="仅新成为VIP的用户会自动获得系统设置的VIP识图次数，已有余额会继续保留。"
+          type="info"
+          :closable="false"
+          show-icon
+        />
       </el-form>
       <template #footer>
         <div class="dialog-footer">
@@ -780,8 +813,10 @@ import {
   updateUser,
   addUser,
   getDefaultAiRecognitionCount,
+  getVipAiRecognitionGrantCount,
   getRegisterCleanupRule,
   updateDefaultAiRecognitionCount,
+  updateVipAiRecognitionGrantCount,
   updateRegisterCleanupRule,
 } from "@/api/system/user";
 
@@ -819,13 +854,17 @@ const defaultAiDialog = reactive({
   loading: false,
   aiImageRecognitionCount: 0,
 });
+const vipAiGrantDialog = reactive({
+  open: false,
+  loading: false,
+  vipAiImageRecognitionGrantCount: 0,
+});
 const batchVipDialog = reactive({
   open: false,
   loading: false,
   isVip: "1",
   mode: "month",
   expireTime: "",
-  vipAiImageRecognitionCount: 0,
 });
 const limitDialog = reactive({
   open: false,
@@ -1050,8 +1089,8 @@ function submitVipDialog() {
     proxy.$modal.msgError("请选择VIP到期时间");
     return;
   }
-  changeUserVip(vipDialog.row.userId, "1", vipDialog.expireTime).then(() => {
-    proxy.$modal.msgSuccess("VIP授权已更新");
+  changeUserVip(vipDialog.row.userId, "1", vipDialog.expireTime).then((response) => {
+    proxy.$modal.msgSuccess(response.msg || "VIP授权已更新");
     vipDialog.open = false;
     getList();
   });
@@ -1088,12 +1127,36 @@ function submitDefaultAiDialog() {
       defaultAiDialog.loading = false;
     });
 }
+function openVipAiGrantDialog() {
+  vipAiGrantDialog.loading = true;
+  vipAiGrantDialog.open = true;
+  getVipAiRecognitionGrantCount()
+    .then((response) => {
+      vipAiGrantDialog.vipAiImageRecognitionGrantCount = Number(
+        response.data?.vipAiImageRecognitionGrantCount || 0
+      );
+    })
+    .finally(() => {
+      vipAiGrantDialog.loading = false;
+    });
+}
+function submitVipAiGrantDialog() {
+  const count = Math.max(0, Number(vipAiGrantDialog.vipAiImageRecognitionGrantCount || 0));
+  vipAiGrantDialog.loading = true;
+  updateVipAiRecognitionGrantCount(count)
+    .then((response) => {
+      proxy.$modal.msgSuccess(response.msg || "VIP开通赠送识图次数已保存");
+      vipAiGrantDialog.open = false;
+    })
+    .finally(() => {
+      vipAiGrantDialog.loading = false;
+    });
+}
 function openBatchVipDialog() {
   batchVipDialog.open = true;
   batchVipDialog.isVip = "1";
   batchVipDialog.mode = "month";
   batchVipDialog.expireTime = getFutureTime("month");
-  batchVipDialog.vipAiImageRecognitionCount = 0;
 }
 function handleBatchVipModeChange(mode) {
   if (mode !== "custom") {
@@ -1114,16 +1177,14 @@ function submitBatchVipDialog() {
     proxy.$modal.msgError("请选择VIP到期时间");
     return;
   }
-  const vipAiCount = Math.max(0, Number(batchVipDialog.vipAiImageRecognitionCount || 0));
   batchVipDialog.loading = true;
   batchUserVip(
     ids.value,
     batchVipDialog.isVip,
-    batchVipDialog.isVip === "1" ? batchVipDialog.expireTime : null,
-    vipAiCount
+    batchVipDialog.isVip === "1" ? batchVipDialog.expireTime : null
   )
-    .then(() => {
-      proxy.$modal.msgSuccess("批量VIP设置已更新");
+    .then((response) => {
+      proxy.$modal.msgSuccess(response.msg || "批量VIP设置已更新");
       batchVipDialog.open = false;
       getList();
     })

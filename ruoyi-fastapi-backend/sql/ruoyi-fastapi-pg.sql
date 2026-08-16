@@ -401,7 +401,7 @@ insert into sys_menu values(3030, '职业信息写入', 3028, 2, '#', '', '', ''
 insert into sys_menu values(3040, '数据库管理', 1, 10, 'database', 'system/database/index', '', 'SystemDatabase', 1, 0, 'C', '0', '0', 'system:database:list', 'table', 'system', current_timestamp, 'system', current_timestamp, '超级管理员只读数据库浏览器');
 insert into sys_menu values(3041, '数据库列表', 3040, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:database:list', '#', 'system', current_timestamp, 'system', current_timestamp, '查看数据库表结构与用户总览');
 insert into sys_menu values(3042, '数据库查询', 3040, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:database:query', '#', 'system', current_timestamp, 'system', current_timestamp, '查看数据表分页数据');
-insert into sys_menu values(3050, 'AIKey管理', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'system', current_timestamp, 'system', current_timestamp, '维护内功图片识别 API Key');
+insert into sys_menu values(3050, 'AIKey管理', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'system', current_timestamp, 'system', current_timestamp, '维护项目AI图片识别共用 API Key');
 insert into sys_menu values(3100, '内功信息管理', 1, 10, 'internalPower', 'system/internalPower/index', '', 'SystemInternalPower', 1, 0, 'C', '0', '0', 'system:internal-power:list', 'skill', 'system', current_timestamp, 'system', current_timestamp, '系统内功信息管理菜单');
 insert into sys_menu values(3101, '内功信息查询', 3100, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:internal-power:query', '#', 'system', current_timestamp, 'system', current_timestamp, '');
 insert into sys_menu values(3102, '内功信息新增', 3100, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:internal-power:add', '#', 'system', current_timestamp, 'system', current_timestamp, '');
@@ -960,6 +960,7 @@ insert into sys_config values(5, '账号自助-是否开启用户注册功能', 
 insert into sys_config values(6, '用户登录-黑名单列表',           'sys.login.blackIPList',         '',              'Y', 'admin', current_timestamp, '', null, '设置登录IP黑名单限制，多个匹配项以;分隔，支持匹配（*通配、网段）');
 insert into sys_config values(7, '用户管理-初始密码修改策略',     'sys.account.initPasswordModify',  '1',             'Y', 'admin', current_timestamp, '', null, '0：初始密码修改策略关闭，没有任何提示，1：提醒用户，如果未修改初始密码，则在登录时就会提醒修改密码对话框');
 insert into sys_config values(8, '用户管理-账号密码更新周期',     'sys.account.passwordValidateDays', '0',             'Y', 'admin', current_timestamp, '', null, '密码更新周期（填写数字，数据初始化值为0不限制，若修改必须为大于0小于365的正整数），如果超过这个周期登录系统时，则在登录时就会提醒修改密码对话框');
+insert into sys_config values(9, '用户管理-VIP开通赠送识图次数', 'sys.user.vipAiImageRecognitionGrantCount', '0',       'Y', 'system', current_timestamp, 'system', current_timestamp, '用户从非VIP变为有效VIP时一次性追加的VIP AI识图次数');
 
 -- ----------------------------
 -- 14、系统访问记录

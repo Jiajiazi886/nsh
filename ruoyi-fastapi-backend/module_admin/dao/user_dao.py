@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from datetime import datetime, time
 from typing import Any
 
-from sqlalchemy import ColumnElement, and_, delete, desc, or_, select, update
+from sqlalchemy import ColumnElement, and_, case, delete, desc, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import PageModel
@@ -413,6 +413,30 @@ class UserDao:
         return bool(result.rowcount or 0)
 
     @classmethod
+    async def change_manual_vip(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        is_vip: str,
+        vip_expire_time: datetime | None,
+        vip_grant_count: int,
+        update_by: str,
+    ) -> None:
+        """Update manual VIP status and add, rather than replace, a one-time recognition grant."""
+        vip_grant_count = max(0, int(vip_grant_count or 0))
+        await db.execute(
+            update(SysUser)
+            .where(SysUser.user_id == user_id, SysUser.del_flag == '0')
+            .values(
+                is_vip=is_vip,
+                vip_expire_time=vip_expire_time,
+                vip_ai_image_recognition_count=SysUser.vip_ai_image_recognition_count + vip_grant_count,
+                update_by=update_by,
+                update_time=_now(),
+            )
+        )
+
+    @classmethod
     async def change_sponsor_enabled(cls, db: AsyncSession, user_id: int, enabled: str, update_by: str) -> None:
         await db.execute(
             update(SysUser)
@@ -421,10 +445,27 @@ class UserDao:
         )
 
     @classmethod
-    async def sync_sponsored_members(cls, db: AsyncSession, sponsor_user_id: int, enabled: bool, update_by: str) -> None:
+    async def sync_sponsored_members(
+        cls,
+        db: AsyncSession,
+        sponsor_user_id: int,
+        enabled: bool,
+        update_by: str,
+        vip_grant_count: int = 0,
+    ) -> None:
         from module_guild.entity.do.member_do import GuildMember
 
         if enabled:
+            now = _now()
+            manual_vip_active = and_(
+                SysUser.is_vip == '1',
+                SysUser.vip_expire_time.is_not(None),
+                SysUser.vip_expire_time > now,
+            )
+            becomes_vip = and_(
+                or_(SysUser.sponsored_vip != '1', SysUser.sponsored_vip.is_(None)),
+                ~manual_vip_active,
+            )
             member_user_ids = select(GuildMember.member_user_id).where(
                 GuildMember.guild_id == sponsor_user_id,
                 GuildMember.is_active == '1',
@@ -436,8 +477,15 @@ class UserDao:
                 .values(
                     sponsored_vip='1',
                     sponsored_by_user_id=sponsor_user_id,
+                    vip_ai_image_recognition_count=case(
+                        (
+                            becomes_vip,
+                            SysUser.vip_ai_image_recognition_count + max(0, int(vip_grant_count or 0)),
+                        ),
+                        else_=SysUser.vip_ai_image_recognition_count,
+                    ),
                     update_by=update_by,
-                    update_time=_now(),
+                    update_time=now,
                 )
             )
             return
@@ -458,17 +506,41 @@ class UserDao:
         )
 
     @classmethod
-    async def grant_sponsored_vip(cls, db: AsyncSession, user_id: int, sponsor_user_id: int, update_by: str) -> None:
+    async def grant_sponsored_vip(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        sponsor_user_id: int,
+        update_by: str,
+        vip_grant_count: int = 0,
+    ) -> None:
         if not user_id or not sponsor_user_id:
             return
+        now = _now()
+        manual_vip_active = and_(
+            SysUser.is_vip == '1',
+            SysUser.vip_expire_time.is_not(None),
+            SysUser.vip_expire_time > now,
+        )
+        becomes_vip = and_(
+            or_(SysUser.sponsored_vip != '1', SysUser.sponsored_vip.is_(None)),
+            ~manual_vip_active,
+        )
         await db.execute(
             update(SysUser)
             .where(SysUser.user_id == user_id, SysUser.del_flag == '0')
             .values(
                 sponsored_vip='1',
                 sponsored_by_user_id=sponsor_user_id,
+                vip_ai_image_recognition_count=case(
+                    (
+                        becomes_vip,
+                        SysUser.vip_ai_image_recognition_count + max(0, int(vip_grant_count or 0)),
+                    ),
+                    else_=SysUser.vip_ai_image_recognition_count,
+                ),
                 update_by=update_by,
-                update_time=_now(),
+                update_time=now,
             )
         )
 

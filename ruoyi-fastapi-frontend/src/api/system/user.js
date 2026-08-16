@@ -84,16 +84,15 @@ export function changeUserVip(userId, isVip, vipExpireTime) {
   })
 }
 
-// 批量修改用户VIP授权和VIP AI识图次数
-export function batchUserVip(userIds, isVip, vipExpireTime, vipAiImageRecognitionCount) {
+// 批量修改用户VIP授权；新VIP识图赠送次数由系统设置决定
+export function batchUserVip(userIds, isVip, vipExpireTime) {
   return request({
     url: '/system/user/batchVip',
     method: 'put',
     data: {
       userIds,
       isVip,
-      vipExpireTime,
-      vipAiImageRecognitionCount
+      vipExpireTime
     }
   })
 }
@@ -161,6 +160,25 @@ export function updateDefaultAiRecognitionCount(aiImageRecognitionCount) {
     method: 'put',
     data: {
       aiImageRecognitionCount
+    }
+  })
+}
+
+// 查询VIP开通时自动赠送的VIP识图次数
+export function getVipAiRecognitionGrantCount() {
+  return request({
+    url: '/system/user/vip-ai-recognition-grant-count',
+    method: 'get'
+  })
+}
+
+// 修改VIP开通时自动赠送的VIP识图次数
+export function updateVipAiRecognitionGrantCount(vipAiImageRecognitionGrantCount) {
+  return request({
+    url: '/system/user/vip-ai-recognition-grant-count',
+    method: 'put',
+    data: {
+      vipAiImageRecognitionGrantCount
     }
   })
 }

@@ -5,7 +5,7 @@ from pydantic.alias_generators import to_camel
 
 
 class InternalPowerAiKeyModel(BaseModel):
-    """内功图片识别 API Key 的公开状态，不包含密钥明文。"""
+    """项目AI图片识别 API Key 的公开状态，不包含密钥明文。"""
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -15,7 +15,7 @@ class InternalPowerAiKeyModel(BaseModel):
 
 
 class InternalPowerAiKeyUpdateModel(BaseModel):
-    """仅用于更新内功图片识别所使用的 API Key。"""
+    """用于更新项目所有AI图片识别功能共用的 API Key。"""
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 

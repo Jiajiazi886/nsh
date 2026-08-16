@@ -25,6 +25,7 @@ from module_admin.entity.vo.internal_power_vo import (
     InternalPowerRecognizeResultModel,
 )
 from module_admin.entity.vo.user_vo import CurrentUserModel
+from module_admin.service.ai_recognition_quota_service import AiRecognitionQuotaService
 from module_admin.service.internal_power_entry_service import InternalPowerEntryService
 from module_admin.service.internal_power_mimo_service import InternalPowerMimoService
 from module_admin.service.internal_power_preset_service import InternalPowerPresetService
@@ -170,23 +171,15 @@ class InternalPowerService:
     async def recognize_images_services(
         cls, query_db: AsyncSession, current_user: CurrentUserModel, files: list[Any], prompt: str
     ) -> InternalPowerRecognizeResultModel:
-        current_user_id = int(current_user.user.user_id)
         current_user_name = current_user.user.user_name
         image_count = len(files or [])
         if image_count <= 0:
             raise ServiceException(message='请至少上传一张图片')
-        user = (await UserDao.get_user_detail_by_id(query_db, current_user_id)).get('user_basic_info')
-        if user is None:
-            raise ServiceException(message='用户不存在')
-        target_user_id = int(user.user_id)
-        is_unlimited_recognition = UserService.is_admin_role(current_user)
-        is_effective_vip = UserService.is_effective_vip(user)
-        current_vip_count = max(0, int(getattr(user, 'vip_ai_image_recognition_count', 0) or 0))
-        usable_vip_count = current_vip_count if is_effective_vip else 0
-        current_normal_count = max(0, int(user.ai_image_recognition_count or 0))
-        available_count = usable_vip_count + current_normal_count
-        if not is_unlimited_recognition and available_count < image_count:
-            raise ServiceException(message=f'AI识图次数不足，当前剩余{available_count}次')
+        quota_snapshot = await AiRecognitionQuotaService.require_quota(query_db, current_user, image_count)
+        target_user_id = quota_snapshot.user_id
+        is_unlimited_recognition = quota_snapshot.unlimited
+        current_vip_count = quota_snapshot.vip_count
+        current_normal_count = quota_snapshot.normal_count
         presets = await InternalPowerPresetService.get_personal_enabled_presets_service(query_db)
         preset_map: dict[str, list[dict[str, Any]]] = {}
         for preset in presets:
@@ -280,18 +273,17 @@ class InternalPowerService:
         remaining_vip_count = current_vip_count
         remaining_normal_count = current_normal_count
         if success_count > 0 and not is_unlimited_recognition:
-            consumed_vip_count = min(usable_vip_count, success_count)
-            consumed_normal_count = success_count - consumed_vip_count
-            deducted = await UserDao.decrement_ai_recognition_counts(
+            consumption = await AiRecognitionQuotaService.consume_successes(
                 query_db,
-                target_user_id,
-                consumed_vip_count,
-                consumed_normal_count,
+                quota_snapshot,
+                success_count,
                 current_user_name,
             )
-            if deducted:
-                remaining_vip_count = max(0, current_vip_count - consumed_vip_count)
-                remaining_normal_count = max(0, current_normal_count - consumed_normal_count)
+            if consumption.success:
+                consumed_vip_count = consumption.vip_count
+                consumed_normal_count = consumption.normal_count
+                remaining_vip_count = consumption.remaining_vip_count
+                remaining_normal_count = consumption.remaining_normal_count
                 await query_db.commit()
             else:
                 success_count = 0

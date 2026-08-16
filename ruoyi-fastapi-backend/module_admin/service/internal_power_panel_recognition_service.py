@@ -18,6 +18,7 @@ from module_admin.entity.vo.internal_power_panel_setting_vo import (
     PanelRecognitionResultModel,
 )
 from module_admin.entity.vo.user_vo import CurrentUserModel
+from module_admin.service.ai_recognition_quota_service import AiRecognitionQuotaService
 from module_admin.service.internal_power_mimo_service import InternalPowerMimoService
 from module_admin.service.user_service import UserService
 
@@ -136,19 +137,8 @@ class InternalPowerPanelRecognitionService:
         prompt: str,
         normalizer: Callable[[dict[str, Any]], tuple[dict[str, Any], str]],
     ) -> PanelRecognitionResultModel:
-        user_id = int(current_user.user.user_id)
+        requested_user_id = int(current_user.user.user_id)
         user_name = current_user.user.user_name
-        user = (await UserDao.get_user_detail_by_id(query_db, user_id)).get('user_basic_info')
-        if user is None:
-            raise ServiceException(message='用户不存在')
-        is_unlimited = UserService.is_admin_role(current_user)
-        is_effective_vip = UserService.is_effective_vip(user)
-        current_vip_count = max(0, int(getattr(user, 'vip_ai_image_recognition_count', 0) or 0))
-        usable_vip_count = current_vip_count if is_effective_vip else 0
-        current_normal_count = max(0, int(getattr(user, 'ai_image_recognition_count', 0) or 0))
-        available_count = usable_vip_count + current_normal_count
-        if not is_unlimited and available_count < 1:
-            raise ServiceException(message='AI识图次数不足，当前剩余0次')
 
         file_name = file.filename or 'panel-image'
         mime_type = file.content_type or 'image/png'
@@ -160,6 +150,14 @@ class InternalPowerPanelRecognitionService:
             raise ServiceException(message=f'图片读取失败：{exc}') from exc
         if not image_bytes:
             raise ServiceException(message='图片内容为空')
+
+        quota_snapshot = await AiRecognitionQuotaService.require_quota(query_db, current_user, 1)
+        user_id = quota_snapshot.user_id
+        if user_id != requested_user_id:
+            raise ServiceException(message='用户身份不一致')
+        is_unlimited = quota_snapshot.unlimited
+        current_vip_count = quota_snapshot.vip_count
+        current_normal_count = quota_snapshot.normal_count
 
         history = await cls.__create_history(query_db, user_id, file_name, mime_type, image_bytes)
         history_record_id = int(history.record_id)
@@ -220,16 +218,13 @@ class InternalPowerPanelRecognitionService:
         remaining_vip_count = current_vip_count
         remaining_normal_count = current_normal_count
         if not is_unlimited:
-            consumed_vip_count = min(usable_vip_count, 1)
-            consumed_normal_count = 1 - consumed_vip_count
-            deducted = await UserDao.decrement_ai_recognition_counts(
+            consumption = await AiRecognitionQuotaService.consume_successes(
                 query_db,
-                user_id,
-                consumed_vip_count,
-                consumed_normal_count,
+                quota_snapshot,
+                1,
                 user_name,
             )
-            if not deducted:
+            if not consumption.success:
                 await cls.__update_history(
                     query_db,
                     history_record_id,
@@ -249,8 +244,10 @@ class InternalPowerPanelRecognitionService:
                     remainingVipAiImageRecognitionCount=current_vip_count,
                     remainingAiImageRecognitionCount=current_normal_count,
                 )
-            remaining_vip_count = max(0, current_vip_count - consumed_vip_count)
-            remaining_normal_count = max(0, current_normal_count - consumed_normal_count)
+            consumed_vip_count = consumption.vip_count
+            consumed_normal_count = consumption.normal_count
+            remaining_vip_count = consumption.remaining_vip_count
+            remaining_normal_count = consumption.remaining_normal_count
 
         await cls.__update_history(query_db, history_record_id, user_id, 'recognized', parsed, mimo_result.raw_text, '')
         await query_db.commit()

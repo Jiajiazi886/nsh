@@ -159,6 +159,32 @@ DEFAULT_AI_RECOGNITION_CONFIG_SQL = {
     """,
 }
 
+VIP_AI_RECOGNITION_GRANT_CONFIG_SQL = {
+    'mysql': """
+    INSERT INTO sys_config (
+      config_name, config_key, config_value, config_type,
+      create_by, create_time, update_by, update_time, remark
+    )
+    SELECT '用户管理-VIP开通赠送识图次数', 'sys.user.vipAiImageRecognitionGrantCount', '0', 'Y',
+           'system', NOW(), 'system', NOW(), '用户从非VIP变为有效VIP时一次性追加的VIP AI识图次数'
+    FROM DUAL
+    WHERE NOT EXISTS (
+      SELECT 1 FROM sys_config WHERE config_key = 'sys.user.vipAiImageRecognitionGrantCount'
+    )
+    """,
+    'postgresql': """
+    INSERT INTO sys_config (
+      config_name, config_key, config_value, config_type,
+      create_by, create_time, update_by, update_time, remark
+    )
+    SELECT '用户管理-VIP开通赠送识图次数', 'sys.user.vipAiImageRecognitionGrantCount', '0', 'Y',
+           'system', NOW(), 'system', NOW(), '用户从非VIP变为有效VIP时一次性追加的VIP AI识图次数'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM sys_config WHERE config_key = 'sys.user.vipAiImageRecognitionGrantCount'
+    )
+    """,
+}
+
 DAMAGE_FORMULA_VERSION_COLUMN_SQL = {
     'mysql': {
         'formula_package_json': (
@@ -353,6 +379,16 @@ async def ensure_default_ai_recognition_config() -> None:
         await conn.execute(text(sql))
 
 
+async def ensure_vip_ai_recognition_grant_config() -> None:
+    """补齐VIP开通赠送识图次数配置，兼容已部署数据库升级。"""
+    sql = VIP_AI_RECOGNITION_GRANT_CONFIG_SQL.get(DataBaseConfig.db_type)
+    if not sql:
+        return
+
+    async with async_engine.begin() as conn:
+        await conn.execute(text(sql))
+
+
 async def ensure_damage_formula_version_schema() -> None:
     """
     补齐公式版本表字段容量，兼容已部署库升级。
@@ -394,6 +430,7 @@ async def init_create_table() -> None:
     await ensure_internal_power_lingyun_columns()
     await ensure_sys_user_vip_sponsor_columns()
     await ensure_default_ai_recognition_config()
+    await ensure_vip_ai_recognition_grant_config()
     await ensure_damage_formula_version_schema()
     logger.info('✅️ 数据库连接成功')
 

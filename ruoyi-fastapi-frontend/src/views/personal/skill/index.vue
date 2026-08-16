@@ -912,6 +912,7 @@ import {
   createDefaultDefender
 } from '@/utils/personalDefenseCalculator'
 import { getInternalPowerTraitEffect } from '@/utils/internalPowerTraits'
+import { applyAiRecognitionQuota } from '@/utils/aiRecognitionQuota'
 
 const userStore = useUserStore()
 const route = useRoute()
@@ -1731,18 +1732,9 @@ async function recognizeFiles(files = []) {
   }
 }
 
-function applyRecognitionConsumption(initialRecognitionCount, consumedCount, response = {}) {
+function applyRecognitionConsumption(consumedCount, response = {}) {
   if (!aiRecognitionUnlimited.value) {
-    const remainingNormalCount = Number(response.remainingCount ?? response.remainingAiImageRecognitionCount)
-    const remainingVipCount = Number(response.remainingVipAiImageRecognitionCount)
-    if (Number.isFinite(remainingVipCount)) {
-      userStore.vipAiImageRecognitionCount = Math.max(0, remainingVipCount)
-    }
-    if (Number.isFinite(remainingNormalCount)) {
-      userStore.aiImageRecognitionCount = Math.max(0, remainingNormalCount)
-      return
-    }
-    userStore.aiImageRecognitionCount = Math.max(0, Number(initialRecognitionCount || 0) - Number(consumedCount || 0))
+    applyAiRecognitionQuota(userStore, response, consumedCount)
   }
 }
 
@@ -1894,7 +1886,7 @@ async function processRecognitionUploadItem(uploadItem, progressItem, options = 
   progressItem.updatedAt = new Date().toISOString()
   try {
     const response = await recognizeInternalPowerImage(file, internalPowerRecognitionPrompt)
-    applyRecognitionConsumption(aiRecognitionCount.value, Number(response?.consumedCount || 0), response)
+    applyRecognitionConsumption(Number(response?.consumedCount || 0), response)
     const responseItems = Array.isArray(response?.result?.items) ? response.result.items : []
     const previewUrl = progressItem.imageUrl
     const normalizedItem = normalizeRecognitionItems(

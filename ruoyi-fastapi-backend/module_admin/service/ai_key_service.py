@@ -69,7 +69,7 @@ class AiKeyService:
         record.update_time = now
         try:
             await query_db.commit()
-            message = '内功识别 API Key 已清除' if payload.clear_api_key else '内功识别 API Key 已保存'
+            message = 'AI图片识别 API Key 已清除' if payload.clear_api_key else 'AI图片识别 API Key 已保存'
             return CrudResponseModel(is_success=True, message=message)
         except Exception:
             await query_db.rollback()

@@ -195,6 +195,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
+import useUserStore from '@/store/modules/user'
+import { applyAiRecognitionQuota } from '@/utils/aiRecognitionQuota'
 import {
   clearInternalPowerPanelRecognitionHistory,
   getInternalPowerPanelRecognitionHistory,
@@ -224,6 +226,7 @@ import {
 } from '@/utils/personalDefenseCalculator'
 
 const loading = ref(false)
+const userStore = useUserStore()
 const saving = ref(false)
 const templateLoading = ref(false)
 const recognizing = ref(false)
@@ -403,6 +406,11 @@ async function recognizeImage() {
   try {
     const response = await recognizeInternalPowerPanelImage(selectedImageFile.value)
     recognitionResult.value = response.data || response
+    applyAiRecognitionQuota(
+      userStore,
+      recognitionResult.value,
+      Number(recognitionResult.value?.consumedCount || 0)
+    )
     if (recognitionResult.value?.success) {
       if (!autoAppliedAttackSnapshot.value) {
         autoAppliedAttackSnapshot.value = clonePanel(form.attackPanel)

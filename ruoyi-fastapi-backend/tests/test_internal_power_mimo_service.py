@@ -907,7 +907,7 @@ async def test_recognize_images_marks_success_items_failed_when_atomic_deduct_fa
 
 
 @pytest.mark.asyncio
-async def test_recognize_images_deducts_vip_count_before_normal_count(monkeypatch):
+async def test_recognize_images_deducts_normal_count_before_vip_count(monkeypatch):
     install_history_fakes(monkeypatch)
     decrements = []
 
@@ -959,8 +959,8 @@ async def test_recognize_images_deducts_vip_count_before_normal_count(monkeypatc
     )
 
     assert result.consumed_count == 2
-    assert result.consumed_vip_count == 1
-    assert result.consumed_normal_count == 1
-    assert result.remaining_vip_ai_image_recognition_count == 0
-    assert result.remaining_ai_image_recognition_count == 4
-    assert decrements == [{'vip_count': 1, 'normal_count': 1}]
+    assert result.consumed_vip_count == 0
+    assert result.consumed_normal_count == 2
+    assert result.remaining_vip_ai_image_recognition_count == 1
+    assert result.remaining_ai_image_recognition_count == 3
+    assert decrements == [{'vip_count': 0, 'normal_count': 2}]

@@ -1,4 +1,4 @@
--- 系统管理 / AIKey管理：仅供管理员维护内功图片识别所需的一个 API Key。
+-- 系统管理 / AIKey管理：仅供管理员维护项目AI图片识别共用的一个 API Key。
 -- 密钥保存到既有 ai_models 表，后端以 Fernet 加密保存且接口不返回明文。
 
 DELETE FROM sys_role_menu WHERE menu_id IN (3051, 3052, 3053, 3054);
@@ -9,7 +9,7 @@ INSERT INTO sys_menu (
   is_frame, is_cache, menu_type, visible, status, perms, icon,
   create_by, create_time, update_by, update_time, remark
 ) VALUES
-  (3050, 'AIKey管理', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'admin', NOW(), '', NULL, '维护内功图片识别 API Key')
+  (3050, 'AIKey管理', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'admin', NOW(), '', NULL, '维护项目AI图片识别共用 API Key')
 ON DUPLICATE KEY UPDATE
   menu_name = VALUES(menu_name), parent_id = VALUES(parent_id), order_num = VALUES(order_num),
   path = VALUES(path), component = VALUES(component), route_name = VALUES(route_name),
