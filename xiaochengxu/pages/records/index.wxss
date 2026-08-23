@@ -1,0 +1,30 @@
+.records-content { max-width: 760rpx; margin: 0 auto; }
+.record-banner { padding: 30rpx; border-radius: 16rpx; background: #29364a; color: #fff; }
+.record-banner-label { color: #bfc8d8; font-size: 21rpx; font-weight: 700; }
+.record-banner-row { display: flex; align-items: flex-end; margin-top: 14rpx; }
+.record-main-value { font-size: 70rpx; font-weight: 800; line-height: 1; }
+.record-main-copy { margin-left: 22rpx; color: #dce2eb; font-size: 22rpx; line-height: 1.5; }
+.record-grid { margin-top: 20rpx; }
+.win-value, .result-win { color: var(--green); }
+.loss-value { color: var(--danger); }
+.battle-row, .history-card, .detail-header, .detail-player { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; }
+.battle-row, .history-card { min-height: 96rpx; margin-bottom: 12rpx; padding: 18rpx 22rpx; }
+.battle-name { font-size: 26rpx; font-weight: 800; }
+.battle-meta { margin-top: 6rpx; color: var(--muted); font-size: 20rpx; }
+.battle-result { flex: 0 0 auto; font-size: 22rpx; font-weight: 800; }
+.history-date { flex: 0 0 100rpx; color: var(--green); font-size: 20rpx; font-weight: 700; }
+.history-copy { flex: 1; min-width: 0; }
+.history-arrow { color: #8c98aa; font-size: 42rpx; }
+.ranking-head, .ranking-row { display: grid; grid-template-columns: 70rpx minmax(0, 1fr) 74rpx 74rpx; align-items: center; gap: 12rpx; }
+.ranking-head { padding: 0 16rpx 12rpx; color: var(--muted); font-size: 20rpx; }
+.ranking-row { min-height: 92rpx; padding: 0 16rpx; border-bottom: 1rpx solid var(--line); }
+.rank-number { color: var(--green); font-size: 26rpx; font-weight: 800; }
+.rank-stat { text-align: center; font-size: 25rpx; font-weight: 800; }
+.detail-mask { position: fixed; z-index: 1200; inset: 0; display: flex; align-items: flex-end; background: rgba(20,30,45,.42); }
+.detail-sheet { box-sizing: border-box; width: 100%; max-height: 78vh; padding: 28rpx 26rpx calc(28rpx + env(safe-area-inset-bottom)); border-radius: 20rpx 20rpx 0 0; background: #fff; }
+.sheet-title { font-size: 31rpx; font-weight: 800; }
+.detail-header button { margin: 0; background: transparent; color: var(--muted); font-size: 38rpx; }
+.detail-list { max-height: 58vh; margin-top: 18rpx; }
+.detail-player { min-height: 88rpx; border-bottom: 1rpx solid var(--line); }
+.detail-stats { color: var(--green); font-size: 20rpx; font-weight: 700; }
+.error-line { color: var(--danger); }

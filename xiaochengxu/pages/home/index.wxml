@@ -1,83 +1,57 @@
-<navigation-bar title="协同工作台" back="{{false}}" color="#17243a" background="#f4f7fb"></navigation-bar>
+<navigation-bar title="首页" back="{{false}}" color="#17243a" background="#f4f7fb"></navigation-bar>
 <scroll-view class="page-scroll" scroll-y>
   <view class="page-content home-content">
     <view class="workspace-header">
       <view>
         <view class="workspace-kicker">{{environmentName}}</view>
-        <view class="workspace-title">{{nickName}}</view>
-        <view class="workspace-account">账号 {{userName}}</view>
+        <view class="workspace-title">协同工作台</view>
+        <view class="workspace-account">{{nickName}} · {{roleNames[0] || '玩家'}}</view>
       </view>
-      <button class="profile-button" data-url="/pages/profile/index" bindtap="openPage">我的</button>
+      <button class="profile-button" data-url="/pages/profile/index" bindtap="openMainTab">我的</button>
     </view>
 
-    <view class="role-row">
-      <view wx:for="{{roleNames}}" wx:key="*this" class="status-pill">{{item}}</view>
-    </view>
-
-    <view class="panel guild-summary">
+    <view class="guild-summary">
       <view class="summary-topline">
         <view>
-          <view class="section-title">{{isGuildManager ? '管理中的帮会' : '帮会状态'}}</view>
-          <view wx:if="{{isGuildManager && guild}}" class="section-caption">{{guild.guild_name}}</view>
-          <view wx:elif="{{membership}}" class="section-caption">已加入 {{membership.guild_name}}</view>
-          <view wx:elif="{{application}}" class="section-caption">{{application.guild_name}} 的申请正在审核</view>
-          <view wx:else class="section-caption">当前尚未加入帮会</view>
+          <view class="summary-eyebrow">{{isGuildManager ? 'GUILD CONSOLE' : 'PLAYER SPACE'}}</view>
+          <view class="summary-title">{{isGuildManager ? '管理中的帮会' : '我的帮会'}}</view>
+          <view wx:if="{{isGuildManager && guild}}" class="summary-copy">{{guild.guild_name}}</view>
+          <view wx:elif="{{membership}}" class="summary-copy">{{membership.guild_name}}</view>
+          <view wx:elif="{{application}}" class="summary-copy">{{application.guild_name}} 正在审核</view>
+          <view wx:else class="summary-copy">当前尚未加入帮会</view>
         </view>
-        <view class="summary-state {{(isGuildManager || membership) ? 'state-active' : ''}}">{{isGuildManager ? '管理中' : (membership ? '已加入' : (application ? '审核中' : '未加入'))}}</view>
+        <view class="guild-seal">{{isGuildManager ? '管' : (membership ? '会' : '游')}}</view>
       </view>
       <view wx:if="{{isGuildManager && memberSummary}}" class="manager-metrics">
-        <view class="metric-item">
-          <view class="metric-value">{{memberSummary.active_count}}</view>
-          <view class="metric-label">有效成员</view>
-        </view>
-        <view class="metric-item">
-          <view class="metric-value">{{memberSummary.profession_count}}</view>
-          <view class="metric-label">职业类型</view>
-        </view>
-        <view class="metric-item">
-          <view class="metric-value">{{memberSummary.unmatched_profession_count}}</view>
-          <view class="metric-label">待核对职业</view>
-        </view>
+        <view class="metric-item"><view class="metric-value">{{memberSummary.active_count}}</view><view class="metric-label">有效成员</view></view>
+        <view class="metric-item"><view class="metric-value">{{memberSummary.profession_count}}</view><view class="metric-label">职业类型</view></view>
+        <view class="metric-item"><view class="metric-value">{{memberSummary.unmatched_profession_count}}</view><view class="metric-label">待核对职业</view></view>
       </view>
       <view wx:if="{{statusError}}" class="error-line">{{statusError}}</view>
     </view>
 
-    <view class="module-list">
-      <button wx:if="{{canManageMembers}}" class="module-row" data-url="/pages/guild-members/index" bindtap="openPage">
-        <view class="module-icon icon-green">员</view>
-        <view class="module-copy">
-          <view class="module-title">帮会成员</view>
-          <view class="module-caption">查看当前帮会成员和职业分布</view>
-        </view>
-        <view class="module-arrow">›</view>
-      </button>
-
-      <button wx:if="{{!isGuildManager}}" class="module-row" data-url="/pages/guild-join/index" bindtap="openPage">
-        <view class="module-icon icon-green">会</view>
-        <view class="module-copy">
-          <view class="module-title">加入帮会</view>
-          <view class="module-caption">搜索帮会、提交申请、查看审核状态</view>
-        </view>
-        <view class="module-arrow">›</view>
-      </button>
-
-      <button class="module-row" data-url="/pages/battle-invite/index" bindtap="openPage">
-        <view class="module-icon icon-gold">约</view>
-        <view class="module-copy">
-          <view class="module-title">约战邀请</view>
-          <view class="module-caption">打开邀请码并提交约战关联申请</view>
-        </view>
-        <view class="module-arrow">›</view>
-      </button>
-
-      <button class="module-row" data-url="/pages/schedule/index" bindtap="openPage">
-        <view class="module-icon icon-violet">排</view>
-        <view class="module-copy">
-          <view class="module-title">约战排表</view>
-          <view class="module-caption">查看当前团队、小队和成员位置</view>
-        </view>
-        <view class="module-arrow">›</view>
-      </button>
+    <view class="quick-grid">
+      <button data-url="/pages/activities/index" bindtap="openMainTab"><view class="quick-icon quick-gold">活</view><view class="quick-title">活动</view><view class="quick-copy">报名与排表</view></button>
+      <button data-url="/pages/guild/index" bindtap="openMainTab"><view class="quick-icon quick-green">会</view><view class="quick-title">帮会</view><view class="quick-copy">成员与审核</view></button>
+      <button data-url="/pages/records/index" bindtap="openMainTab"><view class="quick-icon quick-blue">绩</view><view class="quick-title">战绩</view><view class="quick-copy">对局与排行</view></button>
+      <button data-url="/pages/profile/index" bindtap="openMainTab"><view class="quick-icon quick-ink">我</view><view class="quick-title">我的</view><view class="quick-copy">资料与额度</view></button>
     </view>
+
+    <view class="section-heading"><view class="section-heading-title">当前活动</view><view class="section-heading-meta">实时同步</view></view>
+    <view wx:if="{{dashboard.active_invite_summary}}" class="panel current-activity">
+      <view class="current-activity-top"><view><view class="activity-label">约战</view><view class="activity-name">{{dashboard.active_invite_summary.battle_name}}</view></view><view class="status-pill">进行中</view></view>
+      <view class="activity-meta">{{dashboard.active_invite_summary.battle_time || '时间待定'}} · 已报名 {{dashboard.active_invite_summary.registration_count || 0}} 人</view>
+      <view class="activity-actions"><button data-url="/pages/activities/index" bindtap="openMainTab">查看活动</button><button data-url="/pages/schedule/index" bindtap="openPage">查看排表</button></view>
+    </view>
+    <view wx:else class="panel empty-activity"><view class="section-title">当前没有进行中的活动</view><view class="section-caption">活动创建、邀请码报名和排表都集中在“活动”页。</view><button class="primary-button" data-url="/pages/activities/index" bindtap="openMainTab">进入活动中心</button></view>
+
+    <view class="section-heading"><view class="section-heading-title">数据速览</view><view class="section-heading-meta">当前范围</view></view>
+    <view class="data-grid">
+      <view class="data-cell"><view class="data-value">{{dashboard.review_summary.pending_join_count || 0}}</view><view class="data-label">待审核入会</view></view>
+      <view class="data-cell"><view class="data-value">{{dashboard.review_summary.pending_battle_registration_count || 0}}</view><view class="data-label">待审核报名</view></view>
+      <view class="data-cell"><view class="data-value">{{dashboard.battle_summary.total || 0}}</view><view class="data-label">历史对局</view></view>
+      <view class="data-cell"><view class="data-value">{{dashboard.schedule_summary.assignment_count || 0}}</view><view class="data-label">已排成员</view></view>
+    </view>
+    <view wx:if="{{loading}}" class="empty-state">正在刷新工作台</view>
   </view>
 </scroll-view>

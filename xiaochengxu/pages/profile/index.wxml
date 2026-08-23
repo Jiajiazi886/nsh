@@ -1,35 +1,64 @@
-<navigation-bar title="我的账号" color="#17243a" background="#f4f7fb"></navigation-bar>
+<navigation-bar title="我的" back="{{false}}" color="#17243a" background="#f4f7fb"></navigation-bar>
 <scroll-view class="page-scroll" scroll-y>
   <view class="page-content profile-content">
-    <view class="panel identity-card">
+    <view class="identity-card">
       <view class="avatar">{{avatarText}}</view>
       <view class="identity-copy">
         <view class="identity-name">{{user.nickName || user.userName}}</view>
         <view class="identity-account">{{user.userName}}</view>
       </view>
+      <view class="identity-role">{{roleNames[0] || '玩家'}}</view>
     </view>
 
-    <view class="panel detail-card">
-      <view class="detail-row">
-        <text>系统角色</text>
-        <view class="role-list">
-          <text wx:for="{{roles}}" wx:key="*this" class="role-item">{{item}}</text>
+    <view class="segmented-control">
+      <button class="segment-button {{activeTab === 'account' ? 'segment-active' : ''}}" data-tab="account" bindtap="switchSection">账号</button>
+      <button class="segment-button {{activeTab === 'player' ? 'segment-active' : ''}}" data-tab="player" bindtap="switchSection">玩家资料</button>
+      <button class="segment-button {{activeTab === 'usage' ? 'segment-active' : ''}}" data-tab="usage" bindtap="switchSection">AI 次数</button>
+      <button class="segment-button {{activeTab === 'settings' ? 'segment-active' : ''}}" data-tab="settings" bindtap="switchSection">设置</button>
+    </view>
+
+    <block wx:if="{{activeTab === 'account'}}">
+      <view class="panel detail-card">
+        <view class="detail-row">
+          <text>系统角色</text>
+          <view class="role-list">
+            <text wx:for="{{roleNames}}" wx:key="*this" class="role-item">{{item}}</text>
+          </view>
         </view>
+        <view class="detail-row"><text>账号</text><text class="detail-value">{{user.userName}}</text></view>
+        <view class="detail-row"><text>昵称</text><text class="detail-value">{{user.nickName || '--'}}</text></view>
+        <view class="detail-row"><text>账号状态</text><text class="detail-value active-value">正常</text></view>
       </view>
-      <view class="detail-row">
-        <text>普通识图次数</text>
-        <text class="detail-value">{{user.aiImageRecognitionCount || 0}}</text>
-      </view>
-      <view class="detail-row">
-        <text>VIP 识图次数</text>
-        <text class="detail-value">{{user.vipAiImageRecognitionCount || 0}}</text>
-      </view>
-      <view class="detail-row">
-        <text>账号状态</text>
-        <text class="detail-value active-value">正常</text>
-      </view>
-    </view>
+    </block>
 
-    <button class="danger-button logout-button" bindtap="logout">退出登录</button>
+    <block wx:if="{{activeTab === 'player'}}">
+      <view wx:if="{{memberProfile}}" class="panel profile-form">
+        <view class="section-title">{{memberProfile.player_name}}</view>
+        <view class="section-caption">所属帮会 {{memberProfile.guild_name}}</view>
+        <view class="field"><text class="field-label">主职</text><input class="field-input" value="{{playerClass}}" data-field="playerClass" bindinput="updateField" /></view>
+        <view class="field"><text class="field-label">副职</text><input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" bindinput="updateField" /></view>
+        <view class="field"><text class="field-label">备注</text><textarea class="field-textarea" value="{{remark}}" data-field="remark" bindinput="updateField"></textarea></view>
+        <button class="primary-button save-profile" loading="{{saving}}" bindtap="saveMemberProfile">保存玩家资料</button>
+      </view>
+      <view wx:else class="panel compact-card"><view class="section-title">暂无绑定玩家资料</view><view class="section-caption">帮会管理员账号以组织身份工作；普通成员通过入会审核后可在这里编辑自己的职业资料。</view></view>
+    </block>
+
+    <block wx:if="{{activeTab === 'usage'}}">
+      <view class="usage-grid">
+        <view class="usage-card"><view class="usage-label">普通 AI 识图</view><view class="usage-value">{{user.aiImageRecognitionCount || 0}}</view><view class="usage-copy">优先扣除</view></view>
+        <view class="usage-card vip-card"><view class="usage-label">VIP AI 识图</view><view class="usage-value">{{user.vipAiImageRecognitionCount || 0}}</view><view class="usage-copy">普通次数用完后扣除</view></view>
+      </view>
+      <view class="panel compact-card usage-note"><view class="section-title">统一识图额度</view><view class="section-caption">内功识别、坦度面板识别和内功词条总体收益识别共用同一套次数。</view></view>
+    </block>
+
+    <block wx:if="{{activeTab === 'settings'}}">
+      <view class="panel detail-card">
+        <view class="detail-row"><text>运行环境</text><text class="detail-value">{{environment.name}}</text></view>
+        <view class="detail-row endpoint-row"><text>接口地址</text><text class="endpoint-value">{{environment.baseUrl}}</text></view>
+      </view>
+      <button class="danger-button logout-button" bindtap="logout">退出登录</button>
+    </block>
+
+    <view wx:if="{{loading}}" class="empty-state">正在加载个人资料</view>
   </view>
 </scroll-view>

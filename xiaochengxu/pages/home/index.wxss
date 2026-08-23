@@ -52,6 +52,9 @@
 
 .guild-summary {
   padding: 28rpx;
+  border-radius: 16rpx;
+  background: #29364a;
+  color: #ffffff;
 }
 
 .summary-topline {
@@ -94,15 +97,150 @@
 }
 
 .metric-value {
-  color: var(--ink);
+  color: #ffffff;
   font-size: 38rpx;
   font-weight: 800;
 }
 
 .metric-label {
   margin-top: 6rpx;
+  color: #bdc7d6;
+  font-size: 21rpx;
+}
+
+.summary-eyebrow {
+  color: #91cbbd;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+
+.summary-title {
+  margin-top: 7rpx;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.summary-copy {
+  margin-top: 7rpx;
+  color: #dce2eb;
+  font-size: 23rpx;
+}
+
+.guild-seal {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 76rpx;
+  height: 76rpx;
+  border: 1rpx solid rgba(255,255,255,.35);
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10rpx;
+  margin-top: 20rpx;
+}
+
+.quick-grid button {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 18rpx 6rpx;
+  border: 1rpx solid var(--line);
+  border-radius: 14rpx;
+  background: #ffffff;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.quick-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48rpx;
+  height: 48rpx;
+  margin: 0 auto;
+  border-radius: 11rpx;
+  color: #ffffff;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+
+.quick-gold { background: #b98512; }
+.quick-green { background: #176b58; }
+.quick-blue { background: #356fa5; }
+.quick-ink { background: #29364a; }
+
+.quick-title {
+  margin-top: 10rpx;
+  color: var(--ink);
+  font-size: 21rpx;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.quick-copy {
+  margin-top: 5rpx;
+  color: var(--muted);
+  font-size: 17rpx;
+  white-space: nowrap;
+}
+
+.current-activity,
+.empty-activity {
+  padding: 24rpx;
+}
+
+.current-activity-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.activity-label {
+  color: #b98512;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+
+.activity-name {
+  margin-top: 6rpx;
+  font-size: 29rpx;
+  font-weight: 800;
+}
+
+.activity-meta {
+  margin-top: 14rpx;
   color: var(--muted);
   font-size: 21rpx;
+}
+
+.activity-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10rpx;
+  margin-top: 20rpx;
+}
+
+.activity-actions button {
+  margin: 0;
+  border: 1rpx solid var(--line);
+  background: #ffffff;
+  color: var(--green);
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.empty-activity .primary-button {
+  margin-top: 20rpx;
 }
 
 .module-list {

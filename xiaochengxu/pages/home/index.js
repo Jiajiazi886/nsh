@@ -2,6 +2,7 @@ const authService = require('../../services/auth')
 const guildService = require('../../services/guild')
 const { getEnvironment } = require('../../config/env')
 const { getToken } = require('../../utils/storage')
+const { selectTab } = require('../../utils/tabbar')
 
 const ROLE_NAMES = {
   admin: '超级管理员',
@@ -21,6 +22,14 @@ Page({
     canManageMembers: false,
     guild: null,
     memberSummary: null,
+    dashboard: {
+      guild: {},
+      member_summary: {},
+      review_summary: {},
+      schedule_summary: {},
+      battle_summary: {},
+      active_invite_summary: null,
+    },
     membership: null,
     application: null,
     statusError: '',
@@ -35,6 +44,7 @@ Page({
   },
 
   onShow() {
+    selectTab(this, 0)
     if (getToken()) this.loadDashboard()
   },
 
@@ -68,6 +78,7 @@ Page({
         canManageMembers: isGuildManager && canManageMembers,
         guild: dashboard.guild || null,
         memberSummary: dashboard.member_summary || null,
+        dashboard,
         membership: guildStatus ? guildStatus.current_membership : null,
         application: guildStatus ? guildStatus.current_application : null,
       })
@@ -80,5 +91,9 @@ Page({
 
   openPage(event) {
     wx.navigateTo({ url: event.currentTarget.dataset.url })
+  },
+
+  openMainTab(event) {
+    wx.switchTab({ url: event.currentTarget.dataset.url })
   },
 })

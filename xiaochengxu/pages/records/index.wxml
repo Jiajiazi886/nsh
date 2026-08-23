@@ -1,0 +1,69 @@
+<navigation-bar title="战绩" back="{{false}}" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content records-content">
+    <view class="page-kicker">BATTLE RECORDS</view>
+    <view class="page-title">帮会战绩</view>
+
+    <view class="segmented-control">
+      <button class="segment-button {{activeTab === 'overview' ? 'segment-active' : ''}}" data-tab="overview" bindtap="switchSection">战绩概览</button>
+      <button class="segment-button {{activeTab === 'history' ? 'segment-active' : ''}}" data-tab="history" bindtap="switchSection">对局记录</button>
+      <button class="segment-button {{activeTab === 'ranking' ? 'segment-active' : ''}}" data-tab="ranking" bindtap="switchSection">数据排行</button>
+    </view>
+
+    <view wx:if="{{errorMessage}}" class="panel compact-card error-line">{{errorMessage}}</view>
+
+    <block wx:if="{{activeTab === 'overview'}}">
+      <view class="record-banner">
+        <view class="record-banner-label">{{dashboard.guild.guild_name || '个人数据'}}</view>
+        <view class="record-banner-row"><view class="record-main-value">{{dashboard.battle_summary.win_rate || 0}}%</view><view class="record-main-copy">历史胜率<br/>完成 {{dashboard.battle_summary.completed || 0}} 场</view></view>
+      </view>
+      <view class="data-grid record-grid">
+        <view class="data-cell"><view class="data-value">{{dashboard.battle_summary.total || 0}}</view><view class="data-label">全部对局</view></view>
+        <view class="data-cell"><view class="data-value win-value">{{dashboard.battle_summary.wins || 0}}</view><view class="data-label">胜利</view></view>
+        <view class="data-cell"><view class="data-value loss-value">{{dashboard.battle_summary.losses || 0}}</view><view class="data-label">失败</view></view>
+        <view class="data-cell"><view class="data-value">{{dashboard.member_summary.active_count || 0}}</view><view class="data-label">当前成员</view></view>
+      </view>
+      <view class="section-heading"><view class="section-heading-title">最近对局</view><view class="section-heading-meta">最多显示 5 场</view></view>
+      <view wx:for="{{dashboard.latest_battles}}" wx:key="battle_id" class="panel battle-row" data-id="{{item.battle_id}}" bindtap="openBattle">
+        <view><view class="battle-name">{{item.battle_name}}</view><view class="battle-meta">{{item.battle_date}} · {{item.opponent_name || '未知对手'}}</view></view>
+        <view class="battle-result {{item.resultClass}}">{{item.battle_result || '已结束'}}</view>
+      </view>
+      <view wx:if="{{!dashboard.latest_battles.length}}" class="empty-state">暂无历史约战数据</view>
+    </block>
+
+    <block wx:if="{{activeTab === 'history'}}">
+      <view wx:if="{{canViewHistory}}">
+        <view wx:for="{{battles}}" wx:key="battle_id" class="panel history-card" data-id="{{item.battle_id}}" bindtap="openBattle">
+          <view class="history-date">{{item.battle_date || '--'}}</view>
+          <view class="history-copy"><view class="battle-name">{{item.battle_name}}</view><view class="battle-meta">对手 {{item.opponent_name || '未知'}} · {{item.battle_type || '约战'}}</view></view>
+          <view class="history-arrow">›</view>
+        </view>
+        <view wx:if="{{!battles.length}}" class="empty-state">当前没有可查看的对局记录</view>
+      </view>
+      <view wx:else class="panel compact-card"><view class="section-title">战绩权限未开放</view><view class="section-caption">当前角色没有帮会战绩列表权限。</view></view>
+    </block>
+
+    <block wx:if="{{activeTab === 'ranking'}}">
+      <view class="ranking-head"><text>排名</text><text>玩家</text><text>击杀</text><text>助攻</text></view>
+      <view wx:for="{{dashboard.top_records}}" wx:key="record_id" class="ranking-row">
+        <view class="rank-number">{{index + 1}}</view>
+        <view><view class="battle-name">{{item.player_name}}</view><view class="battle-meta">{{item.player_class || '未设置职业'}}</view></view>
+        <view class="rank-stat">{{item.kills || 0}}</view>
+        <view class="rank-stat">{{item.assists || 0}}</view>
+      </view>
+      <view wx:if="{{!dashboard.top_records.length}}" class="empty-state">暂无可排行的玩家战绩</view>
+    </block>
+
+    <view wx:if="{{selectedBattle}}" class="detail-mask" bindtap="closeBattle">
+      <view class="detail-sheet" catchtap="noop">
+        <view class="detail-header"><view><view class="sheet-title">{{selectedBattle.battle_name}}</view><view class="battle-meta">{{selectedBattle.battle_date}} · {{selectedBattle.opponent_name || '未知对手'}}</view></view><button bindtap="closeBattle">×</button></view>
+        <scroll-view class="detail-list" scroll-y>
+          <view wx:for="{{battleRecords}}" wx:key="record_id" class="detail-player"><view><view class="battle-name">{{item.player_name}}</view><view class="battle-meta">{{item.player_class || '未设置职业'}}</view></view><view class="detail-stats">击杀 {{item.kills || 0}} · 助攻 {{item.assists || 0}}</view></view>
+          <view wx:if="{{detailLoading}}" class="empty-state">正在加载战绩明细</view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty-state">正在加载战绩</view>
+  </view>
+</scroll-view>

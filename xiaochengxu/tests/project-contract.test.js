@@ -24,12 +24,23 @@ test('app.json registers every Demo page', () => {
     'pages/login/index',
     'pages/register/index',
     'pages/home/index',
+    'pages/activities/index',
+    'pages/guild/index',
+    'pages/records/index',
+    'pages/profile/index',
     'pages/guild-members/index',
     'pages/guild-join/index',
     'pages/battle-invite/index',
     'pages/schedule/index',
-    'pages/profile/index',
   ])
+})
+
+test('primary functions use a five-item custom tab bar', () => {
+  const appConfig = JSON.parse(read('app.json'))
+  assert.equal(appConfig.tabBar.custom, true)
+  assert.deepEqual(appConfig.tabBar.list.map((item) => item.text), ['首页', '活动', '帮会', '战绩', '我的'])
+  assert.equal(appConfig.tabBar.list.length, 5)
+  assert.match(read('custom-tab-bar/index.js'), /wx\.switchTab/)
 })
 
 test('all JavaScript files are valid scripts', () => {
@@ -60,6 +71,17 @@ test('guild manager workspace uses role-scoped dashboard and member APIs', () =>
   assert.match(guildService, /url: '\/guild\/member\/list'/)
   assert.match(homePage, /roles\.includes\('common'\)/)
   assert.match(homePage, /permissions\.includes\('guild:member:list'\)/)
+})
+
+test('activity, guild, and records pages use existing backend modules', () => {
+  const battleService = read('services/battle.js')
+  const guildService = read('services/guild.js')
+  const scheduleService = read('services/schedule.js')
+  assert.match(battleService, /\/guild\/battle-registration\/invite\/list/)
+  assert.match(battleService, /\/guild\/battle\/list/)
+  assert.match(guildService, /\/guild\/join\/pending/)
+  assert.match(guildService, /\/guild\/member\/guild-name/)
+  assert.match(scheduleService, /\/guild\/schedule\/current/)
 })
 
 test('trial and release builds use the production API', () => {

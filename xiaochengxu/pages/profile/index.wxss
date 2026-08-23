@@ -12,6 +12,9 @@
 
 .identity-card {
   padding: 30rpx;
+  border-radius: 16rpx;
+  background: #29364a;
+  color: #ffffff;
 }
 
 .avatar {
@@ -28,6 +31,8 @@
 }
 
 .identity-copy {
+  flex: 1;
+  min-width: 0;
   margin-left: 22rpx;
 }
 
@@ -38,8 +43,18 @@
 
 .identity-account {
   margin-top: 6rpx;
-  color: var(--muted);
+  color: #c9d1df;
   font-size: 23rpx;
+}
+
+.identity-role {
+  flex: 0 0 auto;
+  padding: 8rpx 14rpx;
+  border-radius: 10rpx;
+  background: #176b58;
+  color: #ffffff;
+  font-size: 20rpx;
+  font-weight: 700;
 }
 
 .detail-card {
@@ -85,4 +100,67 @@
 
 .logout-button {
   margin-top: 30rpx;
+}
+
+.profile-form {
+  padding: 28rpx;
+}
+
+.save-profile {
+  margin-top: 24rpx;
+}
+
+.usage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.usage-card {
+  min-width: 0;
+  padding: 26rpx;
+  border: 1rpx solid #c8ded7;
+  border-radius: 16rpx;
+  background: #edf7f3;
+}
+
+.vip-card {
+  border-color: #e7d6a7;
+  background: #fff8e9;
+}
+
+.usage-label {
+  color: var(--muted);
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.usage-value {
+  margin-top: 12rpx;
+  font-size: 48rpx;
+  font-weight: 800;
+}
+
+.usage-copy {
+  margin-top: 8rpx;
+  color: var(--muted);
+  font-size: 19rpx;
+}
+
+.usage-note {
+  margin-top: 18rpx;
+}
+
+.endpoint-row {
+  align-items: flex-start;
+  padding: 22rpx 0;
+}
+
+.endpoint-value {
+  max-width: 430rpx;
+  color: var(--muted);
+  font-size: 20rpx;
+  line-height: 1.5;
+  text-align: right;
+  word-break: break-all;
 }

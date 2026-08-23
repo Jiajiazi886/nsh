@@ -1,0 +1,117 @@
+<navigation-bar title="活动" back="{{false}}" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content activity-content">
+    <view class="page-kicker">ACTIVITY CENTER</view>
+    <view class="page-title">活动中心</view>
+
+    <view class="segmented-control">
+      <button class="segment-button {{activeTab === 'overview' ? 'segment-active' : ''}}" data-tab="overview" bindtap="switchSection">活动总览</button>
+      <button class="segment-button {{activeTab === 'review' ? 'segment-active' : ''}}" data-tab="review" bindtap="switchSection">报名审核</button>
+      <button class="segment-button {{activeTab === 'schedule' ? 'segment-active' : ''}}" data-tab="schedule" bindtap="switchSection">约战排表</button>
+    </view>
+
+    <view wx:if="{{errorMessage}}" class="panel compact-card error-line">{{errorMessage}}</view>
+
+    <block wx:if="{{activeTab === 'overview'}}">
+      <view class="activity-hero">
+        <view>
+          <view class="hero-label">{{isManager ? '帮会活动管理' : '我的活动'}}</view>
+          <view class="hero-title">{{dashboard.guild.guild_name || '尚未加入帮会'}}</view>
+          <view class="hero-copy">报名、请假、排表和审核集中在这里处理</view>
+        </view>
+        <view class="hero-count">{{dashboard.active_invite_summary ? dashboard.active_invite_summary.registration_count : 0}}</view>
+      </view>
+
+      <view class="data-grid overview-grid">
+        <view class="data-cell"><view class="data-value">{{dashboard.review_summary.pending_battle_registration_count || 0}}</view><view class="data-label">待审核报名</view></view>
+        <view class="data-cell"><view class="data-value">{{dashboard.schedule_summary.assignment_count || 0}}</view><view class="data-label">已排成员</view></view>
+        <view class="data-cell"><view class="data-value">{{dashboard.battle_summary.total || 0}}</view><view class="data-label">历史约战</view></view>
+        <view class="data-cell"><view class="data-value">{{dashboard.battle_summary.win_rate || 0}}%</view><view class="data-label">历史胜率</view></view>
+      </view>
+
+      <view wx:if="{{canReview}}" class="section-heading">
+        <view class="section-heading-title">约战活动</view>
+        <view class="section-heading-meta">{{invites.length}} 条记录</view>
+      </view>
+      <view wx:for="{{invites}}" wx:key="invite_id" class="panel activity-card">
+        <view class="activity-card-top">
+          <view>
+            <view class="activity-name">{{item.battle_name}}</view>
+            <view class="activity-meta">{{item.battle_time || '时间待定'}} · {{item.registration_count}} 人报名</view>
+          </view>
+          <view class="status-pill">{{item.expired ? '已结束' : (item.status === '0' ? '进行中' : '已停用')}}</view>
+        </view>
+        <view class="invite-code">邀请码 {{item.invite_code}}</view>
+      </view>
+      <button wx:if="{{canReview}}" class="create-activity" bindtap="toggleCreateForm">
+        <view class="create-symbol">+</view>
+        <view><view class="create-title">创建约战活动</view><view class="create-copy">生成报名、请假和入会邀请入口</view></view>
+      </button>
+
+      <view wx:else class="panel invite-entry">
+        <view class="section-title">打开活动邀请码</view>
+        <view class="section-caption">输入管理员提供的邀请码，查看活动并提交申请。</view>
+        <view class="invite-input-row">
+          <input class="field-input" value="{{inviteCode}}" data-field="inviteCode" placeholder="输入邀请码" bindinput="updateField" />
+          <button class="primary-button" bindtap="openInvite">打开</button>
+        </view>
+      </view>
+    </block>
+
+    <block wx:if="{{activeTab === 'review'}}">
+      <view wx:if="{{!canReview}}" class="panel compact-card">
+        <view class="section-title">报名状态</view>
+        <view class="section-caption">普通成员可通过活动邀请码提交报名、请假或入会申请，审核由帮会管理员处理。</view>
+      </view>
+      <block wx:else>
+        <view class="section-heading"><view class="section-heading-title">待处理报名</view><view class="section-heading-meta">{{registrations.length}} 人</view></view>
+        <view wx:for="{{registrations}}" wx:key="registration_id" class="panel review-card">
+          <view><view class="review-name">{{item.player_name}}</view><view class="review-meta">{{item.player_class || '未设置职业'}} · {{item.remark || '无备注'}}</view></view>
+          <view wx:if="{{item.approval_status === '0'}}" class="review-actions">
+            <button data-id="{{item.registration_id}}" data-action="reject" bindtap="reviewRegistration">拒绝</button>
+            <button class="approve-button" data-id="{{item.registration_id}}" data-action="approve" bindtap="reviewRegistration">通过</button>
+          </view>
+          <view wx:else class="status-pill">{{item.approval_status === '1' ? '已通过' : '已拒绝'}}</view>
+        </view>
+        <view class="section-heading"><view class="section-heading-title">请假申请</view><view class="section-heading-meta">{{leaves.length}} 人</view></view>
+        <view wx:for="{{leaves}}" wx:key="registration_id" class="panel review-card">
+          <view><view class="review-name">{{item.player_name}}</view><view class="review-meta">{{item.remark || '未填写请假原因'}}</view></view>
+          <view wx:if="{{item.approval_status === '0'}}" class="review-actions">
+            <button data-id="{{item.registration_id}}" data-action="reject" bindtap="reviewRegistration">拒绝</button>
+            <button class="approve-button" data-id="{{item.registration_id}}" data-action="approve" bindtap="reviewRegistration">通过</button>
+          </view>
+        </view>
+        <view wx:if="{{!registrations.length && !leaves.length}}" class="empty-state">当前没有报名或请假记录</view>
+      </block>
+    </block>
+
+    <block wx:if="{{activeTab === 'schedule'}}">
+      <view wx:if="{{schedule}}" class="panel schedule-preview">
+        <view class="status-pill">当前排表</view>
+        <view class="schedule-title">{{schedule.schedule_name}}</view>
+        <view class="section-caption">{{schedule.teams.length}} 个团队，可进入查看各小队与成员位置。</view>
+        <button class="primary-button schedule-button" bindtap="openSchedule">查看完整排表</button>
+      </view>
+      <view wx:else class="empty-state">{{canViewSchedule ? '当前暂无有效排表' : '当前角色没有排表查看权限'}}</view>
+    </block>
+
+    <view wx:if="{{showCreateForm}}" class="sheet-mask">
+      <view class="form-sheet">
+        <view class="sheet-title">创建约战活动</view>
+        <input class="field-input" value="{{battleName}}" data-field="battleName" placeholder="活动名称" bindinput="updateField" />
+        <view class="picker-row">
+          <picker mode="date" value="{{battleDate}}" data-field="battleDate" bindchange="updateField"><view class="picker-value">{{battleDate || '选择日期'}}</view></picker>
+          <picker mode="time" value="{{battleTime}}" data-field="battleTime" bindchange="updateField"><view class="picker-value">{{battleTime}}</view></picker>
+        </view>
+        <input class="field-input" type="number" value="{{expireHours}}" data-field="expireHours" placeholder="有效小时数" bindinput="updateField" />
+        <textarea class="field-textarea" value="{{remark}}" data-field="remark" placeholder="活动备注" bindinput="updateField"></textarea>
+        <view class="inline-actions">
+          <button class="secondary-button" bindtap="toggleCreateForm">取消</button>
+          <button class="primary-button" loading="{{submitting}}" bindtap="createInvite">创建</button>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty-state">正在加载活动数据</view>
+  </view>
+</scroll-view>

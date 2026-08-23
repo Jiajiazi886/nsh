@@ -1,0 +1,98 @@
+<navigation-bar title="帮会" back="{{false}}" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content guild-content">
+    <view class="page-kicker">GUILD WORKSPACE</view>
+    <view class="page-title">{{dashboard.guild.guild_name || '帮会中心'}}</view>
+
+    <view class="segmented-control">
+      <button class="segment-button {{activeTab === 'overview' ? 'segment-active' : ''}}" data-tab="overview" bindtap="switchSection">概览</button>
+      <button class="segment-button {{activeTab === 'members' ? 'segment-active' : ''}}" data-tab="members" bindtap="switchSection">成员</button>
+      <button class="segment-button {{activeTab === 'applications' ? 'segment-active' : ''}}" data-tab="applications" bindtap="switchSection">审核</button>
+      <button class="segment-button {{activeTab === 'settings' ? 'segment-active' : ''}}" data-tab="settings" bindtap="switchSection">设置</button>
+    </view>
+
+    <view wx:if="{{errorMessage}}" class="panel compact-card error-line">{{errorMessage}}</view>
+
+    <block wx:if="{{activeTab === 'overview'}}">
+      <view class="guild-banner">
+        <view class="guild-mark">{{guildInitial}}</view>
+        <view class="guild-banner-copy">
+          <view class="guild-banner-title">{{dashboard.guild.guild_name || '尚未加入帮会'}}</view>
+          <view class="guild-banner-meta">{{isManager ? '帮会管理员工作区' : (membership ? membership.player_name : '加入帮会后解锁协同功能')}}</view>
+        </view>
+        <view class="manager-tag">{{isManager ? '管理' : '成员'}}</view>
+      </view>
+      <view class="data-grid guild-grid">
+        <view class="data-cell"><view class="data-value">{{dashboard.member_summary.active_count || 0}}</view><view class="data-label">有效成员</view></view>
+        <view class="data-cell"><view class="data-value">{{dashboard.class_distribution.length || 0}}</view><view class="data-label">职业分布</view></view>
+        <view class="data-cell"><view class="data-value">{{dashboard.review_summary.pending_join_count || 0}}</view><view class="data-label">待审核入会</view></view>
+        <view class="data-cell"><view class="data-value">{{dashboard.schedule_summary.active_schedule_count || 0}}</view><view class="data-label">当前排表</view></view>
+      </view>
+      <view class="section-heading"><view class="section-heading-title">职业分布</view><view class="section-heading-meta">实时名册</view></view>
+      <view wx:for="{{dashboard.class_distribution}}" wx:key="class_name" class="class-row">
+        <view class="class-name">{{item.class_name}}</view>
+        <view class="class-track"><view class="class-fill" style="width: {{item.percent}}%"></view></view>
+        <view class="class-count">{{item.count}}</view>
+      </view>
+    </block>
+
+    <block wx:if="{{activeTab === 'members'}}">
+      <view wx:if="{{canViewMembers}}">
+        <view class="member-toolbar">
+          <input class="field-input" value="{{keyword}}" data-field="keyword" placeholder="搜索玩家名或职业" bindinput="updateField" />
+          <button wx:if="{{canAddMember}}" class="primary-button add-button" bindtap="toggleAddForm">新增</button>
+        </view>
+        <view wx:for="{{visibleMembers}}" wx:key="member_id" class="member-row">
+          <view class="member-index">{{index + 1}}</view>
+          <view class="member-copy"><view class="member-name">{{item.player_name}}</view><view class="member-meta">{{item.player_class || '未设置主职'}}{{item.secondary_class ? ' · ' + item.secondary_class : ''}}</view></view>
+          <view class="member-role">{{item.role_in_guild || '成员'}}</view>
+        </view>
+        <view wx:if="{{!visibleMembers.length}}" class="empty-state">没有匹配的成员</view>
+      </view>
+      <view wx:else class="panel compact-card">
+        <view class="section-title">我的帮会资料</view>
+        <view wx:if="{{membership}}" class="section-caption">{{membership.guild_name}} · {{membership.player_name}}</view>
+        <view wx:else class="section-caption">当前尚未加入帮会。</view>
+        <button class="primary-button join-button" bindtap="openJoinGuild">{{membership ? '查看我的帮会' : '搜索并加入帮会'}}</button>
+      </view>
+    </block>
+
+    <block wx:if="{{activeTab === 'applications'}}">
+      <view wx:if="{{canReview}}">
+        <view wx:for="{{applications}}" wx:key="application_id" class="panel application-card">
+          <view class="application-top"><view><view class="member-name">{{item.player_name}}</view><view class="member-meta">{{item.player_class || '未设置职业'}} · {{item.applicant_nick_name || item.applicant_user_name}}</view></view><view class="status-pill">待审核</view></view>
+          <view wx:if="{{item.remark}}" class="application-remark">{{item.remark}}</view>
+          <view class="inline-actions"><button wx:if="{{canReject}}" class="secondary-button" data-id="{{item.application_id}}" data-action="reject" bindtap="reviewApplication">拒绝</button><button wx:if="{{canApprove}}" class="primary-button" data-id="{{item.application_id}}" data-action="approve" bindtap="reviewApplication">同意入会</button></view>
+        </view>
+        <view wx:if="{{!applications.length}}" class="empty-state">当前没有待审核入会申请</view>
+      </view>
+      <view wx:else class="panel compact-card">
+        <view class="section-title">我的入会状态</view>
+        <view class="section-caption">{{membership ? '已加入 ' + membership.guild_name : (application ? application.guild_name + ' 正在审核' : '尚未提交入会申请')}}</view>
+        <button class="primary-button join-button" bindtap="openJoinGuild">查看入会流程</button>
+      </view>
+    </block>
+
+    <block wx:if="{{activeTab === 'settings'}}">
+      <view wx:if="{{canEditGuild}}" class="panel settings-card">
+        <view class="section-title">帮会设置</view>
+        <view class="section-caption">名称将同步显示在邀请、审核和活动页面。</view>
+        <view class="field"><text class="field-label">帮会名称</text><input class="field-input" value="{{guildName}}" data-field="guildName" bindinput="updateField" /></view>
+        <button class="primary-button save-button" loading="{{submitting}}" bindtap="saveGuildName">保存设置</button>
+      </view>
+      <view wx:else class="panel compact-card"><view class="section-title">帮会设置</view><view class="section-caption">只有具备帮会编辑权限的管理员可以修改帮会设置。</view></view>
+    </block>
+
+    <view wx:if="{{showAddForm}}" class="sheet-mask">
+      <view class="form-sheet">
+        <view class="sheet-title">新增帮会成员</view>
+        <input class="field-input" value="{{playerName}}" data-field="playerName" placeholder="玩家名" bindinput="updateField" />
+        <view class="field-pair"><input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="主职" bindinput="updateField" /><input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="副职" bindinput="updateField" /></view>
+        <textarea class="field-textarea" value="{{remark}}" data-field="remark" placeholder="备注" bindinput="updateField"></textarea>
+        <view class="inline-actions"><button class="secondary-button" bindtap="toggleAddForm">取消</button><button class="primary-button" loading="{{submitting}}" bindtap="addMember">添加</button></view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty-state">正在加载帮会数据</view>
+  </view>
+</scroll-view>

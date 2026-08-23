@@ -18,7 +18,7 @@ Page({
 
   onLoad(query) {
     if (getToken()) {
-      wx.reLaunch({ url: '/pages/home/index' })
+      wx.switchTab({ url: '/pages/home/index' })
       return
     }
     this.setData({
@@ -100,7 +100,7 @@ Page({
         roles: userInfo.roles || [],
         permissions: userInfo.permissions || [],
       })
-      wx.reLaunch({ url: '/pages/home/index' })
+      wx.switchTab({ url: '/pages/home/index' })
     } catch (error) {
       clearSession()
       wx.showToast({ title: error.message || '登录失败', icon: 'none' })
