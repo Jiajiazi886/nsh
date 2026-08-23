@@ -21,6 +21,18 @@
     "ignore": [],
     "include": []
   },
+  "condition": {
+    "miniprogram": {
+      "list": [
+        {
+          "name": "登录页",
+          "pathName": "pages/login/index",
+          "query": "",
+          "scene": null
+        }
+      ]
+    }
+  },
   "appid": "wx964461c344f84a78",
   "editorSetting": {}
 }
