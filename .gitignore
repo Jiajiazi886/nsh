@@ -158,6 +158,9 @@ cython_debug/
 # JavaScript dependencies/build output
 node_modules/
 
+# WeChat DevTools personal settings
+xiaochengxu/project.private.config.json
+
 # Project-local generated/runtime files
 .ruff_cache/
 logs/
