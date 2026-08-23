@@ -17,6 +17,10 @@ Page({
     nickName: '',
     roleNames: [],
     environmentName: '',
+    isGuildManager: false,
+    canManageMembers: false,
+    guild: null,
+    memberSummary: null,
     membership: null,
     application: null,
     statusError: '',
@@ -41,19 +45,31 @@ Page({
   async loadDashboard() {
     this.setData({ loading: true, statusError: '' })
     try {
-      const [userInfo, guildStatus] = await Promise.all([
-        authService.getInfo(),
-        guildService.getMyStatus(),
-      ])
+      const userInfo = await authService.getInfo()
       const user = userInfo.user || {}
       const roles = userInfo.roles || []
-      getApp().updateUser({ user, roles, permissions: userInfo.permissions || [] })
+      const permissions = userInfo.permissions || []
+      const isGuildManager = roles.includes('admin') || roles.includes('common')
+      const canManageMembers = permissions.includes('*:*:*') || permissions.includes('guild:member:list')
+      const dashboardResponse = await guildService.getDashboardSummary()
+      const dashboard = dashboardResponse.data || {}
+      let guildStatus = null
+      if (!isGuildManager) {
+        const statusResponse = await guildService.getMyStatus()
+        guildStatus = statusResponse.data || {}
+      }
+
+      getApp().updateUser({ user, roles, permissions })
       this.setData({
         userName: user.userName || '',
         nickName: user.nickName || user.userName || '玩家',
         roleNames: roles.map((role) => ROLE_NAMES[role] || role),
-        membership: guildStatus.data ? guildStatus.data.current_membership : null,
-        application: guildStatus.data ? guildStatus.data.current_application : null,
+        isGuildManager,
+        canManageMembers: isGuildManager && canManageMembers,
+        guild: dashboard.guild || null,
+        memberSummary: dashboard.member_summary || null,
+        membership: guildStatus ? guildStatus.current_membership : null,
+        application: guildStatus ? guildStatus.current_application : null,
       })
     } catch (error) {
       this.setData({ statusError: error.message || '工作台加载失败' })

@@ -76,6 +76,35 @@
   font-size: 23rpx;
 }
 
+.manager-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 26rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid var(--line);
+}
+
+.metric-item {
+  min-width: 0;
+  text-align: center;
+}
+
+.metric-item + .metric-item {
+  border-left: 1rpx solid var(--line);
+}
+
+.metric-value {
+  color: var(--ink);
+  font-size: 38rpx;
+  font-weight: 800;
+}
+
+.metric-label {
+  margin-top: 6rpx;
+  color: var(--muted);
+  font-size: 21rpx;
+}
+
 .module-list {
   margin-top: 28rpx;
   border-top: 1rpx solid var(--line);

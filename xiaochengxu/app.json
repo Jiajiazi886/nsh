@@ -3,6 +3,7 @@
     "pages/login/index",
     "pages/register/index",
     "pages/home/index",
+    "pages/guild-members/index",
     "pages/guild-join/index",
     "pages/battle-invite/index",
     "pages/schedule/index",

@@ -4,6 +4,18 @@ function getMyStatus() {
   return request({ url: '/guild/join/my-status' })
 }
 
+function getDashboardSummary() {
+  return request({ url: '/guild/dashboard/summary' })
+}
+
+function getGuildInfo() {
+  return request({ url: '/guild/member/guild-info' })
+}
+
+function getMembers() {
+  return request({ url: '/guild/member/list' })
+}
+
 function searchGuilds(keyword) {
   return request({
     url: `/guild/join/search?keyword=${encodeURIComponent(keyword)}`,
@@ -30,6 +42,9 @@ function quitGuild() {
 
 module.exports = {
   applyToGuild,
+  getDashboardSummary,
+  getGuildInfo,
+  getMembers,
   getMyStatus,
   quitGuild,
   searchGuilds,

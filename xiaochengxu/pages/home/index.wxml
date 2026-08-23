@@ -17,18 +17,42 @@
     <view class="panel guild-summary">
       <view class="summary-topline">
         <view>
-          <view class="section-title">帮会状态</view>
-          <view wx:if="{{membership}}" class="section-caption">已加入 {{membership.guild_name}}</view>
+          <view class="section-title">{{isGuildManager ? '管理中的帮会' : '帮会状态'}}</view>
+          <view wx:if="{{isGuildManager && guild}}" class="section-caption">{{guild.guild_name}}</view>
+          <view wx:elif="{{membership}}" class="section-caption">已加入 {{membership.guild_name}}</view>
           <view wx:elif="{{application}}" class="section-caption">{{application.guild_name}} 的申请正在审核</view>
           <view wx:else class="section-caption">当前尚未加入帮会</view>
         </view>
-        <view class="summary-state {{membership ? 'state-active' : ''}}">{{membership ? '已加入' : (application ? '审核中' : '未加入')}}</view>
+        <view class="summary-state {{(isGuildManager || membership) ? 'state-active' : ''}}">{{isGuildManager ? '管理中' : (membership ? '已加入' : (application ? '审核中' : '未加入'))}}</view>
+      </view>
+      <view wx:if="{{isGuildManager && memberSummary}}" class="manager-metrics">
+        <view class="metric-item">
+          <view class="metric-value">{{memberSummary.active_count}}</view>
+          <view class="metric-label">有效成员</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-value">{{memberSummary.profession_count}}</view>
+          <view class="metric-label">职业类型</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-value">{{memberSummary.unmatched_profession_count}}</view>
+          <view class="metric-label">待核对职业</view>
+        </view>
       </view>
       <view wx:if="{{statusError}}" class="error-line">{{statusError}}</view>
     </view>
 
     <view class="module-list">
-      <button class="module-row" data-url="/pages/guild-join/index" bindtap="openPage">
+      <button wx:if="{{canManageMembers}}" class="module-row" data-url="/pages/guild-members/index" bindtap="openPage">
+        <view class="module-icon icon-green">员</view>
+        <view class="module-copy">
+          <view class="module-title">帮会成员</view>
+          <view class="module-caption">查看当前帮会成员和职业分布</view>
+        </view>
+        <view class="module-arrow">›</view>
+      </button>
+
+      <button wx:if="{{!isGuildManager}}" class="module-row" data-url="/pages/guild-join/index" bindtap="openPage">
         <view class="module-icon icon-green">会</view>
         <view class="module-copy">
           <view class="module-title">加入帮会</view>

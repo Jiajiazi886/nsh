@@ -24,6 +24,7 @@ test('app.json registers every Demo page', () => {
     'pages/login/index',
     'pages/register/index',
     'pages/home/index',
+    'pages/guild-members/index',
     'pages/guild-join/index',
     'pages/battle-invite/index',
     'pages/schedule/index',
@@ -50,6 +51,15 @@ test('invite join uses the authenticated account endpoint', () => {
   const battleService = read('services/battle.js')
   assert.match(battleService, /\/guild\/battle-registration\/invite\/\$\{encodeURIComponent\(inviteCode\)\}\/join/)
   assert.doesNotMatch(battleService, /url: `\/public\/battle\/\$\{encodeURIComponent\(inviteCode\)\}\/join`/)
+})
+
+test('guild manager workspace uses role-scoped dashboard and member APIs', () => {
+  const guildService = read('services/guild.js')
+  const homePage = read('pages/home/index.js')
+  assert.match(guildService, /url: '\/guild\/dashboard\/summary'/)
+  assert.match(guildService, /url: '\/guild\/member\/list'/)
+  assert.match(homePage, /roles\.includes\('common'\)/)
+  assert.match(homePage, /permissions\.includes\('guild:member:list'\)/)
 })
 
 test('trial and release builds use the production API', () => {

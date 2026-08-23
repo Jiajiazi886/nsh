@@ -1,0 +1,46 @@
+<navigation-bar title="帮会成员" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content roster-content">
+    <view wx:if="{{guild}}" class="roster-header">
+      <view>
+        <view class="workspace-kicker">GUILD ROSTER</view>
+        <view class="roster-title">{{guild.guild_name}}</view>
+        <view class="section-caption">{{guild.member_count}} 名成员 · {{guild.class_count}} 个职业</view>
+      </view>
+      <view class="roster-count">{{visibleMembers.length}}</view>
+    </view>
+
+    <view class="search-row">
+      <input
+        class="search-input"
+        value="{{keyword}}"
+        placeholder="搜索玩家名、职业或备注"
+        bindinput="onKeywordInput"
+      />
+    </view>
+
+    <view wx:if="{{errorMessage}}" class="panel permission-card">
+      <view class="section-title">无法读取成员名册</view>
+      <view class="section-caption">{{errorMessage}}</view>
+      <view class="permission-note">请确认账号仍拥有“帮会管理”角色及成员查看权限，然后重新登录。</view>
+    </view>
+
+    <view wx:for="{{visibleMembers}}" wx:key="member_id" class="member-card">
+      <view class="member-sequence">{{index + 1}}</view>
+      <view class="member-main">
+        <view class="member-name">{{item.player_name}}</view>
+        <view class="member-meta">
+          <text>{{item.player_class || '未设置主职'}}</text>
+          <text wx:if="{{item.secondary_class}}"> · 副职 {{item.secondary_class}}</text>
+        </view>
+        <view wx:if="{{item.remark}}" class="member-remark">{{item.remark}}</view>
+      </view>
+      <view class="member-role">{{item.role_in_guild || '成员'}}</view>
+    </view>
+
+    <view wx:if="{{!loading && !errorMessage && !visibleMembers.length}}" class="empty-state">
+      {{keyword ? '没有匹配的帮会成员' : '当前帮会暂无成员'}}
+    </view>
+    <view wx:if="{{loading}}" class="empty-state">正在加载成员名册</view>
+  </view>
+</scroll-view>
