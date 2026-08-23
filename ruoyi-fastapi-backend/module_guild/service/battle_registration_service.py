@@ -8,7 +8,6 @@ from exceptions.exception import ServiceException
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_guild.dao.battle_registration_dao import BattleRegistrationDao
 from module_guild.dao.join_application_dao import JoinApplicationDao
-from module_guild.service.profession_service import ProfessionService
 from module_guild.entity.do.battle_registration_do import GuildBattleInvite, GuildBattleRegistration
 from module_guild.entity.vo.battle_registration_vo import (
     BattleInviteCreateModel,
@@ -17,6 +16,9 @@ from module_guild.entity.vo.battle_registration_vo import (
     PublicBattleLeaveApplicationModel,
     PublicBattleRegistrationModel,
 )
+from module_guild.entity.vo.join_application_vo import JoinApplicationCreateModel
+from module_guild.service.join_application_service import JoinApplicationService
+from module_guild.service.profession_service import ProfessionService
 
 
 class BattleRegistrationService:
@@ -362,6 +364,30 @@ class BattleRegistrationService:
         )
         await db.commit()
         return CrudResponseModel(is_success=True, message='入会申请已提交，请等待管理员审核')
+
+    @classmethod
+    async def submit_authenticated_join_service(
+        cls,
+        db: AsyncSession,
+        current_user: CurrentUserModel,
+        invite_code: str,
+        data: PublicBattleJoinApplicationModel,
+    ) -> CrudResponseModel:
+        invite = await cls._get_active_invite_or_raise(db, invite_code)
+        remark_parts = cls._build_join_remark(data)
+        application = JoinApplicationCreateModel(
+            guild_id=invite.owner_user_id,
+            player_name=data.player_name,
+            player_class=data.player_class or '',
+            secondary_class=data.secondary_class or '',
+            remark='；'.join(remark_parts),
+        )
+        return await JoinApplicationService.submit_application_service(db, current_user, application)
+
+    @classmethod
+    def _build_join_remark(cls, data: PublicBattleJoinApplicationModel) -> list[str]:
+        remark_parts = cls._build_join_remark(data)
+        return remark_parts
 
     @classmethod
     async def _get_scoped_pending_registration(

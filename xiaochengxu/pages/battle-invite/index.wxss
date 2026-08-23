@@ -1,0 +1,73 @@
+.invite-content {
+  max-width: 760rpx;
+  margin: 0 auto;
+}
+
+.code-row,
+.invite-topline,
+.field-grid {
+  display: flex;
+  align-items: center;
+}
+
+.code-row {
+  gap: 16rpx;
+}
+
+.code-input {
+  flex: 1;
+}
+
+.code-button {
+  width: 150rpx;
+  margin: 0;
+}
+
+.invite-card,
+.apply-card {
+  margin-top: 24rpx;
+  padding: 30rpx;
+}
+
+.invite-topline {
+  justify-content: space-between;
+}
+
+.invite-time {
+  color: var(--muted);
+  font-size: 23rpx;
+}
+
+.invite-title {
+  margin-top: 24rpx;
+  font-size: 38rpx;
+  font-weight: 800;
+}
+
+.invite-guild {
+  margin-top: 8rpx;
+  color: var(--green);
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.invite-remark {
+  margin-top: 22rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid var(--line);
+  color: var(--muted);
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.field-grid {
+  gap: 18rpx;
+}
+
+.compact-field {
+  flex: 1;
+}
+
+.submit-button {
+  margin-top: 30rpx;
+}

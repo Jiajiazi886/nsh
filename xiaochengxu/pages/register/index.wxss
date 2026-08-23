@@ -1,0 +1,61 @@
+.register-page {
+  box-sizing: border-box;
+  padding: 36rpx 32rpx calc(48rpx + env(safe-area-inset-bottom));
+}
+
+.register-panel {
+  max-width: 680rpx;
+  margin: 0 auto;
+  padding: 34rpx;
+}
+
+.password-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input {
+  padding-right: 116rpx;
+}
+
+.visibility-button {
+  position: absolute;
+  right: 20rpx;
+  min-width: 72rpx;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--violet);
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.captcha-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.captcha-input {
+  flex: 1;
+}
+
+.captcha-image {
+  width: 210rpx;
+  height: 84rpx;
+  border: 1rpx solid var(--line);
+  border-radius: 14rpx;
+  background: #ffffff;
+}
+
+.submit-button {
+  margin-top: 34rpx;
+}
+
+.disabled-notice {
+  margin-top: 22rpx;
+  color: var(--danger);
+  font-size: 24rpx;
+  text-align: center;
+}

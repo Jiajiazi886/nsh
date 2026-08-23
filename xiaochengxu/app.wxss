@@ -1,10 +1,142 @@
-/**app.wxss**/
-.container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 200rpx 0;
+page {
+  --ink: #17243a;
+  --muted: #637089;
+  --line: #dce3ec;
+  --surface: #ffffff;
+  --canvas: #f4f7fb;
+  --green: #176b58;
+  --violet: #6541d8;
+  --gold: #d5a21e;
+  --danger: #c94444;
+  min-height: 100%;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  font-size: 28rpx;
+  letter-spacing: 0;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  letter-spacing: 0;
+}
+
+button::after {
+  border: 0;
+}
+
+.page-scroll {
+  height: 100vh;
+}
+
+.page-content {
   box-sizing: border-box;
-} 
+  padding: 28rpx 28rpx calc(44rpx + env(safe-area-inset-bottom));
+}
+
+.panel {
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+  background: var(--surface);
+}
+
+.section-title {
+  margin: 0;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.section-caption {
+  margin-top: 8rpx;
+  color: var(--muted);
+  font-size: 24rpx;
+  line-height: 1.55;
+}
+
+.field {
+  margin-top: 24rpx;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 10rpx;
+  color: #3d4b62;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.field-input,
+.field-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1rpx solid var(--line);
+  border-radius: 14rpx;
+  background: #fbfcfe;
+  color: var(--ink);
+}
+
+.field-input {
+  height: 84rpx;
+  padding: 0 24rpx;
+}
+
+.field-textarea {
+  min-height: 144rpx;
+  padding: 20rpx 24rpx;
+}
+
+.primary-button,
+.secondary-button,
+.danger-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 84rpx;
+  border-radius: 14rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.primary-button {
+  background: var(--violet);
+  color: #ffffff;
+}
+
+.secondary-button {
+  border: 1rpx solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.danger-button {
+  border: 1rpx solid #efcaca;
+  background: #fff8f8;
+  color: var(--danger);
+}
+
+.button-disabled {
+  opacity: 0.55;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40rpx;
+  padding: 0 14rpx;
+  border-radius: 999rpx;
+  background: #edf7f3;
+  color: var(--green);
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.empty-state {
+  padding: 56rpx 24rpx;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.6;
+}

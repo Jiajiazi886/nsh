@@ -1,0 +1,59 @@
+<navigation-bar title="协同工作台" back="{{false}}" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content home-content">
+    <view class="workspace-header">
+      <view>
+        <view class="workspace-kicker">{{environmentName}}</view>
+        <view class="workspace-title">{{nickName}}</view>
+        <view class="workspace-account">账号 {{userName}}</view>
+      </view>
+      <button class="profile-button" data-url="/pages/profile/index" bindtap="openPage">我的</button>
+    </view>
+
+    <view class="role-row">
+      <view wx:for="{{roleNames}}" wx:key="*this" class="status-pill">{{item}}</view>
+    </view>
+
+    <view class="panel guild-summary">
+      <view class="summary-topline">
+        <view>
+          <view class="section-title">帮会状态</view>
+          <view wx:if="{{membership}}" class="section-caption">已加入 {{membership.guild_name}}</view>
+          <view wx:elif="{{application}}" class="section-caption">{{application.guild_name}} 的申请正在审核</view>
+          <view wx:else class="section-caption">当前尚未加入帮会</view>
+        </view>
+        <view class="summary-state {{membership ? 'state-active' : ''}}">{{membership ? '已加入' : (application ? '审核中' : '未加入')}}</view>
+      </view>
+      <view wx:if="{{statusError}}" class="error-line">{{statusError}}</view>
+    </view>
+
+    <view class="module-list">
+      <button class="module-row" data-url="/pages/guild-join/index" bindtap="openPage">
+        <view class="module-icon icon-green">会</view>
+        <view class="module-copy">
+          <view class="module-title">加入帮会</view>
+          <view class="module-caption">搜索帮会、提交申请、查看审核状态</view>
+        </view>
+        <view class="module-arrow">›</view>
+      </button>
+
+      <button class="module-row" data-url="/pages/battle-invite/index" bindtap="openPage">
+        <view class="module-icon icon-gold">约</view>
+        <view class="module-copy">
+          <view class="module-title">约战邀请</view>
+          <view class="module-caption">打开邀请码并提交约战关联申请</view>
+        </view>
+        <view class="module-arrow">›</view>
+      </button>
+
+      <button class="module-row" data-url="/pages/schedule/index" bindtap="openPage">
+        <view class="module-icon icon-violet">排</view>
+        <view class="module-copy">
+          <view class="module-title">约战排表</view>
+          <view class="module-caption">查看当前团队、小队和成员位置</view>
+        </view>
+        <view class="module-arrow">›</view>
+      </button>
+    </view>
+  </view>
+</scroll-view>

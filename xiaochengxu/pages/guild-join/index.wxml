@@ -1,0 +1,67 @@
+<navigation-bar title="加入帮会" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content join-content">
+    <view wx:if="{{membership}}" class="panel current-card">
+      <view class="status-pill">当前帮会</view>
+      <view class="current-name">{{membership.guild_name}}</view>
+      <view class="current-player">{{membership.player_name}} · {{membership.player_class || '未设置职业'}}</view>
+      <button class="danger-button quit-button" bindtap="quitGuild">退出帮会</button>
+    </view>
+
+    <view wx:elif="{{application}}" class="panel current-card">
+      <view class="status-pill">等待审核</view>
+      <view class="current-name">{{application.guild_name}}</view>
+      <view class="current-player">申请角色 {{application.player_name}}</view>
+    </view>
+
+    <block wx:else>
+      <view class="search-bar">
+        <input class="field-input search-input" value="{{keyword}}" data-field="keyword" placeholder="输入帮会名称" bindinput="updateField" confirm-type="search" bindconfirm="searchGuilds" />
+        <button class="primary-button search-button" loading="{{searching}}" bindtap="searchGuilds">搜索</button>
+      </view>
+
+      <view wx:if="{{results.length}}" class="result-list panel">
+        <button wx:for="{{results}}" wx:key="guild_id" class="result-row" data-id="{{item.guild_id}}" bindtap="selectGuild">
+          <view>
+            <view class="result-name">{{item.guild_name}}</view>
+            <view class="result-owner">管理员账号 {{item.owner_user_name}}</view>
+          </view>
+          <view class="result-action">申请</view>
+        </button>
+      </view>
+
+      <view wx:elif="{{!searching}}" class="empty-state">输入名称搜索希望加入的帮会</view>
+    </block>
+
+    <view wx:if="{{selectedGuild}}" class="apply-overlay">
+      <view class="apply-sheet">
+        <view class="sheet-header">
+          <view>
+            <view class="section-title">申请加入 {{selectedGuild.guild_name}}</view>
+            <view class="section-caption">申请将进入帮会管理员审核</view>
+          </view>
+          <button class="close-button" bindtap="cancelSelection">×</button>
+        </view>
+        <view class="field">
+          <text class="field-label">玩家名</text>
+          <input class="field-input" value="{{playerName}}" data-field="playerName" placeholder="必填" bindinput="updateField" />
+        </view>
+        <view class="field-grid">
+          <view class="field compact-field">
+            <text class="field-label">主职</text>
+            <input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="可选" bindinput="updateField" />
+          </view>
+          <view class="field compact-field">
+            <text class="field-label">副职</text>
+            <input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="可选" bindinput="updateField" />
+          </view>
+        </view>
+        <view class="field">
+          <text class="field-label">备注</text>
+          <textarea class="field-textarea" value="{{remark}}" data-field="remark" maxlength="200" placeholder="可选" bindinput="updateField"></textarea>
+        </view>
+        <button class="primary-button sheet-submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitApplication">提交申请</button>
+      </view>
+    </view>
+  </view>
+</scroll-view>

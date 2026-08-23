@@ -1,0 +1,88 @@
+.profile-content {
+  max-width: 760rpx;
+  margin: 0 auto;
+}
+
+.identity-card,
+.detail-row,
+.role-list {
+  display: flex;
+  align-items: center;
+}
+
+.identity-card {
+  padding: 30rpx;
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 16rpx;
+  background: var(--green);
+  color: #ffffff;
+  font-size: 38rpx;
+  font-weight: 800;
+}
+
+.identity-copy {
+  margin-left: 22rpx;
+}
+
+.identity-name {
+  font-size: 34rpx;
+  font-weight: 800;
+}
+
+.identity-account {
+  margin-top: 6rpx;
+  color: var(--muted);
+  font-size: 23rpx;
+}
+
+.detail-card {
+  margin-top: 24rpx;
+  padding: 0 28rpx;
+}
+
+.detail-row {
+  justify-content: space-between;
+  min-height: 94rpx;
+  border-bottom: 1rpx solid var(--line);
+  color: #3d4b62;
+  font-size: 25rpx;
+}
+
+.detail-row:last-child {
+  border-bottom: 0;
+}
+
+.role-list {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8rpx;
+  max-width: 420rpx;
+}
+
+.role-item {
+  padding: 6rpx 10rpx;
+  border-radius: 8rpx;
+  background: #f0edfb;
+  color: var(--violet);
+  font-size: 21rpx;
+}
+
+.detail-value {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.active-value {
+  color: var(--green);
+}
+
+.logout-button {
+  margin-top: 30rpx;
+}

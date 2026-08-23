@@ -1,6 +1,12 @@
 {
   "pages": [
-    "pages/index/index"
+    "pages/login/index",
+    "pages/register/index",
+    "pages/home/index",
+    "pages/guild-join/index",
+    "pages/battle-invite/index",
+    "pages/schedule/index",
+    "pages/profile/index"
   ],
   "window": {
     "navigationBarTextStyle": "black",
@@ -19,6 +25,9 @@
     }
   },
   "componentFramework": "glass-easel",
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  },
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"
 }

@@ -1,0 +1,53 @@
+<navigation-bar title="约战邀请" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content invite-content">
+    <view class="code-row">
+      <input class="field-input code-input" value="{{inviteCode}}" data-field="inviteCode" maxlength="32" placeholder="输入约战邀请码" bindinput="updateField" confirm-type="search" bindconfirm="loadInvite" />
+      <button class="primary-button code-button" loading="{{loading}}" bindtap="loadInvite">读取</button>
+    </view>
+
+    <view wx:if="{{invite}}" class="panel invite-card">
+      <view class="invite-topline">
+        <view class="status-pill">{{invite.expired ? '已失效' : '有效邀请'}}</view>
+        <view class="invite-time">{{invite.battle_time || '时间待定'}}</view>
+      </view>
+      <view class="invite-title">{{invite.battle_name}}</view>
+      <view class="invite-guild">{{invite.guild_name}}</view>
+      <view wx:if="{{invite.remark}}" class="invite-remark">{{invite.remark}}</view>
+    </view>
+
+    <view wx:if="{{invite && !invite.expired}}" class="panel apply-card">
+      <view class="section-title">申请加入帮会</view>
+      <view class="section-caption">提交后由帮会管理员在原系统审核</view>
+      <view class="field">
+        <text class="field-label">玩家名</text>
+        <input class="field-input" value="{{playerName}}" data-field="playerName" placeholder="必填" bindinput="updateField" />
+      </view>
+      <view class="field-grid">
+        <view class="field compact-field">
+          <text class="field-label">主职</text>
+          <input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="可选" bindinput="updateField" />
+        </view>
+        <view class="field compact-field">
+          <text class="field-label">副职</text>
+          <input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="可选" bindinput="updateField" />
+        </view>
+      </view>
+      <view class="field">
+        <text class="field-label">申请人称呼</text>
+        <input class="field-input" value="{{applicantName}}" data-field="applicantName" placeholder="可选" bindinput="updateField" />
+      </view>
+      <view class="field">
+        <text class="field-label">联系方式</text>
+        <input class="field-input" value="{{applicantContact}}" data-field="applicantContact" placeholder="可选" bindinput="updateField" />
+      </view>
+      <view class="field">
+        <text class="field-label">备注</text>
+        <textarea class="field-textarea" value="{{remark}}" data-field="remark" maxlength="200" placeholder="可选" bindinput="updateField"></textarea>
+      </view>
+      <button class="primary-button submit-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitJoin">提交入会申请</button>
+    </view>
+
+    <view wx:if="{{!invite && !loading}}" class="empty-state">输入管理员分享的邀请码读取约战信息</view>
+  </view>
+</scroll-view>

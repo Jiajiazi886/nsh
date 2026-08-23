@@ -1,0 +1,47 @@
+<navigation-bar title="逆水寒联赛助手" back="{{false}}" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="auth-page">
+    <view class="brand-block">
+      <view class="brand-mark">联</view>
+      <view>
+        <view class="brand-title">帮会协同工作台</view>
+        <view class="brand-subtitle">约战、成员与排表使用同一账号</view>
+      </view>
+    </view>
+
+    <view class="panel auth-panel">
+      <view class="auth-heading">
+        <view class="section-title">账号登录</view>
+        <view class="status-pill">{{environmentName}}</view>
+      </view>
+
+      <view class="field">
+        <text class="field-label">账号</text>
+        <input class="field-input" value="{{username}}" maxlength="30" placeholder="请输入账号" bindinput="onUsernameInput" />
+      </view>
+
+      <view class="field">
+        <text class="field-label">密码</text>
+        <view class="password-row">
+          <input class="field-input password-input" value="{{password}}" password="{{!showPassword}}" maxlength="64" placeholder="请输入密码" bindinput="onPasswordInput" />
+          <button class="visibility-button" bindtap="togglePassword">{{showPassword ? '隐藏' : '显示'}}</button>
+        </view>
+      </view>
+
+      <view wx:if="{{captchaEnabled}}" class="field">
+        <text class="field-label">验证码</text>
+        <view class="captcha-row">
+          <input class="field-input captcha-input" value="{{code}}" maxlength="8" placeholder="请输入验证码" bindinput="onCodeInput" />
+          <image class="captcha-image" src="{{captchaSrc}}" mode="aspectFill" bindtap="refreshCaptcha"></image>
+        </view>
+      </view>
+
+      <button class="primary-button submit-button {{loading ? 'button-disabled' : ''}}" loading="{{loading}}" disabled="{{loading}}" bindtap="submitLogin">登录</button>
+
+      <view wx:if="{{registerEnabled}}" class="auth-footer">
+        <text>还没有账号</text>
+        <button class="text-button" bindtap="openRegister">立即注册</button>
+      </view>
+    </view>
+  </view>
+</scroll-view>

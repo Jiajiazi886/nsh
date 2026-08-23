@@ -1,0 +1,35 @@
+<navigation-bar title="我的账号" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content profile-content">
+    <view class="panel identity-card">
+      <view class="avatar">{{avatarText}}</view>
+      <view class="identity-copy">
+        <view class="identity-name">{{user.nickName || user.userName}}</view>
+        <view class="identity-account">{{user.userName}}</view>
+      </view>
+    </view>
+
+    <view class="panel detail-card">
+      <view class="detail-row">
+        <text>系统角色</text>
+        <view class="role-list">
+          <text wx:for="{{roles}}" wx:key="*this" class="role-item">{{item}}</text>
+        </view>
+      </view>
+      <view class="detail-row">
+        <text>普通识图次数</text>
+        <text class="detail-value">{{user.aiImageRecognitionCount || 0}}</text>
+      </view>
+      <view class="detail-row">
+        <text>VIP 识图次数</text>
+        <text class="detail-value">{{user.vipAiImageRecognitionCount || 0}}</text>
+      </view>
+      <view class="detail-row">
+        <text>账号状态</text>
+        <text class="detail-value active-value">正常</text>
+      </view>
+    </view>
+
+    <button class="danger-button logout-button" bindtap="logout">退出登录</button>
+  </view>
+</scroll-view>

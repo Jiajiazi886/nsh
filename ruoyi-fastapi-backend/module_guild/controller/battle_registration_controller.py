@@ -113,6 +113,29 @@ async def delete_invite(
         return ResponseUtil.error(msg=f'{e!s}')
 
 
+@battle_registration_controller.post(
+    '/invite/{invite_code}/join',
+    summary='登录用户通过邀请码申请入会',
+    dependencies=[UserInterfaceAuthDependency('personal:join:list')],
+)
+async def submit_authenticated_join(
+    invite_code: str,
+    data: PublicBattleJoinApplicationModel,
+    query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
+    current_user: Annotated[CurrentUserModel | None, CurrentUserDependency()] = None,
+) -> Response:
+    try:
+        result = await BattleRegistrationService.submit_authenticated_join_service(
+            query_db, current_user, invite_code, data
+        )
+        return ResponseUtil.success(msg=result.message)
+    except ServiceException as e:
+        return ResponseUtil.error(msg=e.message)
+    except Exception as e:
+        logger.error(f'登录用户通过邀请码申请入会失败: {e!s}')
+        return ResponseUtil.error(msg=f'{e!s}')
+
+
 @battle_registration_controller.get(
     '/list',
     summary='查看约战报名审核列表',

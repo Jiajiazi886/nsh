@@ -1,0 +1,38 @@
+<navigation-bar title="约战排表" color="#17243a" background="#f4f7fb"></navigation-bar>
+<scroll-view class="page-scroll" scroll-y>
+  <view class="page-content schedule-content">
+    <view wx:if="{{schedule}}" class="panel schedule-header">
+      <view class="status-pill">当前排表</view>
+      <view class="schedule-name">{{schedule.schedule_name}}</view>
+      <view class="schedule-meta">{{schedule.teams.length}} 个团队 · {{memberCount}} 名已排成员</view>
+    </view>
+
+    <view wx:for="{{schedule.teams}}" wx:key="team_id" class="team-block">
+      <view class="team-title">{{item.team_name}}</view>
+      <view wx:for="{{item.squads}}" wx:key="squad_id" wx:for-item="squad" class="panel squad-card">
+        <view class="squad-header">
+          <view class="squad-name">{{squad.squad_name}}</view>
+          <view class="squad-count">{{squad.members.length}} / {{squad.max_members}}</view>
+        </view>
+        <view wx:if="{{squad.members.length}}" class="member-list">
+          <view wx:for="{{squad.members}}" wx:key="assignment_id" wx:for-item="member" class="member-row">
+            <view class="member-order">{{index + 1}}</view>
+            <view class="member-copy">
+              <view class="member-name">{{member.player_name}}</view>
+              <view class="member-class">{{member.player_class || '未设置职业'}}</view>
+            </view>
+          </view>
+        </view>
+        <view wx:else class="squad-empty">暂无成员</view>
+      </view>
+    </view>
+
+    <view wx:if="{{accessMessage}}" class="panel permission-card">
+      <view class="section-title">排表权限未开放</view>
+      <view class="section-caption">{{accessMessage}}</view>
+      <view class="permission-note">普通帮会成员完成约战审核后，将在后续版本进入移动端抢椅子流程。</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty-state">正在加载排表</view>
+  </view>
+</scroll-view>

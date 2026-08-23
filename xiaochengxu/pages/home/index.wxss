@@ -1,0 +1,140 @@
+.home-content {
+  max-width: 760rpx;
+  margin: 0 auto;
+}
+
+.workspace-header,
+.summary-topline,
+.module-row,
+.role-row {
+  display: flex;
+  align-items: center;
+}
+
+.workspace-header {
+  justify-content: space-between;
+  padding: 20rpx 4rpx 24rpx;
+}
+
+.workspace-kicker {
+  color: var(--green);
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.workspace-title {
+  margin-top: 6rpx;
+  font-size: 44rpx;
+  font-weight: 800;
+}
+
+.workspace-account {
+  margin-top: 6rpx;
+  color: var(--muted);
+  font-size: 23rpx;
+}
+
+.profile-button {
+  margin: 0;
+  min-width: 112rpx;
+  border: 1rpx solid var(--line);
+  border-radius: 14rpx;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 24rpx;
+}
+
+.role-row {
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 24rpx;
+}
+
+.guild-summary {
+  padding: 28rpx;
+}
+
+.summary-topline {
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.summary-state {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.state-active {
+  color: var(--green);
+}
+
+.error-line {
+  margin-top: 20rpx;
+  color: var(--danger);
+  font-size: 23rpx;
+}
+
+.module-list {
+  margin-top: 28rpx;
+  border-top: 1rpx solid var(--line);
+  border-bottom: 1rpx solid var(--line);
+}
+
+.module-row {
+  width: 100%;
+  min-height: 138rpx;
+  margin: 0;
+  padding: 24rpx 4rpx;
+  border-bottom: 1rpx solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.module-row:last-child {
+  border-bottom: 0;
+}
+
+.module-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 14rpx;
+  color: #ffffff;
+  font-size: 27rpx;
+  font-weight: 800;
+}
+
+.icon-green { background: var(--green); }
+.icon-gold { background: #b98512; }
+.icon-violet { background: var(--violet); }
+
+.module-copy {
+  flex: 1;
+  min-width: 0;
+  margin-left: 22rpx;
+}
+
+.module-title {
+  color: var(--ink);
+  font-size: 29rpx;
+  font-weight: 700;
+}
+
+.module-caption {
+  margin-top: 8rpx;
+  color: var(--muted);
+  font-size: 23rpx;
+  line-height: 1.45;
+}
+
+.module-arrow {
+  margin-left: 18rpx;
+  color: #8c98aa;
+  font-size: 48rpx;
+  font-weight: 300;
+}
