@@ -7,6 +7,7 @@ import InnerLink from '@/layout/components/InnerLink'
 import GuildMember from '@/views/guild/member/index.vue'
 import SystemAiKey from '@/views/system/aiKey/index.vue'
 import SystemPvpAttackPanel from '@/views/system/pvpAttackPanel/index.vue'
+import { withTeamManagementRoute } from './guildGroupRoutes'
 
 // 匹配views里面所有的.vue文件
 const modules = import.meta.glob([
@@ -44,9 +45,10 @@ const usePermissionStore = defineStore(
         return new Promise(resolve => {
           // 向后端请求路由数据
           getRouters().then(res => {
-            const sdata = JSON.parse(JSON.stringify(res.data))
-            const rdata = JSON.parse(JSON.stringify(res.data))
-            const defaultData = JSON.parse(JSON.stringify(res.data))
+            const menuRoutes = withTeamManagementRoute(res.data)
+            const sdata = JSON.parse(JSON.stringify(menuRoutes))
+            const rdata = JSON.parse(JSON.stringify(menuRoutes))
+            const defaultData = JSON.parse(JSON.stringify(menuRoutes))
             const sidebarRoutes = filterAsyncRouter(sdata)
             const rewriteRoutes = filterAsyncRouter(rdata, false, true)
             const defaultRoutes = filterAsyncRouter(defaultData)

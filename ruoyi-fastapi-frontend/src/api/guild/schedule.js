@@ -21,10 +21,11 @@ export function getScheduleDetail(scheduleId) {
   })
 }
 
-export function addScheduleTeam(data) {
+export function addScheduleTeam(data, options = {}) {
   return request({
     url: '/guild/schedule/team',
     method: 'post',
+    headers: { repeatSubmit: options.repeatSubmit ?? true },
     data
   })
 }
@@ -36,10 +37,11 @@ export function deleteScheduleTeam(teamId) {
   })
 }
 
-export function addScheduleSquad(teamId, data) {
+export function addScheduleSquad(teamId, data, options = {}) {
   return request({
     url: `/guild/schedule/team/${teamId}/squad`,
     method: 'post',
+    headers: { repeatSubmit: options.repeatSubmit ?? true },
     data
   })
 }
@@ -59,18 +61,20 @@ export function createRegionSquad(data) {
   })
 }
 
-export function syncRegionSquadAssignments(squadId, data) {
+export function syncRegionSquadAssignments(squadId, data, options = {}) {
   return request({
     url: `/guild/schedule/region/squad/${squadId}/assignments`,
     method: 'put',
+    headers: { repeatSubmit: options.repeatSubmit ?? true },
     data
   })
 }
 
-export function updateRegionSquad(squadId, data) {
+export function updateRegionSquad(squadId, data, options = {}) {
   return request({
     url: `/guild/schedule/region/squad/${squadId}`,
     method: 'put',
+    headers: { repeatSubmit: options.repeatSubmit ?? true },
     data
   })
 }
@@ -142,10 +146,11 @@ export function getScheduleWorkbook(scheduleId) {
   })
 }
 
-export function saveCurrentScheduleWorkbook(workbook) {
+export function saveCurrentScheduleWorkbook(workbook, options = {}) {
   return request({
     url: '/guild/schedule/current/workbook',
     method: 'put',
+    headers: { repeatSubmit: options.repeatSubmit ?? true },
     data: { workbook }
   })
 }

@@ -104,43 +104,28 @@
         <div class="panel-header">
           <div>
             <h3>约战排表</h3>
-            <span>选中表格区域即可创建小队，团队/小队会同步给数据分析使用</span>
+            <span>创建团队和小队，将成员安排到具体位置，供数据分析使用</span>
           </div>
           <div class="schedule-actions">
-            <el-button type="primary" plain @click="createSquadFromSelection">创建小队</el-button>
-            <el-button type="success" plain @click="createTeamFromSquads">创建团队</el-button>
-            <el-button-group class="schedule-merge-actions">
-              <el-button @click="mergeSelectedCells('all')">全部合并</el-button>
-              <el-button @click="mergeSelectedCells('horizontal')">水平合并</el-button>
-              <el-button @click="mergeSelectedCells('vertical')">垂直合并</el-button>
-            </el-button-group>
-            <el-tooltip content="撤回（Ctrl + Z）" placement="top">
-              <el-button :icon="RefreshLeft" aria-label="撤回" @click="undoSchedule" />
-            </el-tooltip>
-            <el-button :loading="scheduleImportLoading" @click="triggerScheduleImport">导入 Excel</el-button>
-            <el-button @click="exportCurrentSchedule">导出 Excel</el-button>
-            <el-button @click="saveHistorySnapshot">保存历史</el-button>
-            <el-button @click="openHistory">历史查询</el-button>
+            <el-button type="primary" :disabled="loading || boxBusy" @click="createTeamFromSquads">创建团队</el-button>
+            <el-button type="primary" :disabled="loading || boxBusy" @click="saveCurrentDraft">保存</el-button>
+            <el-button :disabled="loading || boxBusy" @click="saveHistorySnapshot">保存历史</el-button>
+            <el-button :disabled="loading || boxBusy" @click="openHistory">历史查询</el-button>
           </div>
         </div>
 
-        <ScheduleUniverSheet
+        <ScheduleBoxes
           ref="scheduleSheetRef"
           v-loading="loading"
           :schedule="schedule"
+          :members="filteredMembers"
+          :user-id="userStore.id"
           :dragging-member="draggingMember"
           :get-class-style="getClassStyle"
-          @assign-member="handleSheetAssignMember"
           @workbook-assignments-change="syncWorkbookAssignments"
           @temp-members-change="syncTempMembers"
-          @structure-changed="handleScheduleStructureChanged"
-        />
-        <input
-          ref="scheduleImportInputRef"
-          class="schedule-import-input"
-          type="file"
-          accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
-          @change="handleScheduleImport"
+          @busy-change="boxBusy = $event"
+          @draft-schedule-change="normalizeSchedule"
         />
       </section>
     </div>
@@ -219,37 +204,14 @@
                 <el-button @click="renameHistory(historyPreview)">重命名</el-button>
                 <el-button type="danger" @click="deleteHistory(historyPreview)">删除</el-button>
                 <el-button @click="exportHistoryWorkbook">导出 Excel</el-button>
-                <el-button type="primary" @click="useHistoryConfiguration">应用配置</el-button>
+                <el-button type="primary" @click="useHistoryConfiguration">加载到草稿</el-button>
               </div>
             </div>
-            <ScheduleWorkbookTable :workbook="historyWorkbook" />
-            <div v-if="historyPreview.teams?.length" class="preview-summary">
-              <div class="preview-summary-title">结构化排表摘要</div>
-              <section
-                v-for="team in historyPreview.teams"
-                :key="team.team_id"
-                class="preview-team"
-              >
-                <strong>{{ team.team_name }}</strong>
-                <div
-                  v-for="squad in team.squads"
-                  :key="squad.squad_id"
-                  class="preview-squad"
-                >
-                  <span>{{ squad.squad_name }}: {{ squad.members.length }} / {{ squad.max_members }}</span>
-                  <div class="preview-members">
-                    <span
-                      v-for="member in squad.members"
-                      :key="member.assignment_id || member.member_id"
-                      class="preview-chip"
-                      :style="getClassStyle(member.player_class)"
-                    >
-                      {{ member.player_name }}
-                    </span>
-                  </div>
-                </div>
-              </section>
-            </div>
+            <ScheduleBoxes :schedule="historyPreview" :workbook="historyWorkbook" :get-class-style="getClassStyle" readonly />
+            <details v-if="historyWorkbook?.sheets" class="legacy-history">
+              <summary>旧 Excel 内容（只读兼容）</summary>
+              <ScheduleWorkbookTable :workbook="historyWorkbook" />
+            </details>
           </template>
           <el-empty v-else description="选择一条历史查看详情" />
         </div>
@@ -262,26 +224,24 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRightBold, Folder, FolderOpened, RefreshLeft } from '@element-plus/icons-vue'
+import { ArrowRightBold, Folder, FolderOpened } from '@element-plus/icons-vue'
 import { getApprovedBattleRegistrationsForSchedule, getBattleLeaveRegistrationsForSchedule } from '@/api/guild/battle'
-import ScheduleUniverSheet from './components/ScheduleUniverSheet.vue'
+import ScheduleBoxes from './components/ScheduleBoxes.vue'
 import ScheduleWorkbookTable from './components/ScheduleWorkbookTable.vue'
 import {
-  applyScheduleHistory,
   deleteScheduleHistory,
   getCurrentSchedule,
   getScheduleDetail,
   getScheduleWorkbook,
   getScheduleHistory,
   renameScheduleHistory,
-  saveScheduleAssignment,
-  saveScheduleSnapshot,
-  importCurrentScheduleWorkbook
+  saveScheduleSnapshot
 } from '@/api/guild/schedule'
 import useGuildMemberStore from '@/store/modules/guildMember'
+import useUserStore from '@/store/modules/user'
 import { useGuildClassColors } from '@/utils/guildClassColor'
 import { useGuildPageMotion } from '@/composables/useGuildPageMotion'
-import { exportScheduleWorkbook, importScheduleWorkbook } from './utils/scheduleWorkbook'
+import { exportScheduleWorkbook } from './utils/scheduleWorkbook'
 
 let scheduleGsapLoader = null
 function loadScheduleGsap() {
@@ -292,10 +252,10 @@ function loadScheduleGsap() {
 }
 
 const guildMemberStore = useGuildMemberStore()
+const userStore = useUserStore()
 const pageRef = ref(null)
 const scheduleSheetRef = ref(null)
-const scheduleImportInputRef = ref(null)
-const scheduleImportLoading = ref(false)
+const boxBusy = ref(false)
 const loading = ref(false)
 const members = computed(() => guildMemberStore.members)
 const schedule = ref({ teams: [] })
@@ -347,8 +307,8 @@ const assignedByMemberId = computed(() => {
   Object.values(workbookAssignedByMemberId.value).forEach((assignment) => {
     if (!assignment?.member_id || map[assignment.member_id]) return
     map[assignment.member_id] = {
-      teamName: '自由表格',
-      squadName: assignment.cellLabel,
+      teamName: assignment.teamName || '旧表格',
+      squadName: assignment.squadName || assignment.cellLabel,
       cellLabel: assignment.cellLabel,
       source: 'workbook'
     }
@@ -519,7 +479,8 @@ async function addTempMember() {
     secondary_class: '',
     is_temporary: true
   }
-  await scheduleSheetRef.value?.upsertTempMember?.(tempMember)
+  const saved = await scheduleSheetRef.value?.upsertTempMember?.(tempMember)
+  if (!saved) return
   const nextCollapsed = new Set(collapsedClassFolders.value)
   nextCollapsed.delete(playerClass || UNSET_CLASS_NAME)
   collapsedClassFolders.value = nextCollapsed
@@ -527,80 +488,29 @@ async function addTempMember() {
   ElMessage.success('临时玩家已加入')
 }
 
-async function exportCurrentSchedule() {
-  try {
-    await scheduleSheetRef.value?.flushWorkbookSave?.()
-    await scheduleSheetRef.value?.exportWorkbook?.(`约战排表-${formatExportTime()}.xlsx`)
-  } catch {
-    ElMessage.error('导出当前排表失败')
-  }
-}
-
-function triggerScheduleImport() {
-  scheduleImportInputRef.value?.click()
-}
-
-async function handleScheduleImport(event) {
-  const input = event.target
-  const file = input?.files?.[0]
-  if (input) input.value = ''
-  if (!file) return
-
-  try {
-    await ElMessageBox.confirm(
-      '导入后会替换当前 Excel 排表，并清空当前团队、小队和成员分配。历史排表不会受影响。',
-      '确认导入 Excel',
-      { confirmButtonText: '确认替换', cancelButtonText: '取消', type: 'warning' }
-    )
-  } catch (error) {
-    if (error !== 'cancel') ElMessage.error('无法确认 Excel 导入')
-    return
-  }
-
-  scheduleImportLoading.value = true
-  try {
-    const workbook = await importScheduleWorkbook(file, members.value)
-    const res = await importCurrentScheduleWorkbook(workbook)
-    normalizeSchedule({ ...schedule.value, teams: [] })
-    await nextTick()
-    await scheduleSheetRef.value?.reloadWorkbook?.()
-    ElMessage.success(res.msg || res.data?.msg || 'Excel 排表导入成功')
-  } catch (error) {
-    ElMessage.error(error?.message || 'Excel 排表导入失败')
-  } finally {
-    scheduleImportLoading.value = false
-  }
-}
-
-function createSquadFromSelection() {
-  scheduleSheetRef.value?.openCreateSquadFromSelection?.()
-}
-
 function createTeamFromSquads() {
   scheduleSheetRef.value?.openCreateTeamDialog?.()
 }
-
-function mergeSelectedCells(mode) {
-  scheduleSheetRef.value?.mergeSelectedCells?.(mode)
-}
-
-function undoSchedule() {
-  scheduleSheetRef.value?.undoLastAction?.()
+async function saveCurrentDraft() {
+  try {
+    const saved = await scheduleSheetRef.value?.saveToBackend?.()
+    if (saved) ElMessage.success('排表已保存到后端')
+  } catch { /* Child reports the error and retains the draft. */ }
 }
 
 async function saveHistorySnapshot() {
   const defaultName = `约战排表 ${new Date().toLocaleString()}`
   try {
-    await scheduleSheetRef.value?.flushWorkbookSave?.()
-    const { value } = await ElMessageBox.prompt('请输入历史名称', '保存历史', {
+    const { value } = await ElMessageBox.prompt('将先提交当前本地草稿，再保存后端快照。请输入历史名称', '保存历史', {
       confirmButtonText: '保存',
       cancelButtonText: '取消',
       inputValue: defaultName
     })
+    await scheduleSheetRef.value?.flushWorkbookSave?.()
     await saveScheduleSnapshot({ schedule_name: value })
     ElMessage.success('历史已保存')
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error !== 'cancel' && error !== 'close') {
       ElMessage.error('保存历史失败')
     }
   }
@@ -652,18 +562,18 @@ async function exportHistoryWorkbook() {
 async function useHistoryConfiguration() {
   if (!historyPreview.value) return
   try {
-    await ElMessageBox.confirm('应用该历史配置会替换当前约战排表，确定继续吗？', '应用配置', {
+    await ElMessageBox.confirm('加载该历史会替换当前本地草稿，不立即修改后端。之后点击“保存”才会提交，确定继续吗？', '加载到草稿', {
       type: 'warning',
-      confirmButtonText: '应用配置',
+      confirmButtonText: '加载到草稿',
       cancelButtonText: '取消'
     })
-    await applyScheduleHistory(historyPreview.value.schedule_id)
-    ElMessage.success('历史配置已应用')
+    const loaded = await scheduleSheetRef.value?.applyHistoryToDraft?.(historyPreview.value, historyWorkbook.value)
+    if (!loaded) throw Error('加载历史草稿失败')
     historyVisible.value = false
-    await fetchSchedule()
+    ElMessage.success('历史已加载到本地草稿，请点击保存提交')
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('应用历史配置失败')
+      ElMessage.error(error?.message || '应用历史配置失败')
     }
   }
 }
@@ -675,24 +585,6 @@ async function fetchMembers() {
 async function fetchApprovedBattleMembers() {
   const res = await getApprovedBattleRegistrationsForSchedule()
   approvedBattleMemberIds.value = (res.data || []).map(item => item.member_id).filter(Boolean)
-}
-
-async function handleSheetAssignMember({ member, team, squad, orderNum }) {
-  if (!member || !team || !squad) return
-  try {
-    await saveScheduleAssignment({
-      member_id: member.member_id,
-      team_id: team.team_id,
-      squad_id: squad.squad_id,
-      order_num: orderNum
-    })
-    ElMessage.success('排表已保存')
-    await fetchSchedule()
-  } catch (error) {
-    ElMessage.error(error?.message || '排表保存失败')
-  } finally {
-    draggingMember.value = null
-  }
 }
 
 function syncWorkbookAssignments(assignments = []) {
@@ -714,14 +606,6 @@ function syncTempMembers(list = []) {
     member_id: String(member.member_id),
     is_temporary: true
   }))
-}
-
-async function handleScheduleStructureChanged() {
-  try {
-    await fetchSchedule()
-  } catch {
-    ElMessage.warning('排表结构已保存，但刷新当前结构失败，请手动刷新')
-  }
 }
 
 async function renameHistory(item) {
@@ -781,6 +665,7 @@ async function fetchLeaveMembers() {
 }
 
 async function fetchSchedule() {
+  if (scheduleSheetRef.value?.hasDraft?.()) return scheduleSheetRef.value.reloadWorkbook()
   const res = await getCurrentSchedule()
   normalizeSchedule(res.data || { teams: [] })
 }
@@ -1092,6 +977,15 @@ onMounted(fetchData)
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.legacy-history > summary {
+  padding: 10px 0;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .schedule-import-input {
