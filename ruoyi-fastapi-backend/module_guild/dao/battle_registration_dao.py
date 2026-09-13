@@ -92,6 +92,15 @@ class BattleRegistrationDao:
         return result.scalar_one_or_none()
 
     @classmethod
+    async def lock_invite_by_code(cls, db: AsyncSession, invite_code: str) -> GuildBattleInvite | None:
+        stmt = select(GuildBattleInvite).where(
+            GuildBattleInvite.invite_code == invite_code,
+            GuildBattleInvite.del_flag == '0',
+        ).with_for_update()
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
     async def list_invites(cls, db: AsyncSession, owner_user_id: int | None = None) -> list[GuildBattleInvite]:
         stmt = select(GuildBattleInvite).where(GuildBattleInvite.del_flag == '0')
         if owner_user_id is not None:
@@ -141,6 +150,16 @@ class BattleRegistrationDao:
         return result.scalar_one_or_none()
 
     @classmethod
+    async def lock_member_for_invite(cls, db: AsyncSession, owner_user_id: int, member_id: int) -> GuildMember | None:
+        stmt = select(GuildMember).where(
+            GuildMember.user_id == owner_user_id,
+            GuildMember.member_id == member_id,
+            GuildMember.is_active == '1',
+        ).with_for_update()
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
     async def has_effective_registration(cls, db: AsyncSession, invite_id: int, member_id: int) -> bool:
         await cls._ensure_registration_schema(db)
         stmt = select(func.count()).select_from(GuildBattleRegistration).where(
@@ -175,8 +194,11 @@ class BattleRegistrationDao:
         invite_id: int,
         member_id: int,
         registration_type: str | None = None,
+        *,
+        ensure_schema: bool = True,
     ) -> GuildBattleRegistration | None:
-        await cls._ensure_registration_schema(db)
+        if ensure_schema:
+            await cls._ensure_registration_schema(db)
         stmt = select(GuildBattleRegistration).where(
             GuildBattleRegistration.invite_id == invite_id,
             GuildBattleRegistration.member_id == member_id,
@@ -210,8 +232,9 @@ class BattleRegistrationDao:
         return result.scalars().all()
 
     @classmethod
-    async def create_registration(cls, db: AsyncSession, data: dict) -> GuildBattleRegistration:
-        await cls._ensure_registration_schema(db)
+    async def create_registration(cls, db: AsyncSession, data: dict, *, ensure_schema: bool = True) -> GuildBattleRegistration:
+        if ensure_schema:
+            await cls._ensure_registration_schema(db)
         registration = GuildBattleRegistration(**data)
         db.add(registration)
         await db.flush()
@@ -267,9 +290,10 @@ class BattleRegistrationDao:
 
     @classmethod
     async def cancel_effective_registration(
-        cls, db: AsyncSession, invite_id: int, member_id: int, registration_type: str
+        cls, db: AsyncSession, invite_id: int, member_id: int, registration_type: str, *, ensure_schema: bool = True
     ) -> int:
-        await cls._ensure_registration_schema(db)
+        if ensure_schema:
+            await cls._ensure_registration_schema(db)
         stmt = (
             update(GuildBattleRegistration)
             .where(

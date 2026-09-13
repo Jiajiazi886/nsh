@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import HTTPException
 from pydantic_validation_decorator import FieldValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from exceptions.exception import (
     AuthException,
@@ -60,7 +61,16 @@ def handle_exception(app: FastAPI) -> None:
 
     # 处理其他http请求异常
     @app.exception_handler(HTTPException)
+    @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> Response:
+        if request.url.path == '/api/v1' or request.url.path.startswith('/api/v1/'):
+            from module_integration.contract import api_response
+
+            keys = {401: 'AUTH_REQUIRED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 405: 'METHOD_NOT_ALLOWED', 429: 'RATE_LIMITED'}
+            return api_response(request, status=exc.status_code, key=keys.get(exc.status_code, 'HTTP_ERROR'), message='请求未能完成')
+        # Keep Starlette's previous envelope outside v1 (404/405 included).
+        if not isinstance(exc, HTTPException):
+            return JSONResponse(content={'detail': exc.detail}, status_code=exc.status_code, headers=exc.headers)
         return JSONResponse(
             content=jsonable_encoder({'code': exc.status_code, 'msg': exc.detail}), status_code=exc.status_code
         )

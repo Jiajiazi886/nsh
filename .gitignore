@@ -162,6 +162,7 @@ node_modules/
 xiaochengxu/project.private.config.json
 
 # Project-local generated/runtime files
+.artifacts/
 .ruff_cache/
 logs/
 caches/

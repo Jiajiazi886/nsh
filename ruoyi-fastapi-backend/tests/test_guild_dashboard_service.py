@@ -391,9 +391,11 @@ async def test_battle_registration_list_uses_current_active_invite(monkeypatch):
 @pytest.mark.asyncio
 async def test_public_leave_submission_creates_leave_registration(monkeypatch):
     calls = []
-    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101)
+    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101, status='0', expire_time=datetime.now() + timedelta(hours=1))
     member = SimpleNamespace(
         member_id=9,
+        user_id=101,
+        member_user_id=23,
         player_name='测试玩家',
         player_class='素问',
         secondary_class='',
@@ -404,23 +406,26 @@ async def test_public_leave_submission_creates_leave_registration(monkeypatch):
         async def commit(self):
             calls.append(('commit', None))
 
-    async def fake_get_invite_or_raise(db, invite_code):
+    async def fake_get_invite_or_raise(db, invite_code, *, for_update=False):
+        assert for_update is True
         return invite
 
     async def fake_get_member_for_invite(db, owner_user_id, member_id):
         return member
 
-    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None):
+    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None, *, ensure_schema=True):
+        assert ensure_schema is False
         calls.append(('exists', invite_id, member_id, registration_type))
         return None
 
-    async def fake_create_registration(db, payload):
+    async def fake_create_registration(db, payload, *, ensure_schema=True):
+        assert ensure_schema is False
         calls.append(('create', payload))
         return SimpleNamespace(registration_id=1)
 
     monkeypatch.setattr(BattleRegistrationService, '_get_active_invite_or_raise', fake_get_invite_or_raise)
     monkeypatch.setattr(
-        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_member_for_invite',
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.lock_member_for_invite',
         fake_get_member_for_invite,
     )
     monkeypatch.setattr(
@@ -436,12 +441,14 @@ async def test_public_leave_submission_creates_leave_registration(monkeypatch):
         FakeDb(),
         'code001',
         SimpleNamespace(member_id=9, remark='周四加班'),
+        current_user=make_current_user(user_id=23, roles=['user']),
     )
 
     assert result.message == '请假申请已提交，请等待审核'
     assert ('exists', 88, 9, None) in calls
     assert calls[1][0] == 'create'
     assert calls[1][1]['registration_type'] == 'leave'
+    assert calls[1][1]['applicant_user_id'] == 23
     assert calls[1][1]['remark'] == '周四加班'
     assert calls[2] == ('commit', None)
 
@@ -449,9 +456,11 @@ async def test_public_leave_submission_creates_leave_registration(monkeypatch):
 @pytest.mark.asyncio
 async def test_public_signup_submission_auto_cancels_existing_leave(monkeypatch):
     calls = []
-    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101)
+    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101, status='0', expire_time=datetime.now() + timedelta(hours=1))
     member = SimpleNamespace(
         member_id=9,
+        user_id=101,
+        member_user_id=23,
         player_name='测试玩家',
         player_class='素问',
         secondary_class='',
@@ -463,26 +472,30 @@ async def test_public_signup_submission_auto_cancels_existing_leave(monkeypatch)
         async def commit(self):
             calls.append(('commit', None))
 
-    async def fake_get_invite_or_raise(db, invite_code):
+    async def fake_get_invite_or_raise(db, invite_code, *, for_update=False):
+        assert for_update is True
         return invite
 
     async def fake_get_member_for_invite(db, owner_user_id, member_id):
         return member
 
-    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None):
+    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None, *, ensure_schema=True):
+        assert ensure_schema is False
         return existing
 
-    async def fake_cancel_effective_registration(db, invite_id, member_id, registration_type):
+    async def fake_cancel_effective_registration(db, invite_id, member_id, registration_type, *, ensure_schema=True):
+        assert ensure_schema is False
         calls.append(('cancel', invite_id, member_id, registration_type))
         return 1
 
-    async def fake_create_registration(db, payload):
+    async def fake_create_registration(db, payload, *, ensure_schema=True):
+        assert ensure_schema is False
         calls.append(('create', payload))
         return SimpleNamespace(registration_id=1)
 
     monkeypatch.setattr(BattleRegistrationService, '_get_active_invite_or_raise', fake_get_invite_or_raise)
     monkeypatch.setattr(
-        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_member_for_invite',
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.lock_member_for_invite',
         fake_get_member_for_invite,
     )
     monkeypatch.setattr(
@@ -502,11 +515,13 @@ async def test_public_signup_submission_auto_cancels_existing_leave(monkeypatch)
         FakeDb(),
         'code001',
         SimpleNamespace(member_id=9, player_class='', secondary_class='', applicant_name='', applicant_contact='', remark=''),
+        current_user=make_current_user(user_id=23, roles=['user']),
     )
 
     assert calls[0] == ('cancel', 88, 9, 'leave')
     assert calls[1][0] == 'create'
     assert calls[1][1]['registration_type'] == 'signup'
+    assert calls[1][1]['applicant_user_id'] == 23
     assert calls[2] == ('commit', None)
     assert result.message == '约战报名已提交，原请假申请已自动取消'
 
@@ -514,9 +529,11 @@ async def test_public_signup_submission_auto_cancels_existing_leave(monkeypatch)
 @pytest.mark.asyncio
 async def test_public_leave_submission_auto_cancels_existing_signup(monkeypatch):
     calls = []
-    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101)
+    invite = SimpleNamespace(invite_id=88, invite_code='code001', owner_user_id=101, status='0', expire_time=datetime.now() + timedelta(hours=1))
     member = SimpleNamespace(
         member_id=9,
+        user_id=101,
+        member_user_id=23,
         player_name='测试玩家',
         player_class='素问',
         secondary_class='',
@@ -528,26 +545,30 @@ async def test_public_leave_submission_auto_cancels_existing_signup(monkeypatch)
         async def commit(self):
             calls.append(('commit', None))
 
-    async def fake_get_invite_or_raise(db, invite_code):
+    async def fake_get_invite_or_raise(db, invite_code, *, for_update=False):
+        assert for_update is True
         return invite
 
     async def fake_get_member_for_invite(db, owner_user_id, member_id):
         return member
 
-    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None):
+    async def fake_get_effective_registration(db, invite_id, member_id, registration_type=None, *, ensure_schema=True):
+        assert ensure_schema is False
         return existing
 
-    async def fake_cancel_effective_registration(db, invite_id, member_id, registration_type):
+    async def fake_cancel_effective_registration(db, invite_id, member_id, registration_type, *, ensure_schema=True):
+        assert ensure_schema is False
         calls.append(('cancel', invite_id, member_id, registration_type))
         return 1
 
-    async def fake_create_registration(db, payload):
+    async def fake_create_registration(db, payload, *, ensure_schema=True):
+        assert ensure_schema is False
         calls.append(('create', payload))
         return SimpleNamespace(registration_id=1)
 
     monkeypatch.setattr(BattleRegistrationService, '_get_active_invite_or_raise', fake_get_invite_or_raise)
     monkeypatch.setattr(
-        'module_guild.service.battle_registration_service.BattleRegistrationDao.get_member_for_invite',
+        'module_guild.service.battle_registration_service.BattleRegistrationDao.lock_member_for_invite',
         fake_get_member_for_invite,
     )
     monkeypatch.setattr(
@@ -567,11 +588,13 @@ async def test_public_leave_submission_auto_cancels_existing_signup(monkeypatch)
         FakeDb(),
         'code001',
         SimpleNamespace(member_id=9, remark='周四加班'),
+        current_user=make_current_user(user_id=23, roles=['user']),
     )
 
     assert calls[0] == ('cancel', 88, 9, 'signup')
     assert calls[1][0] == 'create'
     assert calls[1][1]['registration_type'] == 'leave'
+    assert calls[1][1]['applicant_user_id'] == 23
     assert calls[2] == ('commit', None)
     assert result.message == '请假申请已提交，原约战报名已自动取消'
 

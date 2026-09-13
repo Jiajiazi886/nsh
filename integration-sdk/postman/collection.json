@@ -1,0 +1,29 @@
+{
+  "info": {
+    "name": "NSH v1 第一阶段接入",
+    "description": "仅账号与本人报名/请假。源码未自动部署；机器人与全量活动接口未完成。变量仅在本机填写，不提交密码/token。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key":"apiRoot","value":"https://api.example.invalid"},
+    {"key":"accessToken","value":""},
+    {"key":"userName","value":""},
+    {"key":"password","value":""},
+    {"key":"captchaCode","value":""},
+    {"key":"captchaUuid","value":""},
+    {"key":"inviteCode","value":""},
+    {"key":"memberId","value":""}
+  ],
+  "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{accessToken}}","type":"string"}]},
+  "item": [
+    {"name":"公开能力", "request":{"method":"GET","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/capabilities"}},
+    {"name":"认证配置", "request":{"method":"GET","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/config"}},
+    {"name":"验证码", "request":{"method":"GET","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/captcha"}},
+    {"name":"账号密码登录", "request":{"method":"POST","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/login","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"userName\":\"{{userName}}\",\"password\":\"{{password}}\",\"code\":\"{{captchaCode}}\",\"uuid\":\"{{captchaUuid}}\"}","options":{"raw":{"language":"json"}}}}},
+    {"name":"当前账号", "request":{"method":"GET","url":"{{apiRoot}}/api/v1/auth/me"}},
+    {"name":"退出当前端", "request":{"method":"POST","url":"{{apiRoot}}/api/v1/auth/logout"}},
+    {"name":"本人请假", "request":{"method":"POST","url":"{{apiRoot}}/api/v1/invitations/{{inviteCode}}/leave","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"memberId\":\"{{memberId}}\",\"remark\":\"请假说明\"}","options":{"raw":{"language":"json"}}}}},
+    {"name":"本人报名", "request":{"method":"POST","url":"{{apiRoot}}/api/v1/invitations/{{inviteCode}}/signup","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"memberId\":\"{{memberId}}\",\"playerClass\":\"\",\"secondaryClass\":\"\",\"remark\":\"\"}","options":{"raw":{"language":"json"}}}}},
+    {"name":"微信登录（预期503）", "request":{"method":"POST","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/wechat/login","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"code\":\"未验证示例，不会登录成功\"}"}}}
+  ]
+}

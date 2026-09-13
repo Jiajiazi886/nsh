@@ -6,7 +6,6 @@ from typing import Any
 import jwt
 from fastapi import Depends, Form, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jwt.exceptions import InvalidTokenError
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +25,7 @@ from module_admin.entity.vo.login_vo import MenuTreeModel, MetaModel, RouterMode
 from module_admin.entity.vo.user_vo import AddUserModel, CurrentUserModel, ResetUserModel, TokenData, UserInfoModel
 from module_admin.service.user_service import UserService
 from utils.client_ip_util import ClientIPUtil
+from utils.access_token_util import decode_access_token
 from utils.common_util import CamelCaseUtil
 from utils.log_util import logger
 from utils.message_util import message_service
@@ -98,8 +98,9 @@ class LoginService:
             request.headers.get('referer').endswith('redoc') if request.headers.get('referer') else False
         )
         # 判断是否开启验证码，开启则验证，否则不验证（dev模式下来自API文档的登录请求不检验）
+        legacy_docs_login = request.url.path == f'{AppConfig.app_root_path.rstrip("/")}/login'
         if not login_user.captcha_enabled or (
-            (request_from_swagger or request_from_redoc) and AppConfig.app_env == 'dev'
+            legacy_docs_login and (request_from_swagger or request_from_redoc) and AppConfig.app_env == 'dev'
         ):
             pass
         else:
@@ -204,26 +205,17 @@ class LoginService:
         :return: 当前用户信息对象
         :raise: 令牌异常AuthException
         """
-        # if token[:6] != 'Bearer':
-        #     logger.warning("用户token不合法")
-        #     raise AuthException(data="", message="用户token不合法")
-        try:
-            if token.startswith('Bearer'):
-                token = token.split(' ')[1]
-            payload = jwt.decode(token, JwtConfig.jwt_secret_key, algorithms=[JwtConfig.jwt_algorithm])
-            user_id: str = payload.get('user_id')
-            session_id: str = payload.get('session_id')
-            if not user_id:
-                logger.warning('用户token不合法')
-                raise AuthException(data='', message='用户token不合法')
-            token_data = TokenData(user_id=int(user_id))
-        except InvalidTokenError as e:
-            logger.warning('用户token已失效，请重新登录')
-            raise AuthException(data='', message='用户token已失效，请重新登录') from e
+        claims = decode_access_token(token, JwtConfig.jwt_secret_key, JwtConfig.jwt_algorithm)
+        token = claims.token
+        session_id = claims.session_id
+        token_data = TokenData(user_id=claims.user_id)
         query_user = await UserDao.get_user_by_id(query_db, user_id=token_data.user_id)
         if query_user.get('user_basic_info') is None:
             logger.warning('用户token不合法')
             raise AuthException(data='', message='用户token不合法')
+        account = query_user['user_basic_info']
+        if account.status != '0' or account.del_flag != '0':
+            raise AuthException(data='', message='账号已停用或删除，请联系管理员')
         if AppConfig.app_same_time_login:
             redis_token = await request.app.state.redis.get(f'{RedisInitKeyConfig.ACCESS_TOKEN.key}:{session_id}')
         else:

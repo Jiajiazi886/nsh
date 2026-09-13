@@ -4,7 +4,7 @@ from secrets import token_urlsafe
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel
-from exceptions.exception import ServiceException
+from exceptions.exception import AuthException, PermissionException, ServiceException
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_guild.dao.battle_registration_dao import BattleRegistrationDao
 from module_guild.dao.join_application_dao import JoinApplicationDao
@@ -254,83 +254,84 @@ class BattleRegistrationService:
 
     @classmethod
     async def submit_public_registration_service(
-        cls, db: AsyncSession, invite_code: str, data: PublicBattleRegistrationModel
+        cls, db: AsyncSession, invite_code: str, data: PublicBattleRegistrationModel,
+        *, current_user: CurrentUserModel | None = None,
     ) -> CrudResponseModel:
-        invite = await cls._get_active_invite_or_raise(db, invite_code)
-        member = await BattleRegistrationDao.get_member_for_invite(db, invite.owner_user_id, data.member_id)
-        if not member:
-            raise ServiceException(message='未找到该帮会成员')
-        exists = await BattleRegistrationDao.get_effective_registration(db, invite.invite_id, member.member_id)
-        if exists:
-            existing_type = cls._normalize_registration_type(exists.registration_type) or 'signup'
-            if existing_type == 'signup':
-                raise ServiceException(message='该成员已提交过约战报名，请勿重复提交')
-            await BattleRegistrationDao.cancel_effective_registration(
-                db, invite.invite_id, member.member_id, existing_type
-            )
-            message = '约战报名已提交，原请假申请已自动取消'
-        else:
-            message = '约战报名已提交，请等待审核'
-        await BattleRegistrationDao.create_registration(
-            db,
-            {
-                'invite_id': invite.invite_id,
-                'invite_code': invite.invite_code,
-                'guild_id': invite.owner_user_id,
-                'owner_user_id': invite.owner_user_id,
-                'applicant_user_id': 0,
-                'member_id': member.member_id,
-                'registration_type': 'signup',
-                'player_name': member.player_name,
-                'player_class': (data.player_class or member.player_class or '').strip(),
-                'secondary_class': (data.secondary_class or member.secondary_class or '').strip(),
-                'role_in_guild': member.role_in_guild or '',
-                'applicant_name': (data.applicant_name or '').strip(),
-                'applicant_contact': (data.applicant_contact or '').strip(),
-                'remark': (data.remark or '').strip(),
-            },
-        )
-        await db.commit()
-        return CrudResponseModel(is_success=True, message=message)
+        return await cls._submit_member_choice(db, current_user, invite_code, data, 'signup')
 
     @classmethod
     async def submit_public_leave_service(
-        cls, db: AsyncSession, invite_code: str, data: PublicBattleLeaveApplicationModel
+        cls, db: AsyncSession, invite_code: str, data: PublicBattleLeaveApplicationModel,
+        *, current_user: CurrentUserModel | None = None,
     ) -> CrudResponseModel:
-        invite = await cls._get_active_invite_or_raise(db, invite_code)
-        member = await BattleRegistrationDao.get_member_for_invite(db, invite.owner_user_id, data.member_id)
-        if not member:
-            raise ServiceException(message='未找到该帮会成员')
-        exists = await BattleRegistrationDao.get_effective_registration(db, invite.invite_id, member.member_id)
-        if exists:
-            existing_type = cls._normalize_registration_type(exists.registration_type) or 'signup'
-            if existing_type == 'leave':
-                raise ServiceException(message='该成员已提交过请假申请，请勿重复提交')
-            await BattleRegistrationDao.cancel_effective_registration(
-                db, invite.invite_id, member.member_id, existing_type
+        return await cls._submit_member_choice(db, current_user, invite_code, data, 'leave')
+
+    @classmethod
+    async def _submit_member_choice(
+        cls, db: AsyncSession, current_user: CurrentUserModel | None, invite_code: str,
+        data: PublicBattleRegistrationModel | PublicBattleLeaveApplicationModel, kind: str,
+    ) -> CrudResponseModel:
+        account_id = getattr(getattr(current_user, 'user', None), 'user_id', None)
+        if isinstance(account_id, bool) or not isinstance(account_id, int) or not 0 < account_id <= (1 << 63) - 1:
+            raise AuthException(message='用户未登录，请先完成登录')
+        try:
+            # Every self-service mutation locks invitation first, then member.
+            # Never invoke lazy schema migrations inside this transaction.
+            invite = await cls._get_active_invite_or_raise(db, invite_code, for_update=True)
+            member = await BattleRegistrationDao.lock_member_for_invite(db, invite.owner_user_id, data.member_id)
+            if not member or member.user_id != invite.owner_user_id:
+                raise PermissionException(data={'errorKey': 'MEMBER_NOT_ALLOWED'}, message='无权操作该邀请中的成员')
+            if not member.member_user_id:
+                raise PermissionException(data={'errorKey': 'MEMBER_BINDING_REQUIRED'}, message='请先完成账号与帮会成员绑定')
+            if member.member_user_id != account_id:
+                raise PermissionException(data={'errorKey': 'MEMBER_NOT_OWNER'}, message='只能提交登录账号本人的报名或请假')
+            if invite.status != '0' or invite.expire_time <= datetime.now():
+                raise ServiceException(data={'errorKey': 'INVITE_INACTIVE'}, message='链接已过期或已停用')
+            primary = (member.player_class or '').strip()
+            secondary = (member.secondary_class or '').strip()
+            if kind == 'signup':
+                primary = (data.player_class or '').strip() or primary
+                secondary = (data.secondary_class or '').strip() or secondary
+                verified = {(member.player_class or '').strip(), (member.secondary_class or '').strip()}
+                if primary not in verified or secondary not in verified:
+                    raise PermissionException(data={'errorKey': 'PROFESSION_NOT_BOUND'}, message='报名职业必须来自本人已绑定成员资料')
+            exists = await BattleRegistrationDao.get_effective_registration(
+                db, invite.invite_id, member.member_id, ensure_schema=False,
             )
-            message = '请假申请已提交，原约战报名已自动取消'
-        else:
-            message = '请假申请已提交，请等待审核'
-        await BattleRegistrationDao.create_registration(
-            db,
-            {
+            label = '请假申请' if kind == 'leave' else '约战报名'
+            if exists:
+                existing_type = cls._normalize_registration_type(exists.registration_type) or 'signup'
+                if existing_type == kind:
+                    raise ServiceException(data={'errorKey': 'REGISTRATION_EXISTS'}, message=f'该成员已提交过{label}，请勿重复提交')
+                await BattleRegistrationDao.cancel_effective_registration(
+                    db, invite.invite_id, member.member_id, existing_type, ensure_schema=False,
+                )
+                old_label = '约战报名' if kind == 'leave' else '请假申请'
+                message = f'{label}已提交，原{old_label}已自动取消'
+            else:
+                message = f'{label}已提交，请等待审核'
+            payload = {
                 'invite_id': invite.invite_id,
                 'invite_code': invite.invite_code,
                 'guild_id': invite.owner_user_id,
                 'owner_user_id': invite.owner_user_id,
-                'applicant_user_id': 0,
+                'applicant_user_id': account_id,
                 'member_id': member.member_id,
-                'registration_type': 'leave',
+                'registration_type': kind,
                 'player_name': member.player_name,
-                'player_class': member.player_class or '',
-                'secondary_class': member.secondary_class or '',
+                'player_class': primary,
+                'secondary_class': secondary,
                 'role_in_guild': member.role_in_guild or '',
                 'remark': (data.remark or '').strip(),
-            },
-        )
-        await db.commit()
-        return CrudResponseModel(is_success=True, message=message)
+            }
+            if kind == 'signup':
+                payload.update(applicant_name=(data.applicant_name or '').strip(), applicant_contact=(data.applicant_contact or '').strip())
+            await BattleRegistrationDao.create_registration(db, payload, ensure_schema=False)
+            await db.commit()
+            return CrudResponseModel(is_success=True, message=message)
+        except BaseException:
+            await db.rollback()
+            raise
 
     @classmethod
     async def submit_public_join_service(
@@ -343,13 +344,7 @@ class BattleRegistrationService:
         guild = await JoinApplicationDao.get_guild_by_id(db, invite.owner_user_id)
         if not guild:
             raise ServiceException(message='目标帮会不存在')
-        remark_parts = []
-        if data.applicant_name:
-            remark_parts.append(f'申请人：{data.applicant_name.strip()}')
-        if data.applicant_contact:
-            remark_parts.append(f'联系方式：{data.applicant_contact.strip()}')
-        if data.remark:
-            remark_parts.append(data.remark.strip())
+        remark_parts = cls._build_join_remark(data)
         await JoinApplicationDao.create_application(
             db,
             {
@@ -386,7 +381,11 @@ class BattleRegistrationService:
 
     @classmethod
     def _build_join_remark(cls, data: PublicBattleJoinApplicationModel) -> list[str]:
-        remark_parts = cls._build_join_remark(data)
+        remark_parts = []
+        for value, label in ((data.applicant_name, '申请人：'), (data.applicant_contact, '联系方式：'), (data.remark, '')):
+            normalized = (value or '').strip()
+            if normalized:
+                remark_parts.append(f'{label}{normalized}')
         return remark_parts
 
     @classmethod
@@ -409,17 +408,18 @@ class BattleRegistrationService:
         return registration
 
     @classmethod
-    async def _get_invite_or_raise(cls, db: AsyncSession, invite_code: str) -> GuildBattleInvite:
-        invite = await BattleRegistrationDao.get_invite_by_code(db, invite_code.strip())
+    async def _get_invite_or_raise(cls, db: AsyncSession, invite_code: str, *, for_update: bool = False) -> GuildBattleInvite:
+        getter = BattleRegistrationDao.lock_invite_by_code if for_update else BattleRegistrationDao.get_invite_by_code
+        invite = await getter(db, invite_code.strip())
         if not invite:
-            raise ServiceException(message='链接不存在')
+            raise ServiceException(data={'errorKey': 'INVITE_NOT_FOUND'}, message='链接不存在')
         return invite
 
     @classmethod
-    async def _get_active_invite_or_raise(cls, db: AsyncSession, invite_code: str) -> GuildBattleInvite:
-        invite = await cls._get_invite_or_raise(db, invite_code)
-        if invite.status != '0' or invite.expire_time < datetime.now():
-            raise ServiceException(message='链接已过期或已停用')
+    async def _get_active_invite_or_raise(cls, db: AsyncSession, invite_code: str, *, for_update: bool = False) -> GuildBattleInvite:
+        invite = await cls._get_invite_or_raise(db, invite_code, for_update=for_update)
+        if invite.status != '0' or invite.expire_time <= datetime.now():
+            raise ServiceException(data={'errorKey': 'INVITE_INACTIVE'}, message='链接已过期或已停用')
         return invite
 
     @classmethod

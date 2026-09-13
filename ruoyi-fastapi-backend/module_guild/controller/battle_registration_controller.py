@@ -7,7 +7,7 @@ from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
 from common.router import APIRouterPro
-from exceptions.exception import ServiceException
+from exceptions.exception import AuthException, PermissionException, ServiceException
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_guild.entity.vo.battle_registration_vo import (
     BattleInviteCreateModel,
@@ -279,32 +279,38 @@ async def get_public_professions(
 async def submit_public_registration(
     invite_code: str,
     data: PublicBattleRegistrationModel,
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
     query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
 ) -> Response:
     try:
-        result = await BattleRegistrationService.submit_public_registration_service(query_db, invite_code, data)
+        result = await BattleRegistrationService.submit_public_registration_service(query_db, invite_code, data, current_user=current_user)
         return ResponseUtil.success(msg=result.message)
+    except (AuthException, PermissionException):
+        raise
     except ServiceException as e:
         return ResponseUtil.error(msg=e.message)
     except Exception as e:
-        logger.error(f'公开提交约战报名失败: {e!s}')
-        return ResponseUtil.error(msg=f'{e!s}')
+        logger.error(f'公开提交约战报名失败: {type(e).__name__}')
+        return ResponseUtil.error(msg='提交失败，请稍后重试')
 
 
 @public_battle_registration_controller.post('/{invite_code}/leave', summary='公开提交请假申请')
 async def submit_public_leave(
     invite_code: str,
     data: PublicBattleLeaveApplicationModel,
+    current_user: Annotated[CurrentUserModel, CurrentUserDependency()],
     query_db: Annotated[AsyncSession, DBSessionDependency()] = None,
 ) -> Response:
     try:
-        result = await BattleRegistrationService.submit_public_leave_service(query_db, invite_code, data)
+        result = await BattleRegistrationService.submit_public_leave_service(query_db, invite_code, data, current_user=current_user)
         return ResponseUtil.success(msg=result.message)
+    except (AuthException, PermissionException):
+        raise
     except ServiceException as e:
         return ResponseUtil.error(msg=e.message)
     except Exception as e:
-        logger.error(f'公开提交请假申请失败: {e!s}')
-        return ResponseUtil.error(msg=f'{e!s}')
+        logger.error(f'公开提交请假申请失败: {type(e).__name__}')
+        return ResponseUtil.error(msg='提交失败，请稍后重试')
 
 
 @public_battle_registration_controller.post('/{invite_code}/join', summary='公开提交入会申请')

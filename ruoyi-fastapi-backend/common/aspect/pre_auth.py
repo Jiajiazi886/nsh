@@ -11,6 +11,7 @@ from config.get_db import get_db
 from exceptions.exception import AuthException
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_admin.service.login_service import LoginService
+from utils.access_token_util import bearer_access_token
 
 
 # 定义排除路由的字典结构
@@ -121,7 +122,7 @@ class PreAuth:
         token = request.headers.get('Authorization')
         if not token:
             raise AuthException(data='', message='用户未登录，请先完成登录')
-        current_user = await LoginService.get_current_user(request, token, db)
+        current_user = await LoginService.get_current_user(request, bearer_access_token(token), db)
         return current_user
 
 
