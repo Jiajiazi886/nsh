@@ -1,0 +1,33 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+
+const root = path.resolve(__dirname, '..')
+
+test('BAT 使用 CMD 可稳定解析的纯 ASCII 内容和英文脚本入口', () => {
+  const bytes = fs.readFileSync(path.join(root, '启动当前项目.bat'))
+  const source = bytes.toString('ascii')
+  assert.equal([...bytes].every(byte => byte < 128), true, 'BAT 含有 CMD 可能错误解析的非 ASCII 字节')
+  assert.match(source, /%~dp0start-current-project\.ps1/)
+  assert.match(source, /Keep this window open/i)
+  assert.doesNotMatch(source, /start\s+""|--no-pause|-Restart/)
+  assert.doesNotMatch(source, /app\.py|RuoYi-Vue3-FastAPI-master|local_activity_dev\.py prepare/)
+})
+
+test('PowerShell 只启动当前开发运行时并验证 9101 与 5173', () => {
+  const bytes = fs.readFileSync(path.join(root, 'start-current-project.ps1'))
+  const source = bytes.toString('ascii')
+  assert.equal([...bytes].every(byte => byte < 128), true, 'Windows PowerShell 5.1 入口必须是纯 ASCII')
+  assert.match(source, /local_activity_dev\.py serve/)
+  assert.doesNotMatch(source, /local_activity_dev\.py prepare/)
+  assert.match(source, /127\.0\.0\.1:9101\/api\/v1\/auth\/config/)
+  assert.match(source, /127\.0\.0\.1:5173\/login/)
+  assert.match(source, /Wait-TaskHealth/)
+  assert.match(source, /Stop-Process/)
+  assert.match(source, /JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/)
+  assert.match(source, /AssignProcessToJobObject/)
+  assert.match(source, /Wait-TaskServices/)
+  assert.match(source, /CloseHandle/)
+  assert.doesNotMatch(source, /Startup completed\.\s*$/)
+})

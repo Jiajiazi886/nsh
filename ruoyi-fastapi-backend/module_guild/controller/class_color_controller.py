@@ -21,7 +21,7 @@ async def get_class_colors(
     current_user: Annotated[dict, CurrentUserDependency()] = None,
 ) -> Response:
     try:
-        result = await ClassColorService.get_colors_service(query_db, current_user)
+        result = await ClassColorService.get_colors_service(query_db, current_user, preserve_saved=True)
         return ResponseUtil.success(data=result)
     except Exception as e:
         logger.error(f'获取颜色配置失败: {str(e)}')

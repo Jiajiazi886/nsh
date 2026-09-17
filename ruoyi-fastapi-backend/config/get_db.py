@@ -422,7 +422,11 @@ async def init_create_table() -> None:
     """
     logger.info('🔎 初始化数据库连接...')
     async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        # New integration tables require an explicit reviewed migration. Merely
+        # importing v1 routes must not create activity tables in an existing ruoyi DB.
+        await conn.run_sync(lambda connection: Base.metadata.create_all(
+            connection, tables=[table for table in Base.metadata.sorted_tables if not table.name.startswith('integration_')]
+        ))
     await ensure_system_roles()
     async with async_engine.begin() as conn:
         await run_schema_migrations(conn)

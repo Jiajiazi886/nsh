@@ -1,0 +1,26 @@
+.activity-page { min-height:100vh; padding:24rpx 24rpx 160rpx; box-sizing:border-box; background:#f5f6f8; color:#253044; font-size:28rpx; }
+.activity-page .panel { background:#fff; border:1rpx solid #dce0e6; border-radius:8rpx; padding:16rpx; margin-bottom:14rpx; }
+.activity-page .title { font-weight:600; font-size:36rpx; margin-bottom:14rpx; }
+.activity-page .section-title { font-weight:600; font-size:30rpx; }
+.activity-page .muted { color:#687386; font-size:24rpx; line-height:1.7; margin:8rpx 0; }
+.activity-page .error { color:#a32626; background:#fff1ef; padding:20rpx; margin-bottom:20rpx; border:1rpx solid #edc0ba; }
+.activity-page .tabs { display:flex; gap:12rpx; margin-bottom:20rpx; }
+.activity-page .tab { flex:1; background:#fff; border:1rpx solid #dce0e6; padding:18rpx 8rpx; text-align:center; border-radius:6rpx; }
+.activity-page .tab.active { color:#245db2; border-color:#245db2; background:#edf3fc; }
+.activity-page .profession { line-height:30rpx; max-width:100%; white-space:nowrap; box-sizing:border-box; display:inline-block; color:#fff; font-size:23rpx; padding:4rpx 10rpx; border-radius:4rpx; margin:6rpx 8rpx 6rpx 0; }
+.activity-page .card { border-top:1rpx solid #e3e7ec; padding:22rpx 0; }
+.activity-page .picker { background:#f5f6f8; border:1rpx solid #dce0e6; padding:16rpx; margin:10rpx 0; }
+.activity-page button { background:#edf3fc; color:#245db2; border:1rpx solid #cbd9ee; border-radius:6rpx; box-shadow:none; font-size:25rpx; margin:10rpx 8rpx 0 0; }
+.activity-page button::after { border:0; }
+.activity-page .squad { padding:12rpx 0; border-top:1rpx solid #e3e7ec; margin-top:14rpx; }
+.activity-page .seats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12rpx; margin-top:12rpx; }
+.activity-page .seat { background:#fafbfc; border:1rpx solid #d6dce4; padding:8rpx; border-radius:5rpx; min-width:0; }
+.activity-page .player-name { font-size:26rpx; font-weight:600; margin:8rpx 0; overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.activity-page .report-player { padding:18rpx 0; border-bottom:1rpx solid #e3e7ec; }
+.activity-page .seat-empty{background:#fff7d6;border:2rpx solid #d3a82f}
+.activity-page .empty-label{font-size:26rpx;font-weight:600;color:#815b00;margin:8rpx 0}
+.activity-page .seat .muted{font-size:21rpx;line-height:1.4;margin:4rpx 0}
+.activity-page .seat .profession{font-size:21rpx;line-height:28rpx;padding:2rpx 6rpx;margin:4rpx 0}
+.activity-page .seat button{line-height:36rpx;padding:0 8rpx;font-size:23rpx;margin-top:4rpx}
+.activity-page .profession-options button{display:inline-block;padding:1rpx 6rpx;margin:4rpx;border:0;background:#fff}
+.activity-page .shortage{display:inline-flex;align-items:center;gap:4rpx;margin:4rpx 10rpx 4rpx 0;font-size:24rpx}

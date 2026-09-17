@@ -9,7 +9,7 @@ class GuildBattle(Base):
     __tablename__ = 'guild_battle'
     __table_args__ = {'comment': '约战主表'}
 
-    battle_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True, comment='约战ID')
+    battle_id = Column(BigInteger().with_variant(Integer, 'sqlite'), primary_key=True, nullable=False, autoincrement=True, comment='约战ID')
     battle_name = Column(String(100), nullable=True, server_default="''", comment='约战名称')
     battle_date = Column(String(10), nullable=True, server_default="''", comment='约战日期')
     initiator_guild_id = Column(BigInteger, nullable=False, server_default='0', comment='发起方帮会ID')
@@ -31,7 +31,7 @@ class GuildBattleRecord(Base):
     __tablename__ = 'guild_battle_record'
     __table_args__ = {'comment': '约战明细表'}
 
-    record_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True, comment='记录ID')
+    record_id = Column(BigInteger().with_variant(Integer, 'sqlite'), primary_key=True, nullable=False, autoincrement=True, comment='记录ID')
     battle_id = Column(BigInteger, nullable=False, server_default='0', comment='约战ID')
     guild_id = Column(BigInteger, nullable=False, server_default='0', comment='帮会ID')
     battle_date = Column(String(10), nullable=True, server_default="''", comment='约战日期')

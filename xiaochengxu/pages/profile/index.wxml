@@ -31,17 +31,7 @@
       </view>
     </block>
 
-    <block wx:if="{{activeTab === 'player'}}">
-      <view wx:if="{{memberProfile}}" class="panel profile-form">
-        <view class="section-title">{{memberProfile.player_name}}</view>
-        <view class="section-caption">所属帮会 {{memberProfile.guild_name}}</view>
-        <view class="field"><text class="field-label">主职</text><input class="field-input" value="{{playerClass}}" data-field="playerClass" bindinput="updateField" /></view>
-        <view class="field"><text class="field-label">副职</text><input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" bindinput="updateField" /></view>
-        <view class="field"><text class="field-label">备注</text><textarea class="field-textarea" value="{{remark}}" data-field="remark" bindinput="updateField"></textarea></view>
-        <button class="primary-button save-profile" loading="{{saving}}" bindtap="saveMemberProfile">保存玩家资料</button>
-      </view>
-      <view wx:else class="panel compact-card"><view class="section-title">暂无绑定玩家资料</view><view class="section-caption">帮会管理员账号以组织身份工作；普通成员通过入会审核后可在这里编辑自己的职业资料。</view></view>
-    </block>
+    <block wx:if="{{activeTab === 'player'}}"><player-profile-form/></block>
 
     <block wx:if="{{activeTab === 'usage'}}">
       <view class="usage-grid">

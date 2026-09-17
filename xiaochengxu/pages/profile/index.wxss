@@ -164,3 +164,6 @@
   text-align: right;
   word-break: break-all;
 }
+/* Profile remains plain and readable. */
+.identity-card{background:#fff;color:#253044;border:1rpx solid #dce0e6;padding:20rpx;border-radius:6rpx}
+.identity-account{color:#687386}.avatar{background:#edf3fc;color:#245db2;width:70rpx;height:70rpx;font-size:30rpx;border-radius:6rpx}.identity-role{background:#edf3fc;color:#245db2;border-radius:4rpx}

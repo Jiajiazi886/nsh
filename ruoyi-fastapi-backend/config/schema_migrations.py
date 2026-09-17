@@ -9,7 +9,10 @@ from config.env import DataBaseConfig
 from utils.log_util import logger
 
 BASELINE_PATH = Path(__file__).with_name('project_menu_baseline.json')
-LEGACY_MENU_IDS = (4, 99, 118, 119, 1061, 1062, 1063, 1064)
+LEGACY_MENU_IDS = (
+    4, 99, 118, 119, 1061, 1062, 1063, 1064, 1068, 1069, 1070, 1071, 1072,
+    1073, 1074, 1075, 2000, 2001,
+)
 BUILTIN_ROLE_IDS = (1, 2, 100)
 DEFENSE_CALCULATOR_RENAME_VERSION = '20260813_rename_defense_calculator'
 MENU_COLUMNS = (

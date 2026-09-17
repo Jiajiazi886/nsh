@@ -26,11 +26,11 @@
       <view class="field-grid">
         <view class="field compact-field">
           <text class="field-label">主职</text>
-          <input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="可选" bindinput="updateField" />
+          <input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="可选" bindinput="updateField" /><profession-tag name="{{playerClass}}"/>
         </view>
         <view class="field compact-field">
           <text class="field-label">副职</text>
-          <input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="可选" bindinput="updateField" />
+          <input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="可选" bindinput="updateField" /><profession-tag name="{{secondaryClass}}"/>
         </view>
       </view>
       <view class="field">

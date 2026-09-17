@@ -25,6 +25,7 @@ services:
       APP_RELOAD: "false"
       APP_DISABLE_SWAGGER: "true"
       APP_DISABLE_REDOC: "true"
+      NSH_ACTIVITIES_ENABLED: "true"
       DB_TYPE: mysql
       DB_HOST: ${MYSQL_HOST:-host.docker.internal}
       DB_PORT: ${MYSQL_PORT:-3306}

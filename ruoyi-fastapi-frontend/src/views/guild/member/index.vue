@@ -1,5 +1,6 @@
 <template>
   <div ref="pageRef" class="app-container guild-member-page">
+    <el-dialog v-model="accountProfileVisible" title="本帮会成员玩家资料" width="420px"><p v-if="accountProfileError" role="alert">{{accountProfileError}}</p><el-descriptions v-if="accountProfile" :column="1" border><el-descriptions-item label="名字">{{accountProfile.name}}</el-descriptions-item><el-descriptions-item label="玩家 UID">{{accountProfile.playerUid||'未填写'}}</el-descriptions-item><el-descriptions-item label="微信号">{{accountProfile.wechatId||'未填写'}}</el-descriptions-item><el-descriptions-item label="橙武">{{accountProfile.hasOrangeWeapon?'有':'无'}}</el-descriptions-item></el-descriptions><p>仅本帮会管理员／助手可查看；未绑定账号的成员没有账号玩家资料。</p></el-dialog>
     <el-card class="roster-panel" shadow="never" data-guild-motion="hero">
       <template #header>
         <div class="card-header">
@@ -86,7 +87,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="scope">
             <el-button
               v-hasPermi="['guild:member:edit']"
@@ -97,6 +98,7 @@
             >
               编辑
             </el-button>
+            <el-button v-if="scope.row.member_user_id" link size="small" @click="viewAccountProfile(scope.row)">玩家资料</el-button>
           </template>
         </el-table-column>
 
@@ -186,6 +188,10 @@
 </template>
 
 <script setup>
+import {activityApi} from '@/api/activities'
+const accountProfileVisible=ref(false),accountProfile=ref(null),accountProfileError=ref('')
+async function viewAccountProfile(row){accountProfileVisible.value=true;accountProfile.value=null;accountProfileError.value='';try{const orgs=await activityApi.organizations();const org=orgs.find(o=>o.orgType==='guild' && o.canManage && o.orgId==='guild-'+String(row.user_id));if(!org)throw Error('没有该帮会的管理员／助手权限');accountProfile.value=await activityApi.organizationPlayerProfile(org.orgId,String(row.member_user_id))}catch(e){accountProfileError.value=e.message}}
+
 import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { addMember, editMember, batchDeleteMembers, importFromBattle, importMembersFromJson, getBattleListForImport, getBattleGuilds } from '@/api/guild/member'

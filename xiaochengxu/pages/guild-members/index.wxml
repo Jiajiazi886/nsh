@@ -30,8 +30,8 @@
       <view class="member-main">
         <view class="member-name">{{item.player_name}}</view>
         <view class="member-meta">
-          <text>{{item.player_class || '未设置主职'}}</text>
-          <text wx:if="{{item.secondary_class}}"> · 副职 {{item.secondary_class}}</text>
+          <profession-tag name="{{item.player_class}}"/>
+          <view wx:if="{{item.secondary_class}}">副职 <profession-tag name="{{item.secondary_class}}"/></view>
         </view>
         <view wx:if="{{item.remark}}" class="member-remark">{{item.remark}}</view>
       </view>

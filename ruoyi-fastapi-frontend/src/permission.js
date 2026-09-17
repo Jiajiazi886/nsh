@@ -18,8 +18,6 @@ const guildMemberWarmRoutes = [
   '/index',
   '/guild/info',
   '/guild/member',
-  '/guild/team',
-  '/guild/group',
   '/guild/schedule'
 ]
 

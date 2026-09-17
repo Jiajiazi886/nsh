@@ -1,0 +1,140 @@
+<view class="analysis-context">
+  <view class="analysis-context-title">{{analysisActivity.title}}</view>
+  <view class="analysis-context-meta">{{analysisActivity.meta}}</view>
+</view>
+<view class="analysis-nav">
+  <view class="analysis-nav-item" data-route="index" bindtap="goAnalysisSection">总览</view>
+  <view class="analysis-nav-item" data-route="players" bindtap="goAnalysisSection">玩家</view>
+  <view class="analysis-nav-item" data-route="teams" bindtap="goAnalysisSection">队伍</view>
+  <view class="analysis-nav-item active">盒子</view>
+</view>
+<view class="page-pad">
+  <view class="import-panel">
+    <view class="import-glow"></view>
+    <view class="import-head">
+
+      <view class="dataset-badge">{{summary.datasetName}}</view>
+    </view>
+    <view class="source-line">当前数据 · {{summary.datasetSource}}</view>
+
+    <view class="match-grid">
+
+      <view class="match-stat"><text class="match-value">{{summary.dataPlayerCount}}</text><text class="match-label">数据人数</text></view>
+      <view class="match-stat match-accent"><text class="match-value">{{summary.matchedCount}}/{{summary.rosterPlayerCount}}</text><text class="match-label">团队匹配</text></view>
+    </view>
+
+    <view class="import-actions {{importing ? 'is-busy' : ''}}">
+      <view class="import-btn import-btn-team" bindtap="importTeamConfig">
+        <text class="import-btn-icon">团</text>
+        <view><text class="import-btn-title">导入团队配置</text></view>
+      </view>
+      <view class="import-btn import-btn-data" bindtap="importCsv">
+        <text class="import-btn-icon">数</text>
+        <view><text class="import-btn-title">导入比赛数据</text></view>
+      </view>
+    </view>
+
+    <view class="utility-row">
+      <view class="utility-link" bindtap="toggleSample">{{sampleExpanded ? '收起团队示例' : '查看团队示例 JSON'}}</view>
+      <view class="utility-dot">·</view>
+      <view class="utility-link" bindtap="copySample">复制示例</view>
+      <view class="utility-spacer"></view>
+      <view class="utility-link danger-link" bindtap="resetAll">恢复默认</view>
+    </view>
+
+    <view wx:if="{{importing}}" class="busy-line"><view class="busy-dot"></view>正在读取文件，请稍候…</view>
+
+    <view wx:if="{{sampleExpanded}}" class="sample-box">
+      <view class="sample-head"><text>团队配置示例 · 3 团 / 10 队 / 60 人</text><text class="copy-link" bindtap="copySample">复制</text></view>
+      <scroll-view scroll-y class="sample-scroll">
+        <text class="sample-code" selectable user-select>{{sampleText}}</text>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view wx:if="{{lastReport}}" class="report-card report-{{lastReport.tone}}">
+    <view class="report-mark">{{lastReport.tone === 'warning' ? '!' : '✓'}}</view>
+    <view class="report-body">
+      <view class="report-head"><text>{{lastReport.title}}</text><text class="report-time">{{lastReport.importedAt}}</text></view>
+      <view class="report-source">{{lastReport.source}}</view>
+      <view class="report-line" wx:for="{{lastReport.lines}}" wx:key="*this">{{item}}</view>
+    </view>
+  </view>
+
+  <view class="top-actions">
+    <view class="btn btn-primary create-btn" bindtap="createBox">新建分析盒子</view>
+  </view>
+
+  <view wx:if="{{!boxes.length}}" class="card empty">还没有分析盒子，点击上方“新建盒子”。</view>
+
+  <view class="card box-card" wx:for="{{boxes}}" wx:key="id">
+    <view class="box-head">
+      <view class="box-title">
+        <text class="box-name" data-id="{{item.id}}" catchtap="renameBox">{{item.name}}</text>
+        <view class="chip muted">{{item.count}} 人</view>
+      </view>
+      <view class="box-head-actions">
+        <view class="collapse-action" data-id="{{item.id}}" catchtap="toggleCollapse">
+          <text>{{item.collapsed ? '展开 ▾' : '收起 ▴'}}</text>
+        </view>
+        <view class="delete-action" data-id="{{item.id}}" catchtap="delBox">✕</view>
+      </view>
+    </view>
+
+    <block wx:if="{{!item.collapsed}}">
+      <view class="section-label"><text>队伍</text><text class="link-btn" data-id="{{item.id}}" catchtap="editTeams">编辑 →</text></view>
+      <view class="chip-row">
+        <view wx:for="{{item.teamChips}}" wx:for-item="chip" wx:key="*this" class="chip">{{chip}}</view>
+        <view wx:if="{{!item.teamChips.length}}" class="chip muted">未选择队伍</view>
+      </view>
+
+      <view class="section-label"><text>玩家（{{item.playerChips.length}}{{item.extraCount ? '+' + item.extraCount : ''}}）</text></view>
+      <view class="chip-row">
+        <view
+          wx:for="{{item.playerChips}}"
+          wx:for-item="pname"
+          wx:key="*this"
+          class="chip role"
+        >{{pname}}</view>
+        <view wx:if="{{item.extraCount}}" class="chip muted">+{{item.extraCount}}</view>
+        <view wx:if="{{!item.playerChips.length}}" class="chip muted">尚未添加玩家</view>
+      </view>
+    </block>
+
+    <view class="section-label"><text>汇总数据</text><text class="link-btn" data-id="{{item.id}}" catchtap="editStats">改指标 →</text></view>
+    <view class="box-stat-grid">
+      <view class="box-stat-card" style="border-color: {{sc.color}}" wx:for="{{item.statCards}}" wx:for-item="sc" wx:key="id">
+        <view class="stat-label">{{sc.label}}</view>
+        <view class="stat-value">{{sc.text}}</view>
+      </view>
+    </view>
+    <view wx:if="{{!item.statCards.length}}" class="empty">未勾选任何数据指标</view>
+
+    <view class="box-view-section">
+      <view class="box-view-head">
+        <view class="box-view-tabs">
+          <view class="box-view-tab {{item.view === 'teams' ? 'active' : ''}}" data-id="{{item.id}}" data-view="teams" catchtap="setBoxView">按队伍</view>
+          <view class="box-view-tab {{item.view === 'players' ? 'active' : ''}}" data-id="{{item.id}}" data-view="players" catchtap="setBoxView">按玩家</view>
+        </view>
+        <view class="table-collapse-action" data-id="{{item.id}}" catchtap="toggleTableCollapse">{{item.tableCollapsed ? '展开 ▾' : '收起 ▴'}}</view>
+      </view>
+      <block wx:if="{{!item.tableCollapsed}}">
+        <view wx:if="{{!item.count}}" class="empty table-empty">添加队伍或玩家后，这里会自动统计。</view>
+        <scroll-view wx:else scroll-x scroll-y enhanced bounces show-scrollbar="{{false}}" class="box-table-scroll" style="height: {{item.table.height}}rpx">
+          <view class="box-data-table" style="width: {{item.table.width}}rpx">
+            <view class="box-table-row box-table-head">
+              <view class="box-primary-cell sortable-cell {{item.table.firstHeader.active ? 'sorted' : ''}}" style="width: {{item.table.firstWidth}}rpx" data-id="{{item.id}}" data-key="{{item.table.firstHeader.key}}" catchtap="sortBoxTable"><text>{{item.table.firstHeader.label}}</text><text class="sort-arrow">{{item.table.firstHeader.arrow}}</text></view>
+              <view class="box-secondary-cell sortable-cell {{item.table.secondHeader.active ? 'sorted' : ''}}" style="width: {{item.table.secondWidth}}rpx" data-id="{{item.id}}" data-key="{{item.table.secondHeader.key}}" catchtap="sortBoxTable"><text>{{item.table.secondHeader.label}}</text><text class="sort-arrow">{{item.table.secondHeader.arrow}}</text></view>
+              <view class="box-metric-cell sortable-cell {{head.active ? 'sorted' : ''}}" style="width: {{head.width}}rpx" wx:for="{{item.table.metricHeaders}}" wx:for-item="head" wx:key="key" data-id="{{item.id}}" data-key="{{head.key}}" catchtap="sortBoxTable"><text>{{head.label}}</text><text class="sort-arrow">{{head.arrow}}</text></view>
+            </view>
+            <view class="box-table-row" wx:for="{{item.table.rows}}" wx:for-item="row" wx:key="id">
+              <view class="box-primary-cell" style="width: {{item.table.firstWidth}}rpx"><text class="table-primary-text">{{row.first}}</text><text wx:if="{{row.firstSub}}" class="table-secondary-text">{{row.firstSub}}</text></view>
+              <view class="box-secondary-cell table-value" style="width: {{item.table.secondWidth}}rpx">{{row.second}}</view>
+              <view class="box-metric-cell table-value" style="width: {{cell.width}}rpx" wx:for="{{row.cells}}" wx:for-item="cell" wx:key="id">{{cell.text}}</view>
+            </view>
+          </view>
+        </scroll-view>
+      </block>
+    </view>
+  </view>
+</view>

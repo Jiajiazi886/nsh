@@ -6,7 +6,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MYSQL_INSTALL_SQL = BACKEND_ROOT / 'sql' / 'ruoyi-fastapi.sql'
 POSTGRES_INSTALL_SQL = BACKEND_ROOT / 'sql' / 'ruoyi-fastapi-pg.sql'
 STARTUP_DB_MODULE = BACKEND_ROOT / 'config' / 'get_db.py'
-EXPECTED_ROLE_MENU_COUNTS = {'1': 152, '2': 41, '100': 11}
+ACTIVITY_MENU_SQL = BACKEND_ROOT / 'sql' / '20260914_activity_information_menus.sql'
+EXPECTED_ROLE_MENU_COUNTS = {'1': 142, '2': 31, '100': 11}
 
 
 def test_project_menu_baseline_has_only_expected_top_level_menus() -> None:
@@ -26,6 +27,38 @@ def test_project_menu_baseline_contains_current_business_features() -> None:
     assert {'帮会管理', '个人管理', 'AIKey管理', '数据库管理', '内功管理', '坦度计算器'} <= names
     assert '防守计算器' not in names
     assert {'system:aikey:edit', 'personal:defense-calculator:list'} <= permissions
+
+
+def test_legacy_battle_management_branch_is_removed() -> None:
+    baseline = load_project_menu_baseline()
+    names = {menu['menu_name'] for menu in baseline['menus']}
+    permissions = {menu['perms'] for menu in baseline['menus']}
+
+    assert not {'约战管理', '历史数据管理', '约战报名', '数据导入'} & names
+    assert not {'guild:battle:list', 'guild:battle:import', 'guild:battle:query', 'guild:battle:remove'} & permissions
+
+
+def test_schedule_is_standalone_and_obsolete_group_review_menus_are_removed() -> None:
+    baseline = load_project_menu_baseline()
+    menus = baseline['menus']
+    names = {menu['menu_name'] for menu in menus}
+    schedule = next(menu for menu in menus if menu['menu_name'] == '约战排表')
+
+    assert schedule['parent_id'] == 1065
+    assert not {'分团管理', '审核管理', '成员审核', '约战审核'} & names
+    for menu_ids in baseline['role_menus'].values():
+        assert not {1068, 1073, 1074, 1075} & set(menu_ids)
+
+
+def test_manual_activity_menu_migration_matches_current_personal_public_rules() -> None:
+    sql = ACTIVITY_MENU_SQL.read_text(encoding='utf-8')
+
+    assert 'GuildFindBattles' not in sql
+    assert "'找约战',47000" not in sql
+    assert "'找约战',47004" in sql
+    assert sql.count("'历史约战'") == 2
+    assert "'历史战报'" not in sql
+    assert 'DELETE FROM sys_menu WHERE menu_id=47002' in sql
 
 
 def test_builtin_roles_have_a_one_time_default_menu_snapshot() -> None:

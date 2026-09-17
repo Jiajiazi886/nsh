@@ -10,7 +10,9 @@
     "pages/guild-members/index",
     "pages/guild-join/index",
     "pages/battle-invite/index",
-    "pages/schedule/index"
+    "pages/schedule/index",
+    "pages/activity-detail/index",
+    "pages/activity-report/index"
   ],
   "window": {
     "navigationBarTextStyle": "black",
@@ -18,7 +20,8 @@
   },
   "style": "v2",
   "usingComponents": {
-    "navigation-bar": "/components/navigation-bar/navigation-bar"
+    "navigation-bar": "/components/navigation-bar/navigation-bar",
+    "profession-tag": "/components/profession-tag/index"
   },
   "tabBar": {
     "custom": true,
@@ -27,11 +30,26 @@
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [
-      { "pagePath": "pages/home/index", "text": "首页" },
-      { "pagePath": "pages/activities/index", "text": "活动" },
-      { "pagePath": "pages/guild/index", "text": "帮会" },
-      { "pagePath": "pages/records/index", "text": "战绩" },
-      { "pagePath": "pages/profile/index", "text": "我的" }
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/activities/index",
+        "text": "活动"
+      },
+      {
+        "pagePath": "pages/guild/index",
+        "text": "帮会"
+      },
+      {
+        "pagePath": "pages/records/index",
+        "text": "战绩"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
     ]
   },
   "sitemapLocation": "sitemap.json",

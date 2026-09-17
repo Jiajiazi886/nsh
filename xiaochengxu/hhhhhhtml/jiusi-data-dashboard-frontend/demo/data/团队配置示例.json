@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "name": "进攻一团",
+      "teams": [
+        {
+          "name": "一队",
+          "players": [
+            { "name": "安崽", "aliases": ["安惠"] },
+            { "name": "烂柯", "aliases": [] },
+            { "name": "两难", "aliases": [] },
+            { "name": "隐曜", "aliases": [] },
+            { "name": "桃月月", "aliases": [] },
+            { "name": "奶糕", "aliases": [] }
+          ]
+        },
+        {
+          "name": "二队",
+          "players": [
+            { "name": "純爱", "aliases": ["纯爱"] },
+            { "name": "拾桉", "aliases": [] },
+            { "name": "镜流", "aliases": [] },
+            { "name": "声凛", "aliases": [] },
+            { "name": "东梦", "aliases": [] },
+            { "name": "流梳梳", "aliases": [] }
+          ]
+        },
+        {
+          "name": "三队",
+          "players": [
+            { "name": "香菜菜", "aliases": [] },
+            { "name": "浅叶", "aliases": ["小叶宝"] },
+            { "name": "断连", "aliases": [] },
+            { "name": "枯木", "aliases": [] },
+            { "name": "小青火", "aliases": [] },
+            { "name": "门门", "aliases": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "进攻二团",
+      "teams": [
+        {
+          "name": "一队",
+          "players": [
+            { "name": "花浊", "aliases": [] },
+            { "name": "封不覺", "aliases": ["封不觉"] },
+            { "name": "姜再逢", "aliases": [] },
+            { "name": "醉折枝", "aliases": [] },
+            { "name": "焦糖兔兔", "aliases": [] },
+            { "name": "桃姿", "aliases": [] }
+          ]
+        },
+        {
+          "name": "二队",
+          "players": [
+            { "name": "小仙", "aliases": [] },
+            { "name": "小泠", "aliases": [] },
+            { "name": "带带彭于晏", "aliases": ["彭于晏"] },
+            { "name": "朴彩英新年快乐", "aliases": ["顾盼"] },
+            { "name": "阿玥", "aliases": [] },
+            { "name": "明月晓寒尘", "aliases": [] }
+          ]
+        },
+        {
+          "name": "三队",
+          "players": [
+            { "name": "昭告", "aliases": [] },
+            { "name": "仟墨", "aliases": ["镜川"] },
+            { "name": "欧阳玄易", "aliases": [] },
+            { "name": "故尘", "aliases": [] },
+            { "name": "零零丷", "aliases": ["零零"] },
+            { "name": "钟瑶", "aliases": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "防守团",
+      "teams": [
+        {
+          "name": "一队",
+          "players": [
+            { "name": "桃柠", "aliases": [] },
+            { "name": "霜落岚雨", "aliases": [] },
+            { "name": "繁星入画", "aliases": [] },
+            { "name": "鱼鸢", "aliases": [] },
+            { "name": "璃月", "aliases": [] },
+            { "name": "离宝", "aliases": [] }
+          ]
+        },
+        {
+          "name": "二队",
+          "players": [
+            { "name": "雲落淋雨", "aliases": ["云落淋雨"] },
+            { "name": "葉落時雨", "aliases": ["叶落时雨"] },
+            { "name": "魔法小多", "aliases": [] },
+            { "name": "月落玄雨", "aliases": [] },
+            { "name": "星落夜雨", "aliases": [] },
+            { "name": "花辞", "aliases": [] }
+          ]
+        },
+        {
+          "name": "三队",
+          "players": [
+            { "name": "早晨", "aliases": [] },
+            { "name": "牛魔", "aliases": [] },
+            { "name": "八八一", "aliases": [] },
+            { "name": "双楠丶", "aliases": ["双楠"] },
+            { "name": "万斯琳丶", "aliases": ["万斯琳"] },
+            { "name": "家猫", "aliases": [] }
+          ]
+        },
+        {
+          "name": "四队",
+          "players": [
+            { "name": "忧郁男人", "aliases": [] },
+            { "name": "小听宝", "aliases": [] },
+            { "name": "晴空丶", "aliases": ["晴空"] },
+            { "name": "小九不暴躁", "aliases": [] },
+            { "name": "明瞳", "aliases": [] },
+            { "name": "小燁子", "aliases": ["烨梓"] }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+<view class="analysis-context">
+  <view style="padding:12rpx;color:#253044;background:#ffffff">本页为离线 CSV 分析示例，不是当前共享约战数据。共享战报请从“约战信息 → 约战详情”查看。</view>
+  <view class="analysis-context-title">{{analysisActivity.title}}</view>
+  <view class="analysis-context-meta">{{analysisActivity.meta}}</view>
+</view>
+<view class="analysis-nav">
+  <view class="analysis-nav-item active">总览</view>
+  <view class="analysis-nav-item" data-route="players" bindtap="goAnalysisSection">玩家</view>
+  <view class="analysis-nav-item" data-route="teams" bindtap="goAnalysisSection">队伍</view>
+  <view class="analysis-nav-item" data-route="boxes" bindtap="goAnalysisSection">盒子</view>
+</view>
+<view class="page-pad">
+  <view class="card hero">
+    <view class="hero-left">
+      <view class="brand-mark">肆</view>
+      <view>
+        <view class="hero-title">九肆 · 联赛数据分析</view>
+        <view class="muted small">当前数据：{{datasetName}} · {{playerCount}} 人 · {{teamCount}} 队</view>
+      </view>
+    </view>
+    <view class="offline-chip">离线数据</view>
+  </view>
+
+  <view class="section-label"><text>团队阵营总览</text></view>
+  <view class="group-grid">
+    <view class="group-card" wx:for="{{groupCards}}" wx:key="group">
+      <view class="group-name">{{item.group}}</view>
+      <view class="group-count muted small">{{item.count}} 人</view>
+      <view class="group-stat"><text class="muted small">击败 / 清泉</text><text class="v">{{item.kills}}</text></view>
+      <view class="group-stat"><text class="muted small">对玩家伤害</text><text class="v">{{item.damage}}</text></view>
+      <view class="group-stat"><text class="muted small">治疗值</text><text class="v">{{item.healing}}</text></view>
+      <view class="group-stat"><text class="muted small">助攻</text><text class="v">{{item.assists}}</text></view>
+    </view>
+  </view>
+
+  <view class="section-label"><text>阵营指标对比</text></view>
+  <view class="card">
+    <view class="cmp-block" wx:for="{{compareBars}}" wx:key="id">
+      <view class="cmp-title">{{item.label}}</view>
+      <view class="cmp-row" wx:for="{{item.rows}}" wx:for-item="row" wx:key="group">
+        <text class="cmp-group">{{row.group}}</text>
+        <view class="bar-wrap cmp-bar"><view class="bar-fill {{row.first ? 'green' : ''}}" style="width: {{row.pct}}%"></view></view>
+        <text class="cmp-val">{{row.text}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="section-label"><text>玩家排行榜 · 点击切换指标</text><text bindtap="goBoxes" class="link-btn">分析盒子 →</text></view>
+  <scroll-view scroll-x class="metric-scroll" show-scrollbar="{{false}}">
+    <view class="tag-tabs nowrap">
+      <view
+        wx:for="{{rankMetrics}}"
+        wx:key="id"
+        class="tag-tab {{activeRankMetric === item.id ? 'active' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="onPickRankMetric"
+      >{{item.label}}</view>
+    </view>
+  </scroll-view>
+
+  <view class="card rank-list">
+    <view class="rank-item" wx:for="{{rankList}}" wx:key="pid" data-id="{{item.pid}}" bindtap="onTapPlayer">
+      <view class="rank-no top{{item.no <= 3 ? item.no : ''}}">{{item.no}}</view>
+      <view class="rank-main">
+        <view class="rank-name">{{item.name}}</view>
+        <profession-tag name="{{item.role}}"/>
+        <view class="bar-wrap"><view class="bar-fill" style="width: {{item.pct}}%"></view></view>
+      </view>
+      <view class="rank-val">{{item.text}}</view>
+    </view>
+    <view wx:if="{{!rankList.length}}" class="empty">暂无数据</view>
+  </view>
+</view>

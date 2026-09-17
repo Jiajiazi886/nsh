@@ -1,0 +1,24 @@
+.search-bar {
+  margin-bottom: 20rpx;
+}
+
+.search-input {
+  background: #0e131d;
+  border: 1rpx solid #283142;
+  border-radius: 16rpx;
+  color: #fff;
+  padding: 18rpx 24rpx;
+  font-size: 26rpx;
+}
+
+.metric-scroll { width: 100%; white-space: nowrap; }
+
+.tag-tabs.nowrap {
+  flex-wrap: nowrap;
+  display: inline-flex;
+  margin-bottom: 16rpx;
+}
+
+.sort-hint {
+  margin: 0 4rpx 14rpx;
+}

@@ -1,0 +1,88 @@
+<view class="page-pad edit-page">
+  <view class="card" wx:if="{{mode === 'full'}}">
+    <view class="section-label" style="margin-top:0"><text>盒子名称</text></view>
+    <input class="input" value="{{name}}" bindinput="onNameInput" placeholder="输入盒子名称" placeholder-class="muted" />
+  </view>
+
+  <view class="card" wx:if="{{mode !== 'metrics'}}">
+    <view class="section-label" style="margin-top:0"><text>选择队伍（自动带入全部队员）</text></view>
+    <view wx:for="{{teamGroups}}" wx:key="group" wx:for-item="g" wx:for-index="gi">
+      <view class="muted small group-cap">{{g.group}}</view>
+      <view class="pick-grid">
+        <view
+          wx:for="{{g.teams}}"
+          wx:key="id"
+          wx:for-item="t"
+          wx:for-index="ti"
+          class="pick-card {{t.checked ? 'on' : ''}}"
+          data-gid="{{gi}}"
+          data-tid="{{ti}}"
+          bindtap="onToggleTeam"
+        >
+          <view class="pick-name">{{t.name}}</view>
+          <view class="muted small">{{t.count}} 人</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{mode !== 'teams'}}">
+    <view class="section-label" style="margin-top:0">
+      <text>统计指标（勾选即显示）</text>
+      <text><text class="link-btn" bindtap="metricAll">全选</text> · <text class="link-btn" bindtap="metricNone">清空</text></text>
+    </view>
+    <view class="pick-grid">
+      <view
+        wx:for="{{metricList}}"
+        wx:key="id"
+        wx:for-item="m"
+        wx:for-index="mi"
+        class="pick-card slim {{m.checked ? 'on' : ''}}"
+        data-idx="{{mi}}"
+        bindtap="onToggleMetric"
+      >{{m.label}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{mode !== 'metrics'}}">
+    <view class="section-label" style="margin-top:0">
+      <view>
+        <text>玩家明细（已选 {{checkedCount || 0}} 人）</text>
+        <text wx:if="{{manualEditCount}}" class="manual-badge">手动调整 {{manualEditCount}}</text>
+      </view>
+      <text class="link-btn" bindtap="resetPlayersToTeams">按小队重置</text>
+    </view>
+    <view class="player-tools"><text class="link-btn" bindtap="checkVisibleAll">全选当前结果</text><text class="tool-dot">·</text><text class="link-btn" bindtap="uncheckVisibleAll">清空当前结果</text></view>
+    <input class="input" value="{{playerKeyword}}" bindinput="onSearchPlayer" placeholder="搜索玩家 / 职业" placeholder-class="muted" />
+    <view class="career-tree" wx:if="{{roleGroups.length}}">
+      <view class="career-node" wx:for="{{roleGroups}}" wx:key="role" wx:for-item="r">
+        <view class="career-folder {{r.expanded ? 'open' : ''}}" data-role="{{r.role}}" bindtap="onToggleRole">
+          <view class="career-folder-copy">
+            <profession-tag name="{{r.role}}"/>
+            <text class="career-folder-count">已选 {{r.checkedCount}} / {{r.count}}</text>
+          </view>
+          <text class="career-folder-action">{{r.expanded ? '收起' : '展开'}}</text>
+        </view>
+        <view class="career-children" wx:if="{{r.expanded}}">
+          <view
+            class="career-player {{p.checked ? 'on' : ''}}"
+            wx:for="{{r.players}}"
+            wx:key="pid"
+            wx:for-item="p"
+            data-pid="{{p.pid}}"
+            bindtap="onTogglePlayer"
+          >
+            <text class="career-player-name">{{p.name}}</text>
+            <text class="career-player-state">{{p.checked ? '已选' : '选择'}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="career-empty muted" wx:else>没有找到对应的职业或玩家</view>
+    <view class="muted small" style="margin-top:14rpx">勾选小队会自动选中对应玩家；你可以继续逐人增减。没有手动调整玩家时，盒子会显示小队数据表格。</view>
+  </view>
+
+  <view class="save-wrap">
+    <view class="btn btn-primary save-btn" bindtap="save">{{saveLabel}}</view>
+  </view>
+</view>

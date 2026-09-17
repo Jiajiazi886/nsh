@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "我的账号"
+  "navigationBarTitleText": "我的账号",
+  "usingComponents": {
+    "player-profile-form": "/components/player-profile-form/index"
+  }
 }

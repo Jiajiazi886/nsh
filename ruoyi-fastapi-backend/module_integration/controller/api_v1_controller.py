@@ -12,6 +12,8 @@ from common.router import APIRouterPro
 from config.env import AppConfig, JwtConfig
 from module_admin.controller import captcha_controller as legacy_captcha
 from module_admin.controller import login_controller as legacy_auth
+from module_admin.entity.vo.login_vo import UserRegister
+from exceptions.exception import ServiceException
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_admin.service.login_service import CustomOAuth2PasswordRequestForm, LoginService
 from module_guild.entity.vo.battle_registration_vo import (
@@ -21,6 +23,7 @@ from module_guild.entity.vo.battle_registration_vo import (
 from module_guild.service.battle_registration_service import BattleRegistrationService
 from module_integration.contract import (
     AccountLogin,
+    AccountRegister,
     ApiEnvelope,
     ApiProblem,
     IntegrationRoute,
@@ -29,6 +32,7 @@ from module_integration.contract import (
     api_response,
 )
 from utils.access_token_util import bearer_access_token, decode_access_token
+from module_integration.activities.enabled import activities_enabled
 
 api_v1_controller = APIRouterPro(
     prefix='/api/v1',
@@ -111,6 +115,29 @@ async def login(request: Request, data: AccountLogin, db: Database) -> JSONRespo
     )
 
 
+@api_v1_controller.post('/auth/register', response_model=ApiEnvelope, operation_id='v1AuthRegister')
+async def register(request: Request, data: AccountRegister, db: Database) -> JSONResponse:
+    prefix = RedisInitKeyConfig.SYS_CONFIG.key
+    if await request.app.state.redis.get(f'{prefix}:sys.account.registerUser') != 'true':
+        raise ApiProblem(403, 'REGISTRATION_DISABLED', '注册已关闭，请联系管理员')
+    form = UserRegister(
+        username=data.user_name,
+        password=data.password.get_secret_value(),
+        confirmPassword=data.confirm_password.get_secret_value(),
+        code=data.code,
+        uuid=data.uuid,
+    )
+    try:
+        # Preserve legacy anonymous rate limiting, cache eviction, role and transaction rules.
+        response = await legacy_auth.register_user(request=request, user_register=form, query_db=db)
+    except ServiceException as exc:
+        if '登录账号已存在' in (exc.message or ''):
+            raise ApiProblem(409, 'ACCOUNT_EXISTS', '登录账号已存在，请更换账号') from exc
+        raise
+    legacy_auth_payload(response)
+    return api_response(request, {'registered': True, 'userName': data.user_name}, message='注册成功，请登录')
+
+
 @api_v1_controller.get('/capabilities', response_model=ApiEnvelope, operation_id='v1Capabilities')
 async def capabilities(request: Request) -> JSONResponse:
     return api_response(
@@ -121,7 +148,8 @@ async def capabilities(request: Request) -> JSONResponse:
             'selfRegistration': True,
             'wechatLogin': False,
             'botTransport': False,
-            'activitySnapshots': False,
+            'activitySnapshots': activities_enabled(),
+            'activityInformation': activities_enabled(),
             'csvAnalysis': False,
         },
     )

@@ -1,0 +1,26 @@
+<view class="page-pad" wx:if="{{player}}">
+  <view class="card">
+    <view class="player-head">
+      <view class="avatar">{{player.name[0]}}</view>
+      <view>
+        <view class="player-name" bindlongpress="copyName">{{player.name}}</view>
+        <view class="chip-row team-chip">
+          <profession-tag name="{{player.role}}"/>
+          <view class="chip muted">{{teamText}}</view>
+        </view>
+      </view>
+    </view>
+    <view class="muted small" style="margin-top:16rpx">长按名字可复制 · 条形图为该指标在全员中的相对水平</view>
+  </view>
+
+  <view class="section-label"><text>全部数据指标</text></view>
+  <view class="card">
+    <view class="stat-row" wx:for="{{statRows}}" wx:key="id">
+      <view class="stat-row-top">
+        <text class="muted">{{item.label}}</text>
+        <text class="stat-row-val">{{item.text}}</text>
+      </view>
+      <view class="bar-wrap"><view class="bar-fill {{item.pct >= 60 ? 'green' : (item.pct <= 15 ? 'warn' : '')}}" style="width: {{item.pct}}%"></view></view>
+    </view>
+  </view>
+</view>

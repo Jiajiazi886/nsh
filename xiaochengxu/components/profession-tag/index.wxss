@@ -1,0 +1,1 @@
+.tag{display:inline-block;font-size:22rpx!important;line-height:30rpx!important;font-weight:500;padding:1rpx 7rpx;margin:2rpx 3rpx;border:1rpx solid #dce0e6;border-radius:4rpx;white-space:nowrap;vertical-align:middle;max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}

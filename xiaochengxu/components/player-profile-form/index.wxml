@@ -1,0 +1,18 @@
+<view class="profile-form">
+ <view class="heading">个人资料</view><view class="hint">未加入帮会也可填写；不修改登录账号。</view>
+ <view wx:if="{{loading}}" class="hint">正在读取…</view>
+ <view wx:if="{{error}}" class="error">{{error}}<button wx:if="{{!ready}}" size="mini" bindtap="load">重试</button></view>
+ <block wx:if="{{ready}}">
+  <view class="field"><text class="label">名字 *</text><input value="{{form.name}}" maxlength="30" data-field="name" bindinput="input" disabled="{{saving}}" placeholder="游戏玩家名"/></view>
+  <view class="field"><text class="label">玩家 UID</text><input type="text" value="{{form.playerUid}}" maxlength="64" data-field="playerUid" bindinput="input" disabled="{{saving}}" placeholder="游戏 UID，保留前导零"/></view>
+  <view class="field"><text class="label">微信号</text><input value="{{form.wechatId}}" maxlength="64" data-field="wechatId" bindinput="input" disabled="{{saving}}" placeholder="手动填写微信号"/></view>
+  <view class="hint">微信号仅本人及本帮会管理员／助手可见，不是微信绑定。</view>
+  <view class="field"><text class="label">橙武</text><switch checked="{{form.hasOrangeWeapon}}" bindchange="orange" disabled="{{saving}}"/></view>
+  <view class="field"><text class="label">主职业</text><button size="mini" style="{{mainStyle}}" data-field="profession" bindtap="openOptions" disabled="{{saving}}">{{form.profession||'未设置'}} ▾</button></view>
+  <view class="field"><text class="label">副职</text><button size="mini" style="{{secondaryStyle}}" data-field="secondaryProfession" bindtap="openOptions" disabled="{{saving}}">{{form.secondaryProfession||'未设置'}} ▾</button></view>
+  <view wx:if="{{optionField}}" class="options"><view class="hint">选择职业（{{optionField==='profession'?'主职业':'副职'}}）</view><button size="mini" data-name="" bindtap="choose">未设置</button><button wx:for="{{options}}" wx:key="name" size="mini" class="profession-option" style="{{item.style}}" data-name="{{item.name}}" bindtap="choose">{{item.name}}</button><button size="mini" bindtap="closeOptions">取消</button></view>
+  <view class="field"><text class="label">备注</text><textarea value="{{form.remark}}" maxlength="500" data-field="remark" bindinput="input" disabled="{{saving}}" placeholder="最多500字"/></view>
+  <view class="buttons"><button size="mini" loading="{{saving}}" disabled="{{saving}}" bindtap="save">保存</button><button size="mini" disabled="{{saving}}" bindtap="reset">重置</button><button size="mini" disabled="{{saving}}" bindtap="reload">重新读取</button></view>
+  <view class="hint">{{dirty?'尚未保存；切换页面不会提交后端。':'网页与小程序共享同一份玩家资料。'}} 历史阵容和战报不变。</view>
+ </block>
+</view>

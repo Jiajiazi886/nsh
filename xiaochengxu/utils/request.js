@@ -1,25 +1,11 @@
 const { getEnvironment } = require('../config/env')
-const { clearSession, getToken } = require('./storage')
-
-let redirectingToLogin = false
+const { invalidateSession, getToken } = require('./storage')
 
 function encodeForm(data) {
   return Object.keys(data || {})
     .filter((key) => data[key] !== undefined && data[key] !== null)
     .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(data[key])}`)
     .join('&')
-}
-
-function redirectToLogin() {
-  if (redirectingToLogin) return
-  redirectingToLogin = true
-  clearSession()
-  wx.reLaunch({
-    url: '/pages/login/index',
-    complete() {
-      redirectingToLogin = false
-    },
-  })
 }
 
 function request(options) {
@@ -44,7 +30,7 @@ function request(options) {
       success(response) {
         const payload = response.data || {}
         if (response.statusCode === 401 || payload.code === 401) {
-          if (options.auth !== false) redirectToLogin()
+          if (options.auth !== false) invalidateSession(token)
           reject(new Error(payload.msg || '登录状态已过期'))
           return
         }

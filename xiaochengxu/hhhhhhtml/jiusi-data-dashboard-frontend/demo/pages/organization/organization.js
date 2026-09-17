@@ -1,0 +1,2 @@
+const {getClient}=require('../../services/activities')
+Page({data:{organizations:[],error:'',loading:false},onShow(){this.load()},async load(){this.setData({loading:true,error:''});try{this.setData({organizations:await getClient().organizations()})}catch(e){this.setData({error:e.message,organizations:[]})}finally{this.setData({loading:false})}},goActivities(){wx.switchTab({url:'/pages/activities/activities'})}})

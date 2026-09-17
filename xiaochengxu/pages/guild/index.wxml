@@ -44,7 +44,7 @@
         </view>
         <view wx:for="{{visibleMembers}}" wx:key="member_id" class="member-row">
           <view class="member-index">{{index + 1}}</view>
-          <view class="member-copy"><view class="member-name">{{item.player_name}}</view><view class="member-meta">{{item.player_class || '未设置主职'}}{{item.secondary_class ? ' · ' + item.secondary_class : ''}}</view></view>
+          <view class="member-copy"><view class="member-name">{{item.player_name}}</view><view class="member-meta"><profession-tag name="{{item.player_class}}"/><profession-tag wx:if="{{item.secondary_class}}" name="{{item.secondary_class}}"/></view></view>
           <view class="member-role">{{item.role_in_guild || '成员'}}</view>
         </view>
         <view wx:if="{{!visibleMembers.length}}" class="empty-state">没有匹配的成员</view>
@@ -60,7 +60,7 @@
     <block wx:if="{{activeTab === 'applications'}}">
       <view wx:if="{{canReview}}">
         <view wx:for="{{applications}}" wx:key="application_id" class="panel application-card">
-          <view class="application-top"><view><view class="member-name">{{item.player_name}}</view><view class="member-meta">{{item.player_class || '未设置职业'}} · {{item.applicant_nick_name || item.applicant_user_name}}</view></view><view class="status-pill">待审核</view></view>
+          <view class="application-top"><view><view class="member-name">{{item.player_name}}</view><view class="member-meta"><profession-tag name="{{item.player_class}}"/> · {{item.applicant_nick_name || item.applicant_user_name}}</view></view><view class="status-pill">待审核</view></view>
           <view wx:if="{{item.remark}}" class="application-remark">{{item.remark}}</view>
           <view class="inline-actions"><button wx:if="{{canReject}}" class="secondary-button" data-id="{{item.application_id}}" data-action="reject" bindtap="reviewApplication">拒绝</button><button wx:if="{{canApprove}}" class="primary-button" data-id="{{item.application_id}}" data-action="approve" bindtap="reviewApplication">同意入会</button></view>
         </view>
@@ -87,7 +87,7 @@
       <view class="form-sheet">
         <view class="sheet-title">新增帮会成员</view>
         <input class="field-input" value="{{playerName}}" data-field="playerName" placeholder="玩家名" bindinput="updateField" />
-        <view class="field-pair"><input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="主职" bindinput="updateField" /><input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="副职" bindinput="updateField" /></view>
+        <view class="field-pair"><input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="主职" bindinput="updateField" /><profession-tag name="{{playerClass}}"/><input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="副职" bindinput="updateField" /><profession-tag name="{{secondaryClass}}"/></view>
         <textarea class="field-textarea" value="{{remark}}" data-field="remark" placeholder="备注" bindinput="updateField"></textarea>
         <view class="inline-actions"><button class="secondary-button" bindtap="toggleAddForm">取消</button><button class="primary-button" loading="{{submitting}}" bindtap="addMember">添加</button></view>
       </view>

@@ -47,7 +47,7 @@
       <view class="ranking-head"><text>排名</text><text>玩家</text><text>击杀</text><text>助攻</text></view>
       <view wx:for="{{dashboard.top_records}}" wx:key="record_id" class="ranking-row">
         <view class="rank-number">{{index + 1}}</view>
-        <view><view class="battle-name">{{item.player_name}}</view><view class="battle-meta">{{item.player_class || '未设置职业'}}</view></view>
+        <view><view class="battle-name">{{item.player_name}}</view><profession-tag name="{{item.player_class}}"/></view>
         <view class="rank-stat">{{item.kills || 0}}</view>
         <view class="rank-stat">{{item.assists || 0}}</view>
       </view>
@@ -58,7 +58,7 @@
       <view class="detail-sheet" catchtap="noop">
         <view class="detail-header"><view><view class="sheet-title">{{selectedBattle.battle_name}}</view><view class="battle-meta">{{selectedBattle.battle_date}} · {{selectedBattle.opponent_name || '未知对手'}}</view></view><button bindtap="closeBattle">×</button></view>
         <scroll-view class="detail-list" scroll-y>
-          <view wx:for="{{battleRecords}}" wx:key="record_id" class="detail-player"><view><view class="battle-name">{{item.player_name}}</view><view class="battle-meta">{{item.player_class || '未设置职业'}}</view></view><view class="detail-stats">击杀 {{item.kills || 0}} · 助攻 {{item.assists || 0}}</view></view>
+          <view wx:for="{{battleRecords}}" wx:key="record_id" class="detail-player"><view><view class="battle-name">{{item.player_name}}</view><profession-tag name="{{item.player_class}}"/></view><view class="detail-stats">击杀 {{item.kills || 0}} · 助攻 {{item.assists || 0}}</view></view>
           <view wx:if="{{detailLoading}}" class="empty-state">正在加载战绩明细</view>
         </scroll-view>
       </view>

@@ -129,6 +129,9 @@ else {
 New-Item -ItemType Directory -Force -Path (Join-Path $releaseDirectory 'sql') | Out-Null
 Copy-Item -LiteralPath $composeFile -Destination (Join-Path $releaseDirectory 'docker-compose.yml')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/ruoyi-fastapi.sql') -Destination (Join-Path $releaseDirectory 'sql/ruoyi-fastapi.sql')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/20260914_activity_information_mysql.sql') -Destination (Join-Path $releaseDirectory 'sql/20260914_activity_information_mysql.sql')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/20260914_player_profile_mysql.sql') -Destination (Join-Path $releaseDirectory 'sql/20260914_player_profile_mysql.sql')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/20260914_activity_information_menus.sql') -Destination (Join-Path $releaseDirectory 'sql/20260914_activity_information_menus.sql')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'ruoyi-fastapi-backend/sql/20260725_reset_admin_credentials.sql') -Destination (Join-Path $releaseDirectory 'sql/20260725_reset_admin_credentials.sql')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BAOTA-README.md') -Destination (Join-Path $releaseDirectory 'BAOTA-README.md')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'site-config.example.env') -Destination (Join-Path $releaseDirectory 'site-config.example.env')

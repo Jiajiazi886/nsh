@@ -32,6 +32,8 @@ test('app.json registers every Demo page', () => {
     'pages/guild-join/index',
     'pages/battle-invite/index',
     'pages/schedule/index',
+    'pages/activity-detail/index',
+    'pages/activity-report/index',
   ])
 })
 
@@ -52,8 +54,9 @@ test('all JavaScript files are valid scripts', () => {
 
 test('authentication uses the existing backend contracts', () => {
   const authService = read('services/auth.js')
-  assert.match(authService, /url: '\/login'/)
-  assert.match(authService, /form: true/)
+  assert.match(authService, /getClient\(\)\.login/)
+  assert.match(authService, /userName:/)
+  assert.match(authService, /validateSession/)
   assert.match(authService, /url: '\/register'/)
   assert.match(authService, /url: '\/getInfo'/)
 })

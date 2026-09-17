@@ -16,10 +16,10 @@ class ClassColorService:
         )
 
     @classmethod
-    def _resolve_color(cls, class_name: str, saved_map: dict) -> dict:
+    def _resolve_color(cls, class_name: str, saved_map: dict, preserve_saved: bool = False) -> dict:
         saved = saved_map.get(class_name)
         default = DEFAULT_GUILD_CLASS_COLOR_MAP.get(class_name, {})
-        if saved and not cls._is_legacy_empty_color(saved, default):
+        if saved and (preserve_saved or not cls._is_legacy_empty_color(saved, default)):
             return {
                 'class_name': class_name,
                 'bg_color': saved.bg_color,
@@ -33,7 +33,7 @@ class ClassColorService:
         }
 
     @classmethod
-    async def get_colors_service(cls, db: AsyncSession, current_user) -> list[dict]:
+    async def get_colors_service(cls, db: AsyncSession, current_user, preserve_saved: bool = False) -> list[dict]:
         user_id = current_user.user.user_id
         items = await ClassColorDao.query_by_user(db, user_id)
         saved_map = {i.class_name: i for i in items}
@@ -49,7 +49,7 @@ class ClassColorService:
             return list(result_map.values())
 
         return [
-            cls._resolve_color(profession.profession_name, saved_map)
+            cls._resolve_color(profession.profession_name, saved_map, preserve_saved)
             for profession in professions
         ]
 

@@ -2,6 +2,7 @@ import { createWebHistory, createRouter } from 'vue-router'
 /* Layout */
 import Layout from '@/layout'
 import GuildMember from '@/views/guild/member/index.vue'
+import {legacyProfileRedirect} from './playerCenterLinks.mjs'
 
 /**
  * Note: 路由配置项
@@ -28,6 +29,21 @@ import GuildMember from '@/views/guild/member/index.vue'
 // 公共路由
 export const constantRoutes = [
   {
+    // All authenticated accounts own a player profile, even without a guild.
+    path: '/personal/profile-edit', component: Layout, hidden: true,
+    children: [{path:'',name:'AccountPlayerCenter',component:()=>import('@/views/personal/profileEdit/index.vue'),meta:{title:'个人中心',noCache:true}}]
+  },
+  {
+    // Stable activity editor; organization permissions are checked by the API
+    // and ScheduleEntry, independently of legacy nested schedule menu paths.
+    path: '/guild/schedule', component: Layout, hidden: true,
+    children: [{path:'',name:'ActivityLineupEditor',component:()=>import('@/views/guild/schedule/index.vue'),meta:{title:'约战排表',noCache:true}}]
+  },
+  {
+    path: '/battle-information', component: Layout, hidden: true,
+    children: [{path:'detail/:activityId',name:'BattleInformationDetail',component:()=>import('@/views/battle-information/detail.vue'),meta:{title:'约战详情',noCache:true}}]
+  },
+  {
     path: '/redirect',
     component: Layout,
     hidden: true,
@@ -51,6 +67,11 @@ export const constantRoutes = [
   {
     path: '/public/battle/:inviteCode',
     component: () => import('@/views/public/battleInvite/index.vue'),
+    hidden: true
+  },
+  {
+    path: '/public/activity-leave/:leaveCode',
+    component: () => import('@/views/public/activityLeave/index.vue'),
     hidden: true
   },
   {
@@ -84,9 +105,9 @@ export const constantRoutes = [
     children: [
       {
         path: 'profile/:activeTab?',
-        component: () => import('@/views/system/user/profile/index'),
+        redirect: legacyProfileRedirect,
         name: 'Profile',
-        meta: { title: '个人中心', icon: 'user' }
+        meta: { title: '个人中心', icon: 'user', noCache: true }
       }
     ]
   },
@@ -101,12 +122,6 @@ export const constantRoutes = [
         component: GuildMember,
         name: 'GuildMember',
         meta: { title: '成员管理' }
-      },
-      {
-        path: 'team',
-        component: () => import('@/views/guild/team/index'),
-        name: 'GuildTeam',
-        meta: { title: '分团管理' }
       },
       {
         path: 'classColor',

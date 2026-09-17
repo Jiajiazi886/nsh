@@ -1,4 +1,5 @@
 import router from '@/router'
+import {clearGuildClassColors} from '@/utils/guildClassColor'
 import { ElMessageBox } from 'element-plus'
 import { login, logout, getInfo } from '@/api/login'
 import { getToken, setToken, removeToken } from '@/utils/auth'
@@ -33,6 +34,7 @@ const useUserStore = defineStore(
         const password = userInfo.password
         return new Promise((resolve, reject) => {
           login(username, password).then(res => {
+            clearGuildClassColors()
             setToken(res.token)
             this.token = res.token
             resolve()
@@ -110,6 +112,7 @@ const useUserStore = defineStore(
               .forEach(key => sessionStorage.removeItem(key))
             useGuildMemberStore().reset()
             removeToken()
+            clearGuildClassColors()
             resolve()
           }).catch(error => {
             reject(error)

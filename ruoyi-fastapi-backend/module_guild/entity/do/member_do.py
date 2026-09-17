@@ -1,11 +1,15 @@
-from sqlalchemy import CHAR, BigInteger, Column, DateTime, Integer, String
+from sqlalchemy import CHAR, BigInteger, Column, DateTime, Index, Integer, String
 
 from config.database import Base
 
 
 class GuildMember(Base):
     __tablename__ = 'guild_member'
-    __table_args__ = {'comment': '帮会成员表'}
+    __table_args__ = (
+        Index('ix_guild_member_account_active_id', 'member_user_id', 'is_active', 'member_id'),
+        Index('ix_guild_member_owner_active_account', 'user_id', 'is_active', 'member_user_id'),
+        {'comment': '帮会成员表'},
+    )
 
     member_id = Column(BigInteger, primary_key=True, nullable=False, autoincrement=True, comment='成员ID')
     guild_id = Column(BigInteger, nullable=False, server_default='0', comment='所属帮会ID')

@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, Response
@@ -118,3 +118,25 @@ class AccountLogin(BaseModel):
     password: SecretStr = Field(min_length=1, max_length=256)
     code: str = Field(default='', max_length=32)
     uuid: str = Field(default='', max_length=128)
+
+
+class AccountRegister(AccountLogin):
+    user_name: str = Field(min_length=2, max_length=20)
+    password: SecretStr = Field(min_length=5, max_length=20)
+    confirm_password: SecretStr = Field(min_length=5, max_length=20)
+
+    @field_validator('user_name')
+    @classmethod
+    def valid_name(cls, value: str) -> str:
+        if not value.strip() or any(char in value for char in '<>'):
+            raise ValueError('Invalid account name')
+        return value
+
+    @model_validator(mode='after')
+    def valid_passwords(self) -> 'AccountRegister':
+        password = self.password.get_secret_value()
+        if password != self.confirm_password.get_secret_value():
+            raise ValueError('Passwords do not match')
+        if any(char in password for char in '<>"\'|\\'):
+            raise ValueError('Invalid password')
+        return self

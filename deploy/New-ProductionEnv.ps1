@@ -56,6 +56,7 @@ if ($LASTEXITCODE -ne 0 -or -not $keyPair.private -or -not $keyPair.public) {
 $privateKey = $keyPair.private.Trim() -replace "`r?`n", '\n'
 $publicKey = $keyPair.public.Trim() -replace "`r?`n", '\n'
 $mysqlPassword = New-HexSecret 32
+$mysqlRootPassword = New-HexSecret 32
 $redisPassword = New-HexSecret 32
 $jwtSecret = New-HexSecret 48
 
@@ -74,6 +75,7 @@ MYSQL_PORT=3306
 MYSQL_DATABASE=ruoyi-fastapi
 MYSQL_USERNAME=nsh_app
 MYSQL_PASSWORD=$mysqlPassword
+MYSQL_ROOT_PASSWORD=$mysqlRootPassword
 DOCKER_NETWORK_SUBNET=172.28.0.0/16
 REDIS_PASSWORD=$redisPassword
 
@@ -85,6 +87,7 @@ JWT_REDIS_EXPIRE_MINUTES=30
 APP_WORKERS=1
 APP_SAME_TIME_LOGIN=true
 APP_DEMO_MODE=false
+NSH_ACTIVITIES_ENABLED=true
 APP_TRUSTED_PROXY_IPS=127.0.0.1,::1
 APP_TRUSTED_PROXY_HOPS=1
 

@@ -19,7 +19,7 @@
             <view class="member-order">{{index + 1}}</view>
             <view class="member-copy">
               <view class="member-name">{{member.player_name}}</view>
-              <view class="member-class">{{member.player_class || '未设置职业'}}</view>
+              <profession-tag name="{{member.player_class}}"/>
             </view>
           </view>
         </view>

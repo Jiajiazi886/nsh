@@ -1,0 +1,49 @@
+<view class="analysis-context">
+  <view class="analysis-context-title">{{analysisActivity.title}}</view>
+  <view class="analysis-context-meta">{{analysisActivity.meta}}</view>
+</view>
+<view class="analysis-nav">
+  <view class="analysis-nav-item" data-route="index" bindtap="goAnalysisSection">总览</view>
+  <view class="analysis-nav-item active">玩家</view>
+  <view class="analysis-nav-item" data-route="teams" bindtap="goAnalysisSection">队伍</view>
+  <view class="analysis-nav-item" data-route="boxes" bindtap="goAnalysisSection">盒子</view>
+</view>
+<view class="page-pad">
+  <view class="search-bar">
+    <input
+      class="search-input"
+      placeholder="搜索玩家 / 职业"
+      placeholder-class="muted"
+      value="{{keyword}}"
+      bindinput="onSearch"
+      confirm-type="search"
+    />
+  </view>
+
+  <view class="muted small sort-hint">按所选指标从高到低排序，点击玩家查看详情</view>
+
+  <scroll-view scroll-x class="metric-scroll" show-scrollbar="{{false}}">
+    <view class="tag-tabs nowrap">
+      <view
+        wx:for="{{metrics}}"
+        wx:key="id"
+        class="tag-tab {{activeMetric === item.id ? 'active' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="onPickMetric"
+      >{{item.label}}</view>
+    </view>
+  </scroll-view>
+
+  <view class="card rank-list">
+    <view class="rank-item" wx:for="{{list}}" wx:key="pid" data-id="{{item.pid}}" bindtap="onTapPlayer">
+      <view class="rank-no top{{item.no <= 3 ? item.no : ''}}">{{item.no}}</view>
+      <view class="rank-main">
+        <view class="rank-name">{{item.name}}</view>
+        <profession-tag name="{{item.role}}"/>
+        <view class="bar-wrap"><view class="bar-fill" style="width: {{item.pct}}%"></view></view>
+      </view>
+      <view class="rank-val">{{item.text}}</view>
+    </view>
+    <view wx:if="{{!list.length}}" class="empty">没有匹配的玩家</view>
+  </view>
+</view>

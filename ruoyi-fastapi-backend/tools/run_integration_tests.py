@@ -34,6 +34,7 @@ TEST_ENV = {
     'TRANSPORT_CRYPTO_PRIVATE_KEY': '',
     'LOG_FILE_ENABLED': 'false',
     'NSH_INTEGRATION_TEST': '1',
+    'NSH_ACTIVITIES_ENABLED': 'true',
 }
 
 

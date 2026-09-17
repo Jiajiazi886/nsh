@@ -1,0 +1,17 @@
+<view class="activity-page">
+  <view class="panel">
+    <view class="title">账号登录</view>
+    <view class="muted">使用网页版的账号和密码，无需另行注册。</view>
+    <view class="muted">后端：{{backendUrl}}</view>
+    <input class="picker" placeholder="账号" value="{{userName}}" maxlength="30" data-field="userName" bindinput="input"/>
+    <input class="picker" placeholder="密码" password value="{{password}}" maxlength="64" data-field="password" bindinput="input"/>
+    <view wx:if="{{captchaEnabled}}">
+      <input class="picker" placeholder="验证码" value="{{code}}" data-field="code" bindinput="input"/>
+      <image src="{{captchaImage}}" style="width:240rpx;height:90rpx" bindtap="captcha"/>
+    </view>
+    <view wx:if="{{error}}" class="error">{{error}}</view>
+    <button wx:if="{{error}}" disabled="{{loading}}" bindtap="retryConnection">重新连接</button>
+    <button loading="{{loading}}" disabled="{{loading}}" bindtap="handleLogin">登录</button>
+    <view class="muted">微信绑定和一键登录尚未启用。</view>
+  </view>
+</view>

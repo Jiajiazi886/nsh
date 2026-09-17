@@ -1,0 +1,54 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/activities/activities",
+    "pages/organization/organization",
+    "pages/index/index",
+    "pages/profile/profile",
+    "pages/activity/activity",
+    "pages/activity-manage/activity-manage",
+    "pages/players/players",
+    "pages/teams/teams",
+    "pages/boxes/boxes",
+    "pages/player/player",
+    "pages/box-edit/box-edit",
+    "pages/activity-report/activity-report"
+  ],
+  "window": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "联赛约战",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f5f6f8"
+  },
+  "tabBar": {
+    "color": "#687386",
+    "selectedColor": "#245db2",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/activities/activities",
+        "text": "活动"
+      },
+      {
+        "pagePath": "pages/organization/organization",
+        "text": "组织"
+      },
+      {
+        "pagePath": "pages/index/index",
+        "text": "分析"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "componentFramework": "glass-easel",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "usingComponents": {
+    "profession-tag": "/components/profession-tag/index"
+  }
+}

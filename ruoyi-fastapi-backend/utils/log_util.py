@@ -83,7 +83,9 @@ class LogSanitizer:
         for item in (field.strip() for field in LogConfig.log_mask_fields.split(','))
         if item
     }
-    _TEXT_SENSITIVE_FIELDS = tuple(field.strip() for field in LogConfig.log_mask_fields.split(',') if field.strip())
+    # Account contact data remains sensitive even when an older env file lists only credentials.
+    _SENSITIVE_FIELDS.add('wechatid')
+    _TEXT_SENSITIVE_FIELDS = tuple(field.strip() for field in LogConfig.log_mask_fields.split(',') if field.strip()) + ('wechat_id',)
     _TEXT_SENSITIVE_KEY_PATTERN = '|'.join(
         sorted({_build_text_key_pattern(field_name) for field_name in _TEXT_SENSITIVE_FIELDS}, key=len, reverse=True)
     )

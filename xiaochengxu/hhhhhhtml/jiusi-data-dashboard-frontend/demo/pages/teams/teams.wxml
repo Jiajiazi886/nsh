@@ -1,0 +1,46 @@
+<view class="analysis-context">
+  <view class="analysis-context-title">{{analysisActivity.title}}</view>
+  <view class="analysis-context-meta">{{analysisActivity.meta}}</view>
+</view>
+<view class="analysis-nav">
+  <view class="analysis-nav-item" data-route="index" bindtap="goAnalysisSection">总览</view>
+  <view class="analysis-nav-item" data-route="players" bindtap="goAnalysisSection">玩家</view>
+  <view class="analysis-nav-item active">队伍</view>
+  <view class="analysis-nav-item" data-route="boxes" bindtap="goAnalysisSection">盒子</view>
+</view>
+<view class="page-pad">
+  <view class="muted small" style="margin:0 4rpx 20rpx">共 {{groups.length}} 个阵营 · 点击玩家可查看详情</view>
+
+  <view wx:for="{{groups}}" wx:key="group" wx:for-item="g">
+    <view class="group-title">{{g.group}}</view>
+    <view class="card team-block" wx:for="{{g.teams}}" wx:key="id" wx:for-item="t">
+      <view class="team-head">
+        <view>
+          <view class="team-name">{{g.group}} · {{t.name}}</view>
+          <view class="muted small" style="margin-top:4rpx">{{t.matchedCount}} / {{t.configuredCount}} 名玩家有数据</view>
+        </view>
+      </view>
+
+      <view class="team-stats">
+        <view class="mini-stat"><view class="mini-label">击败/清泉</view><view class="mini-val">{{t.kills}}</view></view>
+        <view class="mini-stat"><view class="mini-label">玩家伤害</view><view class="mini-val">{{t.damage}}</view></view>
+        <view class="mini-stat"><view class="mini-label">治疗值</view><view class="mini-val">{{t.healing}}</view></view>
+      </view>
+
+      <view class="member-grid">
+        <view
+          class="member-item {{m.hasData ? '' : 'missing'}}"
+          wx:for="{{t.members}}"
+          wx:for-item="m"
+          wx:key="pid"
+          data-id="{{m.pid}}"
+          bindtap="onTapMember"
+          hover-class="none"
+        >
+          <text class="member-name">{{m.name}}</text>
+          <text class="member-role">{{m.hasData ? m.role : '无数据'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

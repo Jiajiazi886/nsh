@@ -10,8 +10,7 @@ Docker 只运行三个容器：前端、后端和 Redis。业务数据库使用�
 
 网站地址：`http://www.xn--kbrr2vyxjytebq4azkrrie.icu/`
 
-管理员初始账号：`cptbtptp369`
-管理员初始密码：`cptbtptp369`
+管理员账号来自初始数据库。首次登录后必须立即改成本次部署独有的强密码，不要在 GitHub、文档或聊天记录中保存真实值。
 
 本次部署只使用 HTTP，不申请 SSL，不开启强制 HTTPS。
 
@@ -61,6 +60,9 @@ BUILD-INFO.txt
 site-config.example.env
 SHA256SUMS.txt
 sql/ruoyi-fastapi.sql
+sql/20260914_activity_information_mysql.sql
+sql/20260914_player_profile_mysql.sql
+sql/20260914_activity_information_menus.sql
 sql/20260725_reset_admin_credentials.sql
 BAOTA-README.md
 ```
@@ -125,9 +127,12 @@ EXIT;
 
 ```bash
 mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/ruoyi-fastapi.sql
+mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/20260914_activity_information_mysql.sql
+mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/20260914_player_profile_mysql.sql
+mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/20260914_activity_information_menus.sql
 ```
 
-如果服务器已有同名数据库，不要再次导入全量 SQL；请先备份，再按需要迁移数据。
+这四个文件依次导入后，才包含新版约战、阵容快照、请假、战报关联和账号玩家资料表。如果服务器已有同名数据库，不要再次导入全量 SQL；请先备份，再只执行尚未应用的功能迁移。
 
 ## 4. 导入镜像并启动 Docker
 
@@ -226,9 +231,13 @@ docker compose --env-file prod.env -f docker-compose.yml up -d --force-recreate 
 
 `MIMO_API_KEY` 请保持为空；运行中的图片识别只读取 AIKey 管理页面保存的 Key。
 
-## 7. 已有数据库时重置管理员
+## 7. 管理员账号安全
 
-新建并导入数据库后，管理员账号和密码已经是 `cptbtptp369`。如需重置已有数据库中的管理员，在发布目录执行：
+全量 SQL 中的初始管理员只用于首次进入系统。部署后应立即在“个人中心 → 修改密码”中设置独有强密码，并核对管理员用户名。不要把真实管理员密码写入 SQL、GitHub 或 `prod.env.example`。
+
+历史的 `20260725_reset_admin_credentials.sql` 只能在明确知道其影响时作为恢复工具使用；执行后也必须立即登录修改密码。
+
+如需对旧库执行该恢复工具，在发布目录执行：
 
 ```bash
 mysql -h 127.0.0.1 -uroot -p ruoyi-fastapi < sql/20260725_reset_admin_credentials.sql

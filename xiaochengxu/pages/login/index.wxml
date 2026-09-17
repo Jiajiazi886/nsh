@@ -14,6 +14,12 @@
         <view class="section-title">账号登录</view>
         <view class="status-pill">{{environmentName}}</view>
       </view>
+      <view class="brand-subtitle">使用网页版的账号和密码，无需另行注册。</view>
+      <view class="brand-subtitle">后端：{{backendUrl}}</view>
+      <view wx:if="{{error}}">
+        <text>{{error}}</text>
+        <button class="text-button" bindtap="retryConnection" disabled="{{loading}}">重新连接</button>
+      </view>
 
       <view class="field">
         <text class="field-label">账号</text>

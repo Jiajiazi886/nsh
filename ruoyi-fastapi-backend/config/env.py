@@ -89,7 +89,7 @@ class LogSettings(BaseSettings):
     log_mask_fields: str = (
         'password,old_password,new_password,confirm_password,api_key,token,access_token,refresh_token,'
         'authorization,client_secret,secret,secret_key,private_key,private_key_pem,credential,credentials,'
-        'sms_code,captcha_code,system_prompt'
+        'sms_code,captcha_code,system_prompt,wechatId,wechat_id'
     )
     log_partial_mask_fields: str = 'phonenumber,phone,mobile,email'
     log_config_secret_patterns: str = 'password,token,secret,key,private,credential,access,jwt,captcha,sms'

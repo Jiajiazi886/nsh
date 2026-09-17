@@ -1,0 +1,64 @@
+.group-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  margin: 8rpx 4rpx 16rpx;
+}
+
+.team-block { padding-bottom: 8rpx; }
+
+.team-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.team-name {
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.team-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.mini-stat {
+  background: #0e131d;
+  border: 1rpx solid #222c3d;
+  border-radius: 12rpx;
+  padding: 10rpx 12rpx;
+  text-align: center;
+}
+
+.mini-label { font-size: 19rpx; color: #707d94; }
+.mini-val { font-size: 24rpx; font-weight: 700; color: #d9d1ff; margin-top: 4rpx; }
+
+.member-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.member-item {
+  background: #171e2b;
+  border: 1rpx solid #283142;
+  border-radius: 14rpx;
+  padding: 14rpx 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.member-name { font-size: 25rpx; font-weight: 600; }
+.member-role { font-size: 20rpx; color: #a994ff; }
+
+.member-item.missing {
+  border-style: dashed;
+  opacity: 0.48;
+}
+
+.member-item.missing .member-role { color: #d18a96; }

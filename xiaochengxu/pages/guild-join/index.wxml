@@ -4,7 +4,7 @@
     <view wx:if="{{membership}}" class="panel current-card">
       <view class="status-pill">当前帮会</view>
       <view class="current-name">{{membership.guild_name}}</view>
-      <view class="current-player">{{membership.player_name}} · {{membership.player_class || '未设置职业'}}</view>
+      <view class="current-player">{{membership.player_name}} · <profession-tag name="{{membership.player_class}}"/></view>
       <button class="danger-button quit-button" bindtap="quitGuild">退出帮会</button>
     </view>
 
@@ -49,11 +49,11 @@
         <view class="field-grid">
           <view class="field compact-field">
             <text class="field-label">主职</text>
-            <input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="可选" bindinput="updateField" />
+            <input class="field-input" value="{{playerClass}}" data-field="playerClass" placeholder="可选" bindinput="updateField" /><profession-tag name="{{playerClass}}"/>
           </view>
           <view class="field compact-field">
             <text class="field-label">副职</text>
-            <input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="可选" bindinput="updateField" />
+            <input class="field-input" value="{{secondaryClass}}" data-field="secondaryClass" placeholder="可选" bindinput="updateField" /><profession-tag name="{{secondaryClass}}"/>
           </view>
         </view>
         <view class="field">
