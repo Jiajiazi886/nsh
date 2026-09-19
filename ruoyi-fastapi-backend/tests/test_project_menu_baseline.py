@@ -7,7 +7,7 @@ MYSQL_INSTALL_SQL = BACKEND_ROOT / 'sql' / 'ruoyi-fastapi.sql'
 POSTGRES_INSTALL_SQL = BACKEND_ROOT / 'sql' / 'ruoyi-fastapi-pg.sql'
 STARTUP_DB_MODULE = BACKEND_ROOT / 'config' / 'get_db.py'
 ACTIVITY_MENU_SQL = BACKEND_ROOT / 'sql' / '20260914_activity_information_menus.sql'
-EXPECTED_ROLE_MENU_COUNTS = {'1': 142, '2': 31, '100': 11}
+EXPECTED_ROLE_MENU_COUNTS = {'1': 148, '2': 31, '100': 11}
 
 
 def test_project_menu_baseline_has_only_expected_top_level_menus() -> None:
@@ -27,6 +27,17 @@ def test_project_menu_baseline_contains_current_business_features() -> None:
     assert {'帮会管理', '个人管理', 'AIKey管理', '数据库管理', '内功管理', '坦度计算器'} <= names
     assert '防守计算器' not in names
     assert {'system:aikey:edit', 'personal:defense-calculator:list'} <= permissions
+    license_menus = {menu['menu_id']: menu for menu in baseline['menus'] if 3170 <= menu['menu_id'] <= 3175}
+    assert set(license_menus) == {3170, 3171, 3172, 3173, 3174, 3175}
+    assert license_menus[3170]['parent_id'] == 1
+    assert license_menus[3170]['component'] == 'system/license/index'
+    assert {menu['perms'] for menu in license_menus.values()} >= {
+        'system:license:list', 'system:license:grant', 'system:license:revoke',
+        'system:license:remark', 'system:license:audit',
+    }
+    assert set(license_menus) <= set(baseline['role_menus']['1'])
+    assert not set(license_menus) & set(baseline['role_menus']['2'])
+    assert not set(license_menus) & set(baseline['role_menus']['100'])
 
 
 def test_legacy_battle_management_branch_is_removed() -> None:

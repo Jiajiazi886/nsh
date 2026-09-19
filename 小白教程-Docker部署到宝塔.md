@@ -113,7 +113,9 @@ nano deploy/prod.env
 ```env
 FRONTEND_PORT=12580
 
-MYSQL_DATABASE=ruoyi-fastapi
+MYSQL_DATABASE=nsh_activity_dev_20260914
+MYSQL_USERNAME=nsh_app
+MYSQL_PASSWORD=CHANGE_ME_mysql_application_password
 MYSQL_ROOT_PASSWORD=CHANGE_ME_mysql_root_password
 
 REDIS_PASSWORD=CHANGE_ME_redis_password
@@ -121,10 +123,12 @@ REDIS_PASSWORD=CHANGE_ME_redis_password
 JWT_SECRET_KEY=CHANGE_ME_64_hex_or_long_random_string
 ```
 
-至少把这三个 `CHANGE_ME` 改掉：
+至少把应用账号、应用密码、root 初始化密码、Redis 密码和 JWT 密钥全部替换：
 
 ```env
-MYSQL_ROOT_PASSWORD=你的MySQL密码
+MYSQL_USERNAME=nsh_app
+MYSQL_PASSWORD=你的应用数据库密码
+MYSQL_ROOT_PASSWORD=仅用于初始化的MySQL root密码
 REDIS_PASSWORD=你的Redis密码
 JWT_SECRET_KEY=你的JWT随机密钥
 ```
@@ -137,13 +141,7 @@ openssl rand -hex 32
 
 执行一次复制给 `MYSQL_ROOT_PASSWORD`，再执行一次复制给 `REDIS_PASSWORD`，再执行一次复制给 `JWT_SECRET_KEY`。
 
-示例：
-
-```env
-MYSQL_ROOT_PASSWORD=0d0e54c9cf52b23e6af491cc7f0f5c3a
-REDIS_PASSWORD=b46d883f6cdb1af32c4d973171f20f90
-JWT_SECRET_KEY=9d9e8d1f14de47a83a5db8f19cc82879bfb8c56b41333a9e314af1d8f91c5a2d
-```
+不要把真实密码或密钥粘贴回本文档；使用 `deploy/New-ProductionEnv.ps1` 或服务器安全随机生成器。
 
 保存：
 

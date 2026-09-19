@@ -4,7 +4,8 @@ const { clearSession, getUser, getToken } = require('../../utils/storage')
 const { selectTab } = require('../../utils/tabbar')
 
 const ROLE_NAMES = {
-  admin: '超级管理员',
+  cptbtptp: '超级管理员',
+  admin: '超级管理员（旧）',
   common: '帮会管理',
   user: '帮会成员',
   guild_assistant: '帮会助理',

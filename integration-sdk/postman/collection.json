@@ -21,6 +21,7 @@
     {"name":"认证配置", "request":{"method":"GET","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/config"}},
     {"name":"验证码", "request":{"method":"GET","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/captcha"}},
     {"name":"账号密码登录", "request":{"method":"POST","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/login","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"userName\":\"{{userName}}\",\"password\":\"{{password}}\",\"code\":\"{{captchaCode}}\",\"uuid\":\"{{captchaUuid}}\"}","options":{"raw":{"language":"json"}}}}},
+    {"name":"刷新登录令牌", "request":{"method":"POST","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/refresh","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"refreshToken\":\"\",\"clientType\":\"web\"}","options":{"raw":{"language":"json"}}}}},
     {"name":"当前账号", "request":{"method":"GET","url":"{{apiRoot}}/api/v1/auth/me"}},
     {"name":"账号注册","request":{"method":"POST","auth":{"type":"noauth"},"url":"{{apiRoot}}/api/v1/auth/register","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"userName\":\"{{userName}}\",\"password\":\"{{password}}\",\"confirmPassword\":\"{{confirmPassword}}\",\"code\":\"{{captchaCode}}\",\"uuid\":\"{{captchaUuid}}\"}","options":{"raw":{"language":"json"}}}}},
     {"name":"退出当前端", "request":{"method":"POST","url":"{{apiRoot}}/api/v1/auth/logout"}},

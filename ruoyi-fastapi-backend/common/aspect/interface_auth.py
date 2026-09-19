@@ -1,6 +1,7 @@
 from fastapi import Depends, Request, params
 
 from common.context import RequestContext
+from common.constant import CommonConstant
 from exceptions.exception import PermissionException
 from utils.dependency_util import DependencyUtil
 
@@ -65,13 +66,21 @@ class CheckRoleInterfaceAuth:
             return True
         user_role_list = current_user.user.role
         user_role_key_list = [role.role_key for role in user_role_list]
-        if isinstance(self.role_key, str) and self.role_key in user_role_key_list:
+        requested_roles = self.role_key
+        if requested_roles == 'admin':
+            requested_roles = CommonConstant.SUPER_ADMIN_ROLE_KEY
+        elif isinstance(requested_roles, list):
+            requested_roles = [
+                CommonConstant.SUPER_ADMIN_ROLE_KEY if role_key == 'admin' else role_key
+                for role_key in requested_roles
+            ]
+        if isinstance(requested_roles, str) and requested_roles in user_role_key_list:
             return True
-        if isinstance(self.role_key, list):
+        if isinstance(requested_roles, list):
             if self.is_strict:
-                if all(role_key_str in user_role_key_list for role_key_str in self.role_key):
+                if all(role_key_str in user_role_key_list for role_key_str in requested_roles):
                     return True
-            elif any(role_key_str in user_role_key_list for role_key_str in self.role_key):
+            elif any(role_key_str in user_role_key_list for role_key_str in requested_roles):
                 return True
         raise PermissionException(data='', message='该用户无此接口权限')
 

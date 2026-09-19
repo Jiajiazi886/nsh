@@ -77,7 +77,7 @@ Page({
       const userInfo = await authService.getInfo()
       const roles = userInfo.roles || []
       const permissions = userInfo.permissions || []
-      const isManager = roles.includes('admin') || roles.includes('common')
+      const isManager = roles.includes('cptbtptp') || roles.includes('common')
       const canViewMembers = isManager && can(permissions, 'guild:member:list')
       const canAddMember = isManager && can(permissions, 'guild:member:add')
       const canReview = isManager && can(permissions, 'guild:review:member:list')

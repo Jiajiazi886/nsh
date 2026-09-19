@@ -31,7 +31,7 @@ services:
       DB_PORT: ${MYSQL_PORT:-3306}
       DB_USERNAME: ${MYSQL_USERNAME:?set MYSQL_USERNAME in prod.env}
       DB_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in prod.env}
-      DB_DATABASE: ${MYSQL_DATABASE:-ruoyi-fastapi}
+      DB_DATABASE: ${MYSQL_DATABASE:-nsh_activity_dev_20260914}
       DB_ECHO: "false"
       REDIS_HOST: ruoyi-redis
       REDIS_PORT: 6379

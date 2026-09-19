@@ -9,6 +9,7 @@ from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
+from common.constant import CommonConstant
 from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
@@ -55,7 +56,7 @@ async def get_system_internal_power_entry_list(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:internal-power-entry:add'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @ValidateFields(validate_model='add_entry')
@@ -81,7 +82,7 @@ async def add_system_internal_power_entry(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:internal-power-entry:edit'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @ValidateFields(validate_model='edit_entry')
@@ -106,7 +107,7 @@ async def edit_system_internal_power_entry(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:internal-power-entry:remove'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @Log(title='内功词条管理', business_type=BusinessType.DELETE)

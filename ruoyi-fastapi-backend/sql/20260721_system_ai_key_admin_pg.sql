@@ -18,10 +18,10 @@ ON CONFLICT (menu_id) DO UPDATE SET
 
 DELETE FROM sys_role_menu rm
 USING sys_role r
-WHERE rm.role_id = r.role_id AND rm.menu_id = 3050 AND r.role_key <> 'admin';
+WHERE rm.role_id = r.role_id AND rm.menu_id = 3050 AND r.role_id <> 1;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT r.role_id, 3050
 FROM sys_role r
-WHERE r.role_key = 'admin'
+WHERE r.role_id = 1
 ON CONFLICT DO NOTHING;

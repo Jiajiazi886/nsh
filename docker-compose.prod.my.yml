@@ -35,9 +35,9 @@ services:
       DB_TYPE: mysql
       DB_HOST: ruoyi-mysql
       DB_PORT: 3306
-      DB_USERNAME: root
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in deploy/prod.env}
-      DB_DATABASE: ${MYSQL_DATABASE:-ruoyi-fastapi}
+      DB_USERNAME: ${MYSQL_USERNAME:-nsh_app}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in deploy/prod.env}
+      DB_DATABASE: ${MYSQL_DATABASE:-nsh_activity_dev_20260914}
       DB_ECHO: "false"
       REDIS_HOST: ruoyi-redis
       REDIS_PORT: 6379
@@ -61,13 +61,16 @@ services:
       - ${RUOYI_PROD_ENV_FILE:-./deploy/prod.env}
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in deploy/prod.env}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-ruoyi-fastapi}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-nsh_activity_dev_20260914}
+      MYSQL_USER: ${MYSQL_USERNAME:-nsh_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in deploy/prod.env}
     volumes:
       - ruoyi-mysql-data:/var/lib/mysql
       - ./ruoyi-fastapi-backend/sql/ruoyi-fastapi.sql:/docker-entrypoint-initdb.d/01-ruoyi-fastapi.sql:ro
       - ./ruoyi-fastapi-backend/sql/20260914_activity_information_mysql.sql:/docker-entrypoint-initdb.d/02-activity-information.sql:ro
       - ./ruoyi-fastapi-backend/sql/20260914_player_profile_mysql.sql:/docker-entrypoint-initdb.d/03-player-profile.sql:ro
       - ./ruoyi-fastapi-backend/sql/20260914_activity_information_menus.sql:/docker-entrypoint-initdb.d/04-activity-menus.sql:ro
+      - ./ruoyi-fastapi-backend/sql/20260919_account_license_mysql.sql:/docker-entrypoint-initdb.d/05-account-license.sql:ro
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci --skip-character-set-client-handshake=1
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$${MYSQL_ROOT_PASSWORD}\""]

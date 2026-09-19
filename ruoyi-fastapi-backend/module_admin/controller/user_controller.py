@@ -16,7 +16,7 @@ from common.aspect.data_scope import DataScopeDependency
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.constant import ApiGroup, ApiNamespace
+from common.constant import ApiGroup, ApiNamespace, CommonConstant
 from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, DynamicResponseModel, PageResponseModel, ResponseBaseModel
@@ -789,7 +789,7 @@ async def reset_system_user_password(
 @ApiRateLimit(
     namespace=ApiNamespace.SYSTEM_USER_IMPORT,
     preset=ApiRateLimitPreset.USER_RESOURCE_IMPORT,
-    bypass=ApiRateLimitBypassConfig(roles=('admin',)),
+    bypass=ApiRateLimitBypassConfig(roles=(CommonConstant.SUPER_ADMIN_ROLE_KEY,)),
 )
 @ApiCacheEvict(namespaces=ApiGroup.DATA_SCOPE_MUTATION)
 @Log(title='用户管理', business_type=BusinessType.IMPORT)

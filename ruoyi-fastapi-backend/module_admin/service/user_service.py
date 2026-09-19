@@ -103,12 +103,15 @@ class UserService:
     @staticmethod
     def is_admin_role(current_user: CurrentUserModel) -> bool:
         """
-        判断当前用户是否为超级管理员或拥有admin角色。
+        判断当前用户是否为超级管理员。
+
+        超级管理员以数据库管理标志、固定超级管理员ID或角色字符
+        ``cptbtptp`` 为准；旧角色字符 ``admin`` 不再授予该能力。
         """
         current_user_info = getattr(current_user, 'user', None)
-        return bool(getattr(current_user_info, 'admin', False)) or getattr(current_user_info, 'user_id', None) == 1 or (
-            'admin' in (current_user.roles or [])
-        )
+        return bool(getattr(current_user_info, 'admin', False)) or (
+            getattr(current_user_info, 'user_id', None) == CommonConstant.SUPER_ADMIN_ROLE_ID
+        ) or CommonConstant.SUPER_ADMIN_ROLE_KEY in (current_user.roles or [])
 
     @staticmethod
     def is_effective_vip(user: Any) -> bool:
@@ -136,7 +139,7 @@ class UserService:
         """
         补充前端展示用的有效VIP和有效内功额度字段。
         """
-        is_admin = bool(getattr(user, 'admin', False)) or 'admin' in (roles or [])
+        is_admin = bool(getattr(user, 'admin', False)) or CommonConstant.SUPER_ADMIN_ROLE_KEY in (roles or [])
         is_effective_vip = UserService.is_effective_vip(user)
         user.effective_vip_type = UserService.get_effective_vip_type(user)
         user.is_vip_effective = is_effective_vip
@@ -149,7 +152,7 @@ class UserService:
     def _decorate_user_rows(cls, rows: list[dict[str, Any]]) -> None:
         for row in rows:
             role_keys = [role.get('roleKey') for role in row.get('role', []) if isinstance(role, dict)]
-            is_admin = row.get('admin') or 'admin' in role_keys
+            is_admin = row.get('admin') or CommonConstant.SUPER_ADMIN_ROLE_KEY in role_keys
             expire_time = row.get('vipExpireTime')
             is_sponsored_vip = row.get('sponsoredVip') == '1'
             is_manual_vip = row.get('isVip') == '1' and isinstance(expire_time, datetime) and expire_time > datetime.now()

@@ -7,6 +7,7 @@ from exceptions.exception import ServiceException
 from module_admin.dao.user_dao import UserDao
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_admin.service.user_service import UserService
+from common.constant import CommonConstant
 from module_guild.dao.join_application_dao import JoinApplicationDao
 from module_guild.dao.member_dao import MemberDao
 from module_guild.entity.do.join_application_do import GuildJoinApplication
@@ -232,7 +233,7 @@ class JoinApplicationService:
     @classmethod
     def _get_role_scope(cls, current_user: CurrentUserModel) -> str:
         role_keys = {str(item).strip() for item in (current_user.roles or []) if str(item).strip()}
-        if 'admin' in role_keys:
+        if CommonConstant.SUPER_ADMIN_ROLE_KEY in role_keys:
             return 'admin'
         if 'common' in role_keys:
             return 'common'

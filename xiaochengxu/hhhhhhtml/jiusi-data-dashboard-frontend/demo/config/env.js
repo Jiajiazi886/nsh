@@ -5,7 +5,7 @@ const ENVIRONMENTS = {
   },
   production: {
     name: '正式环境',
-    baseUrl: 'https://www.xn--kbrr2vyxjytebq4azkrrie.icu/prod-api',
+    baseUrl: 'https://www.xn--kbrr2vyxjytebq4azkrrie.icu/docker-api',
   },
 }
 

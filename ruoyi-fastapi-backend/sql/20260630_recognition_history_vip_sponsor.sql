@@ -57,7 +57,7 @@ INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT r.role_id, m.menu_id
 FROM sys_role r
 JOIN sys_menu m ON m.perms IN ('system:user:vip:edit', 'system:user:sponsor:edit', 'system:user:ai:edit')
-WHERE r.role_key = 'admin'
+WHERE r.role_id = 1
   AND NOT EXISTS (
     SELECT 1 FROM sys_role_menu rm WHERE rm.role_id = r.role_id AND rm.menu_id = m.menu_id
   );

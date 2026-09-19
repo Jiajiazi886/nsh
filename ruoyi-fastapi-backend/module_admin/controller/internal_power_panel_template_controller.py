@@ -9,6 +9,7 @@ from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
+from common.constant import CommonConstant
 from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
@@ -54,7 +55,7 @@ async def get_system_internal_power_panel_template_list(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:internal-power-panel-template:add'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @ValidateFields(validate_model='add_template')
@@ -80,7 +81,7 @@ async def add_system_internal_power_panel_template(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:internal-power-panel-template:edit'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @ValidateFields(validate_model='edit_template')
@@ -105,7 +106,7 @@ async def edit_system_internal_power_panel_template(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:internal-power-panel-template:status'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @Log(title='面板模板状态', business_type=BusinessType.UPDATE)
@@ -130,7 +131,7 @@ async def change_system_internal_power_panel_template_status(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:internal-power-panel-template:remove'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @Log(title='面板模板设置', business_type=BusinessType.DELETE)

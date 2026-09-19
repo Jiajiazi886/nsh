@@ -9,6 +9,7 @@ from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
+from common.constant import CommonConstant
 from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
@@ -72,7 +73,7 @@ async def get_formula_version_list(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:formula-design:add'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @ValidateFields(validate_model='add_version')
@@ -99,7 +100,7 @@ async def add_formula_version(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:formula-design:edit'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @ValidateFields(validate_model='edit_version')
@@ -125,7 +126,7 @@ async def edit_formula_version(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:formula-design:add'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @Log(title='公式设计', business_type=BusinessType.INSERT)
@@ -149,7 +150,7 @@ async def copy_formula_version(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:formula-design:publish'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @Log(title='公式设计', business_type=BusinessType.UPDATE)
@@ -173,7 +174,7 @@ async def publish_formula_version(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:formula-design:publish'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @Log(title='公式设计', business_type=BusinessType.UPDATE)

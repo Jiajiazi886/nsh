@@ -156,6 +156,30 @@ async def test_json_login_reuses_existing_decorated_entry(v1_app, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_license_admin_login_skips_image_captcha_but_keeps_client_marker(v1_app, monkeypatch):
+    from module_admin.controller import login_controller as legacy
+    from utils.response_util import ResponseUtil
+
+    seen = {}
+
+    async def login(request, form_data, query_db):
+        seen['client_type'] = form_data.client_type
+        seen['code'] = form_data.code
+        seen['uuid'] = form_data.uuid
+        return ResponseUtil.success(dict_content={'token': 'synthetic.test.token'})
+
+    monkeypatch.setattr(legacy, 'login', login)
+    response = await call(
+        v1_app,
+        'POST',
+        '/api/v1/auth/login',
+        json={'userName': 'admin', 'password': 'synthetic-only', 'clientType': 'license-admin'},
+    )
+    assert response.status_code == 200
+    assert seen == {'client_type': 'license-admin', 'code': '', 'uuid': ''}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('legacy_code, expected', [(601, 401), (500, 500), (429, 429)])
 async def test_legacy_login_failures_are_normalized_and_sanitized(v1_app, monkeypatch, legacy_code, expected):
     from module_admin.controller import login_controller as legacy

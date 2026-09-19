@@ -1,12 +1,14 @@
 const { getEnvironment } = require('../config/env')
 const { loginPath } = require('../config/auth')
 const TOKEN_KEY = 'nsh-mini-token'
+const REFRESH_TOKEN_KEY = 'nsh-mini-refresh-token'
 const USER_KEY = 'nsh-mini-user'
 const ROOT_KEY = 'nsh-mini-auth-root'
 let redirecting = false
 function clearSession() {
   require('./profession-styles').clear()
   wx.removeStorageSync(TOKEN_KEY)
+  wx.removeStorageSync(REFRESH_TOKEN_KEY)
   wx.removeStorageSync(USER_KEY)
   wx.removeStorageSync(ROOT_KEY)
   if (typeof getApp === 'function') {
@@ -22,6 +24,12 @@ function getToken() {
 function setToken(token) {
   if (typeof token !== 'string' || !token) throw new Error('后端未返回有效登录凭证')
   wx.setStorageSync(TOKEN_KEY, token)
+  wx.setStorageSync(ROOT_KEY, getEnvironment().baseUrl)
+}
+function getRefreshToken() { getToken(); return wx.getStorageSync(REFRESH_TOKEN_KEY) || '' }
+function setRefreshToken(token) {
+  if (typeof token !== 'string' || !token) throw new Error('后端未返回有效刷新令牌')
+  wx.setStorageSync(REFRESH_TOKEN_KEY, token)
   wx.setStorageSync(ROOT_KEY, getEnvironment().baseUrl)
 }
 function getUser() { getToken(); return wx.getStorageSync(USER_KEY) || null }
@@ -42,4 +50,4 @@ function invalidateSession(expectedToken) {
   }
   return true
 }
-module.exports = { clearSession, getToken, getUser, setToken, setUser, invalidateSession }
+module.exports = { clearSession, getToken, getRefreshToken, getUser, setToken, setRefreshToken, setUser, invalidateSession }

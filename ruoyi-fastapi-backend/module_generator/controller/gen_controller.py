@@ -12,7 +12,7 @@ from common.annotation.rate_limit_annotation import ApiRateLimit, ApiRateLimitBy
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.constant import ApiGroup, ApiNamespace
+from common.constant import ApiGroup, ApiNamespace, CommonConstant
 from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
@@ -84,7 +84,7 @@ async def get_gen_db_table_list(
 @ApiRateLimit(
     namespace=ApiNamespace.TOOL_GEN_IMPORT_TABLE,
     preset=ApiRateLimitPreset.USER_RESOURCE_GENERATE,
-    bypass=ApiRateLimitBypassConfig(roles=('admin',)),
+    bypass=ApiRateLimitBypassConfig(roles=(CommonConstant.SUPER_ADMIN_ROLE_KEY,)),
 )
 @ApiCacheEvict(namespaces=ApiGroup.GEN_MUTATION)
 @Log(title='代码生成', business_type=BusinessType.IMPORT)
@@ -153,12 +153,12 @@ async def delete_gen_table(
     summary='创建数据库表接口',
     description='用于创建数据库表',
     response_model=ResponseBaseModel,
-    dependencies=[RoleInterfaceAuthDependency('admin')],
+    dependencies=[RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY)],
 )
 @ApiRateLimit(
     namespace=ApiNamespace.TOOL_GEN_CREATE_TABLE,
     preset=ApiRateLimitPreset.USER_RESOURCE_GENERATE,
-    bypass=ApiRateLimitBypassConfig(roles=('admin',)),
+    bypass=ApiRateLimitBypassConfig(roles=(CommonConstant.SUPER_ADMIN_ROLE_KEY,)),
 )
 @ApiCacheEvict(namespaces=ApiGroup.GEN_MUTATION)
 @Log(title='创建表', business_type=BusinessType.OTHER)
@@ -192,7 +192,7 @@ async def create_table(
 @ApiRateLimit(
     namespace=ApiNamespace.TOOL_GEN_BATCH_GEN_CODE,
     preset=ApiRateLimitPreset.USER_RESOURCE_DOWNLOAD,
-    bypass=ApiRateLimitBypassConfig(roles=('admin',)),
+    bypass=ApiRateLimitBypassConfig(roles=(CommonConstant.SUPER_ADMIN_ROLE_KEY,)),
 )
 @Log(title='代码生成', business_type=BusinessType.GENCODE)
 async def batch_gen_code(
@@ -217,7 +217,7 @@ async def batch_gen_code(
 @ApiRateLimit(
     namespace=ApiNamespace.TOOL_GEN_GEN_CODE_LOCAL,
     preset=ApiRateLimitPreset.USER_RESOURCE_GENERATE,
-    bypass=ApiRateLimitBypassConfig(roles=('admin',)),
+    bypass=ApiRateLimitBypassConfig(roles=(CommonConstant.SUPER_ADMIN_ROLE_KEY,)),
 )
 @ApiCacheEvict(namespaces=ApiGroup.GEN_MUTATION)
 @Log(title='代码生成', business_type=BusinessType.GENCODE)

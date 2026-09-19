@@ -48,6 +48,7 @@ services:
       - ./ruoyi-fastapi-backend/sql/20260914_activity_information_mysql.sql:/docker-entrypoint-initdb.d/02-activity-information.sql:ro
       - ./ruoyi-fastapi-backend/sql/20260914_player_profile_mysql.sql:/docker-entrypoint-initdb.d/03-player-profile.sql:ro
       - ./ruoyi-fastapi-backend/sql/20260914_activity_information_menus.sql:/docker-entrypoint-initdb.d/04-activity-menus.sql:ro
+      - ./ruoyi-fastapi-backend/sql/20260919_account_license_mysql.sql:/docker-entrypoint-initdb.d/05-account-license.sql:ro
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci --skip-character-set-client-handshake=1
     networks:
       - ruoyi-network

@@ -4,7 +4,6 @@
     <breadcrumb v-if="settingsStore.navType == 1" id="breadcrumb-container" class="breadcrumb-container" />
     <top-nav v-if="settingsStore.navType == 2" id="topmenu-container" class="topmenu-container" />
     <template v-if="settingsStore.navType == 3">
-      <logo v-show="settingsStore.sidebarLogo" :collapse="false"></logo>
       <top-bar id="topbar-container" class="topbar-container" />
     </template>
 
@@ -46,7 +45,6 @@ import { ElMessageBox } from 'element-plus'
 import Breadcrumb from '@/components/Breadcrumb'
 import TopNav from '@/components/TopNav'
 import TopBar from './TopBar'
-import Logo from './Sidebar/Logo'
 import Hamburger from '@/components/Hamburger'
 import useAppStore from '@/store/modules/app'
 import useUserStore from '@/store/modules/user'

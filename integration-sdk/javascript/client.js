@@ -97,6 +97,7 @@
       authConfig: () => request('GET', '/auth/config', undefined, false),
       captcha: () => request('GET', '/auth/captcha', undefined, false),
       login: data => request('POST', '/auth/login', data, false),
+      refresh: data => request('POST', '/auth/refresh', data, false),
       register: data => request('POST', '/auth/register', data, false),
       me: () => request('GET', '/auth/me'),
       logout: () => request('POST', '/auth/logout'),

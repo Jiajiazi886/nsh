@@ -45,4 +45,4 @@ JOIN sys_menu m ON m.perms IN (
   'guild:member:remove',
   'guild:member:import'
 )
-WHERE r.role_key IN ('admin', 'common');
+WHERE r.role_id = 1 OR r.role_key = 'common';
