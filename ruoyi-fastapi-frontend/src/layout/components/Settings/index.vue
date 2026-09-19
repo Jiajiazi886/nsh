@@ -53,13 +53,6 @@
     </div>
 
     <div class="drawer-item">
-      <span>显示 Logo</span>
-      <span class="comp-style">
-        <el-switch v-model="settingsStore.sidebarLogo" class="drawer-switch" />
-      </span>
-    </div>
-
-    <div class="drawer-item">
       <span>动态标题</span>
       <span class="comp-style">
         <el-switch v-model="settingsStore.dynamicTitle" @change="dynamicTitleChange" class="drawer-switch" />

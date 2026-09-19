@@ -28,7 +28,10 @@ class RoleService:
     """
 
     SYSTEM_ROLES = {
-        1: {'role_name': '超级管理员', 'role_key': 'admin'},
+        CommonConstant.SUPER_ADMIN_ROLE_ID: {
+            'role_name': '超级管理员',
+            'role_key': CommonConstant.SUPER_ADMIN_ROLE_KEY,
+        },
         2: {'role_name': '帮会管理', 'role_key': 'common'},
         100: {'role_name': '帮会成员', 'role_key': 'user'},
     }

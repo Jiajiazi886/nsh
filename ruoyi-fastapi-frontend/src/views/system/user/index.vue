@@ -842,7 +842,7 @@ const initPassword = ref(undefined);
 const roleOptions = ref([]);
 const registerCleanupEnabled = ref(false);
 const registerCleanupLoading = ref(false);
-const canManageVip = computed(() => (userStore.roles || []).includes("admin"));
+const canManageVip = computed(() => (userStore.roles || []).includes("cptbtptp") || (userStore.permissions || []).includes("*:*:*"));
 const vipDialog = reactive({
   open: false,
   row: null,

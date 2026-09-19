@@ -7,5 +7,5 @@ WHERE user_id NOT IN (
     SELECT DISTINCT ur.user_id
     FROM sys_user_role ur
     INNER JOIN sys_role r ON r.role_id = ur.role_id
-    WHERE r.role_key = 'admin'
+    WHERE r.role_id = 1
 );

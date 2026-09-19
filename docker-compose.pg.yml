@@ -44,6 +44,7 @@ services:
       - "15432:5432"
     volumes:
       - ./ruoyi-fastapi-backend/sql/ruoyi-fastapi-pg.sql:/docker-entrypoint-initdb.d/ruoyi-fastapi-pg.sql
+      - ./ruoyi-fastapi-backend/sql/20260919_account_license_postgresql.sql:/docker-entrypoint-initdb.d/02-account-license.sql
     networks:
       - ruoyi-network
     healthcheck:

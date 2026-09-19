@@ -8,13 +8,15 @@ import InnerLink from '@/layout/components/InnerLink'
 import GuildMember from '@/views/guild/member/index.vue'
 import SystemAiKey from '@/views/system/aiKey/index.vue'
 import SystemPvpAttackPanel from '@/views/system/pvpAttackPanel/index.vue'
+import SystemLicense from '@/views/system/license/index.vue'
 
 // 匹配views里面所有的.vue文件
 const modules = import.meta.glob([
   './../../views/**/*.vue',
   '!./../../views/guild/member/index.vue',
   '!./../../views/system/aiKey/index.vue',
-  '!./../../views/system/pvpAttackPanel/index.vue'
+  '!./../../views/system/pvpAttackPanel/index.vue',
+  '!./../../views/system/license/index.vue'
 ])
 
 const usePermissionStore = defineStore(
@@ -169,6 +171,9 @@ export const loadView = (view) => {
   }
   if (view === 'system/pvpAttackPanel/index') {
     return SystemPvpAttackPanel
+  }
+  if (view === 'system/license/index') {
+    return SystemLicense
   }
 
   let res;

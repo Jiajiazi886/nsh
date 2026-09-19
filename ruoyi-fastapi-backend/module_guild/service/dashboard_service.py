@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from common.constant import CommonConstant
 
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_guild.dao.dashboard_dao import DashboardDao
@@ -74,7 +75,7 @@ class DashboardService:
     @classmethod
     def _get_role_scope(cls, current_user: CurrentUserModel) -> str:
         role_keys = {str(item).strip() for item in (current_user.roles or []) if str(item).strip()}
-        if getattr(current_user.user, 'admin', False) or 'admin' in role_keys:
+        if getattr(current_user.user, 'admin', False) or CommonConstant.SUPER_ADMIN_ROLE_KEY in role_keys:
             return 'admin'
         if 'common' in role_keys:
             return 'common'

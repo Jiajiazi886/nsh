@@ -26,4 +26,4 @@ INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
 SELECT r.role_id, m.menu_id
 FROM sys_role r
 JOIN sys_menu m ON m.menu_id IN (3040, 3041, 3042)
-WHERE r.role_key = 'admin';
+WHERE r.role_id = 1;

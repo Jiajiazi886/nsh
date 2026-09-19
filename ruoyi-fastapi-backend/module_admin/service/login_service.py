@@ -50,6 +50,7 @@ class CustomOAuth2PasswordRequestForm(OAuth2PasswordRequestForm):
         code: str | None = Form(default=''),
         uuid: str | None = Form(default=''),
         login_info: dict[str, str] | None = Form(default=None),
+        client_type: str | None = Form(default=''),
     ) -> None:
         super().__init__(
             grant_type=grant_type,
@@ -62,6 +63,7 @@ class CustomOAuth2PasswordRequestForm(OAuth2PasswordRequestForm):
         self.code = code
         self.uuid = uuid
         self.login_info = login_info
+        self.client_type = client_type or ''
 
 
 class LoginService:

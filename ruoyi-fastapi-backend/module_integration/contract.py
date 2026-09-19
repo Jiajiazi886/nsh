@@ -118,6 +118,7 @@ class AccountLogin(BaseModel):
     password: SecretStr = Field(min_length=1, max_length=256)
     code: str = Field(default='', max_length=32)
     uuid: str = Field(default='', max_length=128)
+    client_type: str = Field(default='', max_length=40)
 
 
 class AccountRegister(AccountLogin):
@@ -140,3 +141,10 @@ class AccountRegister(AccountLogin):
         if any(char in password for char in '<>"\'|\\'):
             raise ValueError('Invalid password')
         return self
+
+
+class RefreshTokenInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True, alias_generator=to_camel)
+
+    refresh_token: str = Field(min_length=24, max_length=256)
+    client_type: str = Field(default='', max_length=40)

@@ -31,10 +31,10 @@ ON DUPLICATE KEY UPDATE
 DELETE rm
 FROM sys_role_menu rm
 JOIN sys_role r ON r.role_id = rm.role_id
-WHERE rm.menu_id IN (3165, 3166) AND r.role_key <> 'admin';
+WHERE rm.menu_id IN (3165, 3166) AND r.role_id <> 1;
 
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
 SELECT r.role_id, m.menu_id
 FROM sys_role r
 JOIN sys_menu m ON m.menu_id IN (3165, 3166)
-WHERE r.role_key = 'admin';
+WHERE r.role_id = 1;

@@ -21,6 +21,6 @@ SELECT 47006,'找约战',47004,2,'public','battle-information/public','','Person
 SELECT 47007,'历史约战',47004,3,'history','battle-information/history','','PersonalBattleHistory',1,1,'C','0','0','activities:read','documentation','system',NOW() WHERE @personal_parent IS NOT NULL;
 INSERT IGNORE INTO sys_role_menu(role_id,menu_id)
 SELECT r.role_id,m.menu_id FROM sys_role r JOIN sys_menu m ON (m.menu_id IN (47000,47001,47003,47004,47005,47006,47007) OR m.menu_id IN (@guild_parent,@personal_parent))
-WHERE r.role_key IN ('admin','common','user') AND r.status='0' AND r.del_flag='0';
+WHERE (r.role_id = 1 OR r.role_key IN ('common','user')) AND r.status='0' AND r.del_flag='0';
 COMMIT;
 -- Clear router/permission caches and re-login after applying; do not grant other guild children to user role.

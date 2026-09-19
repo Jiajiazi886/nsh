@@ -39,6 +39,17 @@ test('login never uses or retains current token', async () => {
   assert.equal(requests[0].headers.Authorization, undefined);
 });
 
+test('refresh never sends the old access token', async () => {
+  const requests = [];
+  const client = createClient({ baseUrl: 'https://example.invalid', getToken: () => 'old-access', transport: async request => {
+    requests.push(request);
+    return { status: 200, data: { code: 200, success: true, data: { accessToken: 'new-access', refreshToken: 'new-refresh' } } };
+  }});
+  const result = await client.refresh({ refreshToken: 'old-refresh', clientType: 'desktop-assistant' });
+  assert.equal(result.accessToken, 'new-access');
+  assert.equal(requests[0].headers.Authorization, undefined);
+});
+
 test('fetch adapter serializes JSON and handles non-JSON errors safely', async () => {
   let init;
   const transport = createFetchTransport(async (url, options) => {

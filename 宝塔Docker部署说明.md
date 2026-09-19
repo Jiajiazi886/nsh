@@ -35,7 +35,10 @@ cp deploy/prod.env.example deploy/prod.env
 编辑 `deploy/prod.env`，至少替换这些值：
 
 ```env
-MYSQL_ROOT_PASSWORD=换成强密码
+MYSQL_DATABASE=nsh_activity_dev_20260914
+MYSQL_USERNAME=nsh_app
+MYSQL_PASSWORD=换成应用数据库强密码
+MYSQL_ROOT_PASSWORD=换成仅用于初始化的MySQL root强密码
 REDIS_PASSWORD=换成强密码
 JWT_SECRET_KEY=换成随机长字符串
 ```

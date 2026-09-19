@@ -90,5 +90,5 @@ test('activity, guild, and records pages use existing backend modules', () => {
 test('trial and release builds use the production API', () => {
   const envSource = read('config/env.js')
   assert.match(envSource, /\['trial', 'release'\]\.includes/)
-  assert.match(envSource, /https:\/\/www\.xn--kbrr2vyxjytebq4azkrrie\.icu\/prod-api/)
+  assert.match(envSource, /https:\/\/www\.xn--kbrr2vyxjytebq4azkrrie\.icu\/docker-api/)
 })

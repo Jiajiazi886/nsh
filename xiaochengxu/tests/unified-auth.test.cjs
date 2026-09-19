@@ -29,6 +29,7 @@ for(const root of roots) {
     assert.match(r.pending[0].url,/\/api\/v1\/auth\/login$/)
     assert.equal(r.pending[0].header.Authorization,undefined)
     assert.equal(r.pending[0].data.userName,'admin')
+    assert.equal(r.pending[0].data.clientType,'wechat-miniapp')
     r.reply(200,ok({accessToken:'shared-token',expiresIn:3600}))
     assert.equal((await promise).token,'shared-token')
     assert.equal(storage.getToken(),'')

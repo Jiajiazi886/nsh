@@ -7,6 +7,7 @@ from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
+from common.constant import CommonConstant
 from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, ResponseBaseModel
@@ -29,7 +30,7 @@ pvp_defense_profession_bonus_controller = APIRouterPro(
     response_model=DataResponseModel[list[ProfessionBonusModel]],
     dependencies=[
         UserInterfaceAuthDependency('system:pvp-defense-profession-bonus:list'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 async def list_profession_bonuses(
@@ -44,7 +45,7 @@ async def list_profession_bonuses(
     response_model=ResponseBaseModel,
     dependencies=[
         UserInterfaceAuthDependency('system:pvp-defense-profession-bonus:edit'),
-        RoleInterfaceAuthDependency('admin'),
+        RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY),
     ],
 )
 @Log(title='职业加成设置', business_type=BusinessType.UPDATE)

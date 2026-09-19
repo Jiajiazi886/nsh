@@ -318,7 +318,7 @@ const joinRules = {
 
 const roleScope = computed(() => {
   const roles = userStore.roles || []
-  if (roles.includes('admin')) return 'admin'
+  if (roles.includes('cptbtptp')) return 'admin'
   if (roles.includes('common')) return 'common'
   return 'user'
 })

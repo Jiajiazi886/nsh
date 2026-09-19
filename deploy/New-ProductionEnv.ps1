@@ -72,7 +72,7 @@ APP_VERSION=1.9.0
 # using the password below before starting Docker.
 MYSQL_HOST=host.docker.internal
 MYSQL_PORT=3306
-MYSQL_DATABASE=ruoyi-fastapi
+MYSQL_DATABASE=nsh_activity_dev_20260914
 MYSQL_USERNAME=nsh_app
 MYSQL_PASSWORD=$mysqlPassword
 MYSQL_ROOT_PASSWORD=$mysqlRootPassword

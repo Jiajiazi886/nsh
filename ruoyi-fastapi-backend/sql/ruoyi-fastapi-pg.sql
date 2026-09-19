@@ -111,7 +111,7 @@ comment on table sys_user is '用户信息表';
 -- ----------------------------
 -- 初始化-用户信息表数据
 -- ----------------------------
-insert into sys_user values(1,  103, 'admin',   '超级管理员', '00', 'niangao@163.com', '15888888888', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '1', '2099-12-31 23:59:59', 0, 20, '0', '127.0.0.1', current_timestamp, current_timestamp, 'admin', current_timestamp, '', null, '管理员');
+insert into sys_user values(1,  103, 'cptbtptp369', '超级管理员', '00', 'niangao@163.com', '15888888888', '1', '', '$2b$12$YvxDRUVcRBiYUZF1CxwVS.uShtsv7hqoEXAGP8VqcJjWcFDfATLNW', '0', '1', '2099-12-31 23:59:59', 0, 20, '0', '127.0.0.1', current_timestamp, current_timestamp, 'cptbtptp369', current_timestamp, '', null, '管理员');
 insert into sys_user values(2,  105, 'niangao', '年糕', 			'00', 'niangao@qq.com',  '15666666666', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '0', null, 0, 20, '0', '127.0.0.1', current_timestamp, current_timestamp, 'admin', current_timestamp, '', null, '测试员');
 
 -- ----------------------------
@@ -229,7 +229,7 @@ comment on table sys_role is '角色信息表';
 -- ----------------------------
 -- 初始化-角色信息表数据
 -- ----------------------------
-insert into sys_role values(1, '超级管理员',  'admin',  1, 1, 1, 1, '0', '0', 'system', current_timestamp, '', null, '系统内置超级管理员角色');
+insert into sys_role values(1, '超级管理员',  'cptbtptp',  1, 1, 1, 1, '0', '0', 'system', current_timestamp, '', null, '系统内置超级管理员角色');
 insert into sys_role values(2, '帮会管理',    'common', 2, 2, 1, 1, '0', '0', 'system', current_timestamp, '', null, '系统内置帮会管理角色');
 insert into sys_role values(100, '帮会成员',  'user',   0, 2, 1, 1, '0', '0', 'system', current_timestamp, '', null, '系统内置帮会成员角色');
 
@@ -428,6 +428,12 @@ insert into sys_menu values(3163, '进攻方面板修改', 3160, 3, '#', '', '',
 insert into sys_menu values(3164, '进攻方面板删除', 3160, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:remove', '#', 'system', current_timestamp, 'system', current_timestamp, '');
 insert into sys_menu values(3165, '职业加成设置', 1, 15, 'pvpDefenseProfessionBonus', 'system/pvpDefenseProfessionBonus/index', '', 'SystemPvpDefenseProfessionBonus', 1, 0, 'C', '0', '0', 'system:pvp-defense-profession-bonus:list', 'setting', 'system', current_timestamp, 'system', current_timestamp, '管理员维护防守计算器职业默认加成');
 insert into sys_menu values(3166, '职业加成修改', 3165, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-defense-profession-bonus:edit', '#', 'system', current_timestamp, 'system', current_timestamp, '');
+insert into sys_menu values(3170, '卡密管理', 1, 16, 'license', 'system/license/index', '', 'SystemLicense', 1, 0, 'C', '0', '0', 'system:license:list', 'lock', 'system', current_timestamp, 'system', current_timestamp, 'RuoYi账号授权管理');
+insert into sys_menu values(3171, '授权查询', 3170, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:list', '#', 'system', current_timestamp, 'system', current_timestamp, '');
+insert into sys_menu values(3172, '发放授权', 3170, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:grant', '#', 'system', current_timestamp, 'system', current_timestamp, '');
+insert into sys_menu values(3173, '撤销授权', 3170, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:revoke', '#', 'system', current_timestamp, 'system', current_timestamp, '');
+insert into sys_menu values(3174, '修改备注', 3170, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:remark', '#', 'system', current_timestamp, 'system', current_timestamp, '');
+insert into sys_menu values(3175, '授权审计', 3170, 5, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:audit', '#', 'system', current_timestamp, 'system', current_timestamp, '');
 select setval(pg_get_serial_sequence('sys_menu', 'menu_id'), (select max(menu_id) from sys_menu), true);
 
 -- 6、用户和角色关联表  用户N-1角色
@@ -606,6 +612,12 @@ insert into sys_role_menu values (1, 3163);
 insert into sys_role_menu values (1, 3164);
 insert into sys_role_menu values (1, 3165);
 insert into sys_role_menu values (1, 3166);
+insert into sys_role_menu values (1, 3170);
+insert into sys_role_menu values (1, 3171);
+insert into sys_role_menu values (1, 3172);
+insert into sys_role_menu values (1, 3173);
+insert into sys_role_menu values (1, 3174);
+insert into sys_role_menu values (1, 3175);
 insert into sys_role_menu values (2, 1);
 insert into sys_role_menu values (2, 107);
 insert into sys_role_menu values (2, 1035);
@@ -1235,3 +1247,38 @@ comment on column ai_models.create_time is '创建时间';
 comment on column ai_models.update_by is '更新者';
 comment on column ai_models.update_time is '更新时间';
 comment on column ai_models.remark is '备注';
+
+CREATE TABLE IF NOT EXISTS system_account_license (
+  license_id varchar(64) PRIMARY KEY, user_id bigint NOT NULL UNIQUE REFERENCES sys_user(user_id),
+  plan_type varchar(16) NOT NULL, status varchar(16) NOT NULL DEFAULT 'active', valid_from timestamp NOT NULL,
+  expires_at timestamp NULL, remark varchar(500) NOT NULL DEFAULT '', version integer NOT NULL DEFAULT 1,
+  create_by varchar(64) NOT NULL DEFAULT 'system', create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_by varchar(64) NOT NULL DEFAULT 'system', update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS ix_system_account_license_user ON system_account_license(user_id);
+CREATE TABLE IF NOT EXISTS system_account_license_audit (
+  audit_id varchar(64) PRIMARY KEY, batch_id varchar(64) NOT NULL, request_id varchar(64) NOT NULL,
+  user_id bigint NOT NULL REFERENCES sys_user(user_id), operator_user_id bigint NOT NULL REFERENCES sys_user(user_id),
+  action varchar(32) NOT NULL, previous_state jsonb NULL, new_state jsonb NULL, remark varchar(500) NOT NULL DEFAULT '',
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(request_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS ix_system_account_license_audit_batch ON system_account_license_audit(batch_id);
+CREATE INDEX IF NOT EXISTS ix_system_account_license_audit_user ON system_account_license_audit(user_id);
+
+CREATE TABLE IF NOT EXISTS system_auth_refresh_token (
+  token_id varchar(64) PRIMARY KEY,
+  token_hash varchar(64) NOT NULL UNIQUE,
+  user_id bigint NOT NULL,
+  client_type varchar(40) NOT NULL DEFAULT '',
+  token_family_id varchar(64) NOT NULL,
+  device_id varchar(128) NULL,
+  issued_at timestamp NOT NULL,
+  expires_at timestamp NOT NULL,
+  last_used_at timestamp NULL,
+  revoked_at timestamp NULL,
+  replaced_by_token_id varchar(64) NULL,
+  CONSTRAINT fk_system_auth_refresh_token_user FOREIGN KEY (user_id) REFERENCES sys_user(user_id)
+);
+CREATE INDEX IF NOT EXISTS ix_system_auth_refresh_token_user ON system_auth_refresh_token(user_id);
+CREATE INDEX IF NOT EXISTS ix_system_auth_refresh_token_family ON system_auth_refresh_token(token_family_id);
+CREATE INDEX IF NOT EXISTS ix_system_auth_refresh_token_device ON system_auth_refresh_token(device_id);

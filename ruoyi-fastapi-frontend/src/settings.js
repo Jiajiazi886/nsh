@@ -37,7 +37,7 @@ export default {
   /**
    * 是否显示logo
    */
-  sidebarLogo: true,
+  sidebarLogo: false,
 
   /**
    * 是否显示动态标题

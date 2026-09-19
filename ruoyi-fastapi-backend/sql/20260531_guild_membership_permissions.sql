@@ -82,7 +82,7 @@ FROM (
   SELECT r.role_id, m.menu_id
   FROM sys_role r
   JOIN sys_menu m ON m.menu_id IN (3000, 3001, 3021)
-  WHERE r.role_key IN ('admin', 'user')
+  WHERE r.role_id = 1 OR r.role_key = 'user'
 
   UNION ALL
 
@@ -99,5 +99,5 @@ FROM (
     UNION ALL SELECT 3026
     UNION ALL SELECT 3027
   ) mapped
-  WHERE r.role_key IN ('admin', 'common')
+  WHERE r.role_id = 1 OR r.role_key = 'common'
 ) role_menu_pairs;

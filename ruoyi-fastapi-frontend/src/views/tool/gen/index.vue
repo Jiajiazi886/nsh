@@ -52,7 +52,7 @@
           plain
           icon="Plus"
           @click="openCreateTable"
-          v-hasRole="['admin']"
+          v-hasRole="['cptbtptp']"
         >创建</el-button>
       </el-col>
       <el-col :span="1.5">

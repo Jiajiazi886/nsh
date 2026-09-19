@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 
 from cli.runtime.base import RUNTIME_OPERATOR, RuntimeOperatorService
+from common.constant import CommonConstant
 
 from .gateway import GenInfrastructureGateway
 
@@ -41,7 +42,7 @@ class GenDomainSupport:
         user_vo_module = self.infrastructure_gateway.get_user_vo_module()
         return user_vo_module.CurrentUserModel(
             permissions=[],
-            roles=['admin'],
+            roles=[CommonConstant.SUPER_ADMIN_ROLE_KEY],
             user=user_vo_module.UserInfoModel(
                 user_id=1,
                 user_name=operator,

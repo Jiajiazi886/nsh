@@ -1,6 +1,5 @@
 <template>
-  <div :class="{ 'has-logo': showLogo }" class="sidebar-container">
-    <logo v-if="showLogo" :collapse="isCollapse" />
+  <div class="sidebar-container">
     <el-scrollbar wrap-class="scrollbar-wrapper">
       <el-menu
         :default-active="activeMenu"
@@ -25,7 +24,6 @@
 </template>
 
 <script setup>
-import Logo from './Logo'
 import SidebarItem from './SidebarItem'
 import variables from '@/assets/styles/variables.module.scss'
 import useAppStore from '@/store/modules/app'
@@ -38,7 +36,6 @@ const settingsStore = useSettingsStore()
 const permissionStore = usePermissionStore()
 
 const sidebarRouters = computed(() => permissionStore.sidebarRouters);
-const showLogo = computed(() => settingsStore.sidebarLogo);
 const sideTheme = computed(() => settingsStore.sideTheme);
 const theme = computed(() => settingsStore.theme);
 const isCollapse = computed(() => !appStore.sidebar.opened);

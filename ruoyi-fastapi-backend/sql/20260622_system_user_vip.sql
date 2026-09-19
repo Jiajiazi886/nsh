@@ -32,6 +32,6 @@ WHERE u.del_flag = '0'
     FROM sys_user_role ur
     JOIN sys_role r ON r.role_id = ur.role_id
     WHERE ur.user_id = u.user_id
-      AND r.role_key = 'admin'
+      AND r.role_id = 1
       AND r.del_flag = '0'
   );

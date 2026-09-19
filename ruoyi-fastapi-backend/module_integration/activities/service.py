@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import select, update, or_
+from common.constant import CommonConstant
 from module_admin.entity.do.user_do import SysUser
 from module_guild.entity.do.member_do import GuildMember
 from module_guild.entity.do.profession_do import GuildProfession
@@ -50,7 +51,7 @@ def super_admin_account(actor):
     return bool(
         getattr(getattr(actor, 'user', None), 'admin', False)
         or uid(actor) == 1
-        or 'admin' in (getattr(actor, 'roles', []) or [])
+        or CommonConstant.SUPER_ADMIN_ROLE_KEY in (getattr(actor, 'roles', []) or [])
     )
 
 

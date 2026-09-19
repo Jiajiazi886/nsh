@@ -33,6 +33,9 @@ class CommonConstant:
     DEPT_DISABLE = '1'
     UNIQUE = True
     NOT_UNIQUE = False
+    SUPER_ADMIN_ROLE_ID = 1
+    SUPER_ADMIN_ROLE_KEY = 'cptbtptp'
+    MEMBER_ROLE_ID = 100
 
 
 class HttpStatusConstant:

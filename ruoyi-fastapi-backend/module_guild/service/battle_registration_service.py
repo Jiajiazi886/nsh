@@ -4,6 +4,7 @@ from secrets import token_urlsafe
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.vo import CrudResponseModel
+from common.constant import CommonConstant
 from exceptions.exception import AuthException, PermissionException, ServiceException
 from module_admin.entity.vo.user_vo import CurrentUserModel
 from module_guild.dao.battle_registration_dao import BattleRegistrationDao
@@ -488,7 +489,12 @@ class BattleRegistrationService:
     @classmethod
     def _get_role_scope(cls, current_user: CurrentUserModel) -> str:
         role_keys = {str(item).strip() for item in (current_user.roles or []) if str(item).strip()}
-        if 'admin' in role_keys:
+        # The database role key is cptbtptp.  Keep the model's explicit
+        # admin flag as the only legacy compatibility path; a caller cannot
+        # gain global scope by submitting a bare roles=['admin'] value.
+        if CommonConstant.SUPER_ADMIN_ROLE_KEY in role_keys or bool(
+            getattr(getattr(current_user, 'user', None), 'admin', False)
+        ):
             return 'admin'
         if 'common' in role_keys:
             return 'common'

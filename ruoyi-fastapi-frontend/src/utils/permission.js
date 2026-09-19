@@ -34,7 +34,7 @@ export function checkRole(value) {
   if (value && value instanceof Array && value.length > 0) {
     const roles = useUserStore().roles
     const permissionRoles = value
-    const super_admin = "admin";
+    const super_admin = "cptbtptp";
 
     const hasRole = roles.some(role => {
       return super_admin === role || permissionRoles.includes(role)
@@ -45,7 +45,7 @@ export function checkRole(value) {
     }
     return true
   } else {
-    console.error(`need roles! Like checkRole="['admin','editor']"`)
+    console.error(`need roles! Like checkRole="['cptbtptp','common']"`)
     return false
   }
 }

@@ -8,6 +8,7 @@ from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
+from common.constant import CommonConstant
 from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
@@ -32,7 +33,7 @@ pvp_attack_panel_controller = APIRouterPro(
 @pvp_attack_panel_controller.get(
     '/list',
     response_model=PageResponseModel[PvpAttackPanelModel],
-    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:list'), RoleInterfaceAuthDependency('admin')],
+    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:list'), RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY)],
 )
 async def get_pvp_attack_panel_list(
     request: Request,
@@ -45,7 +46,7 @@ async def get_pvp_attack_panel_list(
 @pvp_attack_panel_controller.get(
     '/{panel_id}',
     response_model=DataResponseModel[PvpAttackPanelModel],
-    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:query'), RoleInterfaceAuthDependency('admin')],
+    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:query'), RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY)],
 )
 async def get_pvp_attack_panel_detail(
     request: Request,
@@ -58,7 +59,7 @@ async def get_pvp_attack_panel_detail(
 @pvp_attack_panel_controller.post(
     '',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:add'), RoleInterfaceAuthDependency('admin')],
+    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:add'), RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY)],
 )
 @ValidateFields(validate_model='add_pvp_attack_panel')
 @Log(title='进攻方面板设置', business_type=BusinessType.INSERT)
@@ -75,7 +76,7 @@ async def add_pvp_attack_panel(
 @pvp_attack_panel_controller.put(
     '',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:edit'), RoleInterfaceAuthDependency('admin')],
+    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:edit'), RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY)],
 )
 @ValidateFields(validate_model='edit_pvp_attack_panel')
 @Log(title='进攻方面板设置', business_type=BusinessType.UPDATE)
@@ -91,7 +92,7 @@ async def edit_pvp_attack_panel(
 @pvp_attack_panel_controller.post(
     '/{panel_id}/status',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:edit'), RoleInterfaceAuthDependency('admin')],
+    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:edit'), RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY)],
 )
 @Log(title='进攻方面板状态', business_type=BusinessType.UPDATE)
 async def change_pvp_attack_panel_status(
@@ -110,7 +111,7 @@ async def change_pvp_attack_panel_status(
 @pvp_attack_panel_controller.delete(
     '/{panel_ids}',
     response_model=ResponseBaseModel,
-    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:remove'), RoleInterfaceAuthDependency('admin')],
+    dependencies=[UserInterfaceAuthDependency('system:pvp-attack-panel:remove'), RoleInterfaceAuthDependency(CommonConstant.SUPER_ADMIN_ROLE_KEY)],
 )
 @Log(title='进攻方面板设置', business_type=BusinessType.DELETE)
 async def delete_pvp_attack_panel(

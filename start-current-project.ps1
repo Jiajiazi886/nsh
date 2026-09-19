@@ -4,6 +4,12 @@ if ((Split-Path $taskRoot -Leaf) -ne 'RuoYi-Vue3-FastAPI-miniapp-backend') {
   throw 'This starter may run only from the independent development copy.'
 }
 
+# Keep this launcher bound to the isolated activity database.
+$taskDatabase = 'nsh_activity_dev_20260914'
+if ($taskDatabase -notmatch '^nsh_activity_dev_[0-9]{8}$' -or $taskDatabase -eq 'ruoyi') {
+  throw "Unsafe development database name: $taskDatabase"
+}
+
 $taskBackendDir = Join-Path $taskRoot 'ruoyi-fastapi-backend'
 $taskFrontendDir = Join-Path $taskRoot 'ruoyi-fastapi-frontend'
 $taskPython = Join-Path $taskBackendDir '.venv\Scripts\python.exe'
@@ -188,11 +194,17 @@ $taskBackendProcess = $null
 $taskFrontendProcess = $null
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
+$env:APP_ENV = 'dev'
+$env:APP_HOST = '127.0.0.1'
+$env:APP_PORT = '9101'
+$env:DB_DATABASE = $taskDatabase
+$env:NSH_ACTIVITIES_ENABLED = 'true'
+$env:LOG_MASK_ENABLED = 'true'
 
 try {
   $taskJob = [ProjectJob]::CreateKillOnCloseJob()
 
-  Write-Output 'Starting backend with database nsh_activity_dev_20260914...'
+  Write-Output "Starting backend with database $taskDatabase..."
   $taskBackendProcess = Start-Process -FilePath $taskPython `
     -ArgumentList 'tools/local_activity_dev.py serve' -WorkingDirectory $taskBackendDir `
     -WindowStyle Hidden -RedirectStandardOutput $taskBackendOut `

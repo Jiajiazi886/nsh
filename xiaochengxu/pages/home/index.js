@@ -5,7 +5,8 @@ const { getToken } = require('../../utils/storage')
 const { selectTab } = require('../../utils/tabbar')
 
 const ROLE_NAMES = {
-  admin: '超级管理员',
+  cptbtptp: '超级管理员',
+  admin: '超级管理员（旧）',
   common: '帮会管理',
   user: '帮会成员',
   guild_assistant: '帮会助理',
@@ -59,7 +60,7 @@ Page({
       const user = userInfo.user || {}
       const roles = userInfo.roles || []
       const permissions = userInfo.permissions || []
-      const isGuildManager = roles.includes('admin') || roles.includes('common')
+      const isGuildManager = roles.includes('cptbtptp') || roles.includes('common')
       const canManageMembers = permissions.includes('*:*:*') || permissions.includes('guild:member:list')
       const dashboardResponse = await guildService.getDashboardSummary()
       const dashboard = dashboardResponse.data || {}

@@ -149,7 +149,7 @@ create table sys_role (
 -- ----------------------------
 -- 初始化-角色信息表数据
 -- ----------------------------
-insert into sys_role values('1', '超级管理员',  'admin',  1, 1, 1, 1, '0', '0', 'system', sysdate(), '', null, '系统内置超级管理员角色');
+insert into sys_role values('1', '超级管理员',  'cptbtptp',  1, 1, 1, 1, '0', '0', 'system', sysdate(), '', null, '系统内置超级管理员角色');
 insert into sys_role values('2', '帮会管理',    'common', 2, 2, 1, 1, '0', '0', 'system', sysdate(), '', null, '系统内置帮会管理角色');
 insert into sys_role values('100', '帮会成员',  'user',   0, 2, 1, 1, '0', '0', 'system', sysdate(), '', null, '系统内置帮会成员角色');
 
@@ -327,6 +327,12 @@ insert into sys_menu values(3163, '进攻方面板修改', 3160, 3, '#', '', '',
 insert into sys_menu values(3164, '进攻方面板删除', 3160, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-attack-panel:remove', '#', 'system', sysdate(), 'system', sysdate(), '');
 insert into sys_menu values(3165, '职业加成设置', 1, 15, 'pvpDefenseProfessionBonus', 'system/pvpDefenseProfessionBonus/index', '', 'SystemPvpDefenseProfessionBonus', 1, 0, 'C', '0', '0', 'system:pvp-defense-profession-bonus:list', 'setting', 'system', sysdate(), 'system', sysdate(), '管理员维护防守计算器职业默认加成');
 insert into sys_menu values(3166, '职业加成修改', 3165, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:pvp-defense-profession-bonus:edit', '#', 'system', sysdate(), 'system', sysdate(), '');
+insert into sys_menu values(3170, '卡密管理', 1, 16, 'license', 'system/license/index', '', 'SystemLicense', 1, 0, 'C', '0', '0', 'system:license:list', 'lock', 'system', sysdate(), 'system', sysdate(), 'RuoYi账号授权管理');
+insert into sys_menu values(3171, '授权查询', 3170, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:list', '#', 'system', sysdate(), 'system', sysdate(), '');
+insert into sys_menu values(3172, '发放授权', 3170, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:grant', '#', 'system', sysdate(), 'system', sysdate(), '');
+insert into sys_menu values(3173, '撤销授权', 3170, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:revoke', '#', 'system', sysdate(), 'system', sysdate(), '');
+insert into sys_menu values(3174, '修改备注', 3170, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:remark', '#', 'system', sysdate(), 'system', sysdate(), '');
+insert into sys_menu values(3175, '授权审计', 3170, 5, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:license:audit', '#', 'system', sysdate(), 'system', sysdate(), '');
 
 -- 6、用户和角色关联表  用户N-1角色
 -- ----------------------------
@@ -499,6 +505,12 @@ insert into sys_role_menu values (1, 3163);
 insert into sys_role_menu values (1, 3164);
 insert into sys_role_menu values (1, 3165);
 insert into sys_role_menu values (1, 3166);
+insert into sys_role_menu values (1, 3170);
+insert into sys_role_menu values (1, 3171);
+insert into sys_role_menu values (1, 3172);
+insert into sys_role_menu values (1, 3173);
+insert into sys_role_menu values (1, 3174);
+insert into sys_role_menu values (1, 3175);
 insert into sys_role_menu values (2, 1);
 insert into sys_role_menu values (2, 107);
 insert into sys_role_menu values (2, 1035);
@@ -947,3 +959,45 @@ create table ai_models (
   remark            varchar(500)    default null               comment '备注',
   primary key (model_id)
 ) engine=innodb auto_increment=1 comment = 'AI模型表';
+
+CREATE TABLE IF NOT EXISTS system_account_license (
+  license_id varchar(64) NOT NULL, user_id bigint NOT NULL, plan_type varchar(16) NOT NULL,
+  status varchar(16) NOT NULL DEFAULT 'active', valid_from datetime NOT NULL, expires_at datetime NULL,
+  remark varchar(500) NOT NULL DEFAULT '', version int NOT NULL DEFAULT 1,
+  create_by varchar(64) NOT NULL DEFAULT 'system', create_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_by varchar(64) NOT NULL DEFAULT 'system', update_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (license_id), UNIQUE KEY uk_system_account_license_user (user_id),
+  KEY ix_system_account_license_user (user_id),
+  CONSTRAINT fk_system_account_license_user FOREIGN KEY (user_id) REFERENCES sys_user(user_id)
+) ENGINE=InnoDB COMMENT='账号授权';
+
+CREATE TABLE IF NOT EXISTS system_account_license_audit (
+  audit_id varchar(64) NOT NULL, batch_id varchar(64) NOT NULL, request_id varchar(64) NOT NULL,
+  user_id bigint NOT NULL, operator_user_id bigint NOT NULL, action varchar(32) NOT NULL,
+  previous_state json NULL, new_state json NULL, remark varchar(500) NOT NULL DEFAULT '',
+  created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (audit_id),
+  UNIQUE KEY uk_system_account_license_audit_request_user (request_id, user_id),
+  KEY ix_system_account_license_audit_batch (batch_id), KEY ix_system_account_license_audit_user (user_id),
+  CONSTRAINT fk_system_account_license_audit_user FOREIGN KEY (user_id) REFERENCES sys_user(user_id),
+  CONSTRAINT fk_system_account_license_audit_operator FOREIGN KEY (operator_user_id) REFERENCES sys_user(user_id)
+) ENGINE=InnoDB COMMENT='账号授权审计';
+
+CREATE TABLE IF NOT EXISTS system_auth_refresh_token (
+  token_id varchar(64) NOT NULL,
+  token_hash varchar(64) NOT NULL,
+  user_id bigint NOT NULL,
+  client_type varchar(40) NOT NULL DEFAULT '',
+  token_family_id varchar(64) NOT NULL,
+  device_id varchar(128) NULL,
+  issued_at datetime NOT NULL,
+  expires_at datetime NOT NULL,
+  last_used_at datetime NULL,
+  revoked_at datetime NULL,
+  replaced_by_token_id varchar(64) NULL,
+  PRIMARY KEY (token_id),
+  UNIQUE KEY uk_system_auth_refresh_token_hash (token_hash),
+  KEY ix_system_auth_refresh_token_user (user_id),
+  KEY ix_system_auth_refresh_token_family (token_family_id),
+  KEY ix_system_auth_refresh_token_device (device_id),
+  CONSTRAINT fk_system_auth_refresh_token_user FOREIGN KEY (user_id) REFERENCES sys_user(user_id)
+) ENGINE=InnoDB COMMENT='持久化刷新令牌';

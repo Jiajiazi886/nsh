@@ -144,10 +144,13 @@ cp deploy/prod.env.example deploy/prod.env
 nano deploy/prod.env
 ```
 
-至少修改下面三个值：
+至少修改下面四个值；后端使用最小权限账号 `nsh_app`，不要把 root 作为应用账号：
 
 ```env
-MYSQL_ROOT_PASSWORD=换成你的MySQL强密码
+MYSQL_DATABASE=nsh_activity_dev_20260914
+MYSQL_USERNAME=nsh_app
+MYSQL_PASSWORD=换成应用数据库强密码
+MYSQL_ROOT_PASSWORD=换成仅用于初始化的MySQL root强密码
 REDIS_PASSWORD=换成你的Redis强密码
 JWT_SECRET_KEY=换成随机长字符串
 ```
@@ -158,13 +161,7 @@ JWT_SECRET_KEY=换成随机长字符串
 openssl rand -hex 32
 ```
 
-示例：
-
-```env
-MYSQL_ROOT_PASSWORD=5f0e8b1b2d1c9a7e9d0f8c6a12345678
-REDIS_PASSWORD=6ac51ddcc22541e5a30e9dcf12345678
-JWT_SECRET_KEY=2c586ac79adcc14dc4dff53da7b6a5c7083ff2f724a8bdaf75df63fd59da3333
-```
+不要在文档、命令行历史或 Git 中写入真实值；每个值都应在服务器安全环境中单独生成。
 
 不要把 `deploy/prod.env` 提交到 GitHub。
 

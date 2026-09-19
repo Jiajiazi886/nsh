@@ -156,7 +156,7 @@ const data = reactive({
 
 const { queryParams, form, rules } = toRefs(data)
 
-const canManageEntryLimits = computed(() => (userStore.roles || []).includes('admin'))
+const canManageEntryLimits = computed(() => (userStore.roles || []).includes('cptbtptp'))
 
 function getList() {
   loading.value = true

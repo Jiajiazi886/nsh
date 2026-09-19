@@ -4,6 +4,7 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.annotation.cache_annotation import ApiCache, ApiCacheEvict
@@ -11,11 +12,14 @@ from common.annotation.log_annotation import Log
 from common.annotation.rate_limit_annotation import ApiRateLimit, ApiRateLimitPreset
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.pre_auth import CurrentUserDependency
-from common.constant import ApiGroup, ApiNamespace
+from common.constant import ApiGroup, ApiNamespace, CommonConstant
 from common.enums import BusinessType, RedisInitKeyConfig
 from common.router import APIRouterPro
 from common.vo import CrudResponseModel, DataResponseModel, DynamicResponseModel, ResponseBaseModel
 from config.env import AppConfig, JwtConfig
+from exceptions.exception import LoginException
+from module_admin.entity.do.role_do import SysRole
+from module_admin.entity.do.user_do import SysUserRole
 from module_admin.entity.vo.login_vo import AuthConfig, LoginToken, RouterModel, Token, UserLogin, UserRegister
 from module_admin.entity.vo.user_vo import CurrentUserModel, EditUserModel
 from module_admin.service.login_service import CustomOAuth2PasswordRequestForm, LoginService, oauth2_scheme
@@ -56,7 +60,7 @@ async def login(
 ) -> Response:
     captcha_enabled = (
         await request.app.state.redis.get(f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.captchaEnabled') == 'true'
-    )
+    ) and form_data.client_type != 'license-admin'
     user = UserLogin(
         userName=form_data.username,
         password=form_data.password,
@@ -66,6 +70,21 @@ async def login(
         captchaEnabled=captcha_enabled,
     )
     result = await LoginService.authenticate_user(request, query_db, user)
+    if form_data.client_type == 'license-admin':
+        super_admin_role = await query_db.scalar(
+            select(SysRole.role_id)
+            .join(SysUserRole, SysUserRole.role_id == SysRole.role_id)
+            .where(
+                SysUserRole.user_id == result[0].user_id,
+                SysRole.role_id == CommonConstant.SUPER_ADMIN_ROLE_ID,
+                SysRole.role_key == CommonConstant.SUPER_ADMIN_ROLE_KEY,
+                SysRole.status == '0',
+                SysRole.del_flag == '0',
+            )
+        )
+        if super_admin_role is None:
+            logger.warning('开发者管理工具登录被拒绝：账号不是有效超级管理员')
+            raise LoginException(data='', message='只有超级管理员可以登录开发者管理工具')
     access_token_expires = timedelta(minutes=JwtConfig.jwt_expire_minutes)
     session_id = str(uuid.uuid4())
     access_token = await LoginService.create_access_token(

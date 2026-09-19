@@ -1048,7 +1048,7 @@ const aiRecognitionNormalCount = computed(() => Number(userStore.aiImageRecognit
 const aiRecognitionVipCount = computed(() => Number(userStore.vipAiImageRecognitionCount || 0))
 const aiRecognitionCount = computed(() => aiRecognitionNormalCount.value + aiRecognitionVipCount.value)
 const aiRecognitionUnlimited = computed(() => {
-  return (userStore.roles || []).includes('admin') || (userStore.permissions || []).includes('*:*:*')
+  return (userStore.roles || []).includes('cptbtptp') || (userStore.permissions || []).includes('*:*:*')
 })
 const aiRecognitionQuotaValue = computed(() => aiRecognitionUnlimited.value ? '不限' : aiRecognitionCount.value)
 const aiRecognitionQuotaLabel = computed(() => {
