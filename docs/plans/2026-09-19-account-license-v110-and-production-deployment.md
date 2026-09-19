@@ -1571,7 +1571,7 @@ WHERE role_id = 1
 
 ### 27.2 GitHub 验收
 
-- [x] 主项目 `Jiajiazi886/nsh` 的 `xiaochengxu` 分支已推送并核验到 `c271a67667d1ff7f7eb004f8617abd929acbbeaa`；本次数据库审计与文档后续提交待推送。
+- [x] 主项目 `Jiajiazi886/nsh` 的 `xiaochengxu` 分支已推送并核验到 `64977e5de11095c0fe5668f35723b22cff292a7c`。
 - [ ] 桌面端私有仓库 `Jiajiazi886/nsh-daluandou-desktop` 已创建并推送；本地源码提交为普通助手 `eb09e32d4c71231a2d0f28f1e986188eaa8a84b8`、开发者工具 `ce0a2167ef19ab7cdff222c155bf7fb0846399ae`，仓库尚不存在且 GitHub CLI 未授权。
 - [ ] 两个仓库无 token、`.env`、服务器密码、数据库导出、证书私钥或用户数据。
 - [ ] 提交历史清晰，可定位数据库迁移、API、网页、小程序和桌面端改动。
