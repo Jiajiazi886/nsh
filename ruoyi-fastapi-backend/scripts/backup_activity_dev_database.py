@@ -26,11 +26,11 @@ def parse_args():
 def quote(value, connection):
     if value is None:
         return 'NULL'
-    if isinstance(value, (bytes, bytearray)):
-        escaped = connection.escape(value)
-        return "_binary'" + (escaped.decode('ascii') if isinstance(escaped, bytes) else escaped) + "'"
-    escaped = connection.escape(str(value))
-    return "'" + (escaped.decode('ascii') if isinstance(escaped, bytes) else escaped) + "'"
+    # PyMySQL returns a complete SQL literal, including the surrounding quotes
+    # for strings and the _binary prefix for bytes. Wrapping that result again
+    # produces invalid values such as ''player'', so return it unchanged.
+    escaped = connection.escape(value)
+    return escaped.decode('ascii') if isinstance(escaped, bytes) else escaped
 
 
 def main():
