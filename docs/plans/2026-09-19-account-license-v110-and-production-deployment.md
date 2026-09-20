@@ -1,7 +1,7 @@
 # 账号授权卡密系统、超级管理员权限字符调整、桌面端 v1.1.0 与服务器部署任务文档
 
 更新日期：2026-09-19
-执行状态：本地代码与自动化验证完成；目标开发库 `nsh_activity_dev_20260914` 只读审计通过（61 张表、账号授权/审计/刷新令牌表���外键核验）；主项目 `xiaochengxu` 已推送并通过远端分支核验（最终提交以 `git ls-remote --heads origin xiaochengxu` 为准）；桌面端授权改动已在本地两个独立仓库提交（普通助手 `eb09e32d4c71231a2d0f28f1e986188eaa8a84b8`、开发者工具 `ce0a2167ef19ab7cdff222c155bf7fb0846399ae`），但桌面端私有 GitHub 仓库与服务器联调部署待执行。普通助手完整回归 62 项、授权/发布契约测试 9 项、开发者工具无验证码与权限契约测试 7 项通过。公网只读检查（2026-09-20）发现正式域名返回旧 `vfadmin管理系统` Monaco 页面；`/docker-api/api/v1/auth/config`、`/docker-api/api/v1/captchaImage` 与计划中的健康入口均返回 404，不能视为新版部署成功。
+执行状态：本地代码与自动化验证完成；目标开发库 `nsh_activity_dev_20260914` 只读审计通过（61 张表、账号授权/审计/刷新令牌表及外键核验）；主项目 `xiaochengxu` 已推送并通过远端分支核验（远端提交 `023bbcf791b0a288bf9d9a7f27623cbfdfccad46`）；桌面端私有仓库 `Jiajiazi886/nsh-daluandou-desktop` 已创建并推送，`main` 提交为 `da3be1e093513c19671bf09a7fab66ba18a10bee`，`v1.1.0` 标签已发布。服务器联调部署待执行。普通助手完整回归 62 项、授权/发布契约测试 9 项、开发者工具无验证码与权限契约测试 7 项通过。公网只读检查（2026-09-20）发现正式域名返回旧 `vfadmin管理系统` Monaco 页面；`/docker-api/api/v1/auth/config`、`/docker-api/api/v1/captchaImage` 与计划中的健康入口均返回 404，不能视为新版部署成功。
 > 安全说明：服务器地址、IP 和 SSH 用户可写入本任务文档；SSH 密码、私钥、数据库密码、JWT 密钥和 token 不得写入 Markdown、代码、Git 历史、命令行参数或日志。部署时通过交互式密码输入或临时安全凭据注入。此前在聊天中发送过的密码应视为已暴露，正式部署前必须轮换。
 实施分支：xiaochengxu
 文档用途：本文件是本任务唯一的实施、交接、部署与验收文档。新接手的开发者应先完整阅读，再按章节顺序执行。
@@ -1572,7 +1572,7 @@ WHERE role_id = 1
 ### 27.2 GitHub 验收
 
 - [x] 主项目 `Jiajiazi886/nsh` 的 `xiaochengxu` 分支已推送并通过远端分支核验；验收时运行 `git ls-remote --heads origin xiaochengxu` 记录实际提交。
-- [ ] 桌面端私有仓库 `Jiajiazi886/nsh-daluandou-desktop` 已创建并推送；本地源码提交为普通助手 `eb09e32d4c71231a2d0f28f1e986188eaa8a84b8`、开发者工具 `ce0a2167ef19ab7cdff222c155bf7fb0846399ae`，仓库尚不存在且 GitHub CLI 未授权。
+- [x] 桌面端私有仓库 `Jiajiazi886/nsh-daluandou-desktop` 已创建并推送；仓库为私有，默认分支 `main`，远端提交 `da3be1e093513c19671bf09a7fab66ba18a10bee`，`v1.1.0` 标签已发布。发布树只纳入普通助手、开发者工具、构建脚本、测试、模板、必需 DLL 与许可，排除构建输出、缓存、`.env`、令牌、私钥、数据库导出和用户数据。
 - [ ] 两个仓库无 token、`.env`、服务器密码、数据库导出、证书私钥或用户数据。
 - [ ] 提交历史清晰，可定位数据库迁移、API、网页、小程序和桌面端改动。
 - [x] v1.1.0 发布包有版本说明和 SHA-256：普通助手 `7177D1BC029F1EF75E6A90F926A8F9C4AC859BEB914E79E2F98A7427E6FADA1A`；开发者工具 `1EC4C923D1CB845EBB8CDAEE781AF0A9810A772223C417076F243F0DAFCE5AEF`。产物尚未进入桌面端 GitHub 私有仓库。
