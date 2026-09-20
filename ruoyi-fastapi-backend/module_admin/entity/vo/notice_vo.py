@@ -16,7 +16,7 @@ class NoticeModel(BaseModel):
     notice_id: int | None = Field(default=None, description='公告ID')
     notice_title: str | None = Field(default=None, description='公告标题')
     notice_type: Literal['1', '2'] | None = Field(default=None, description='公告类型（1通知 2公告）')
-    notice_content: bytes | None = Field(default=None, description='公告内容')
+    notice_content: str | None = Field(default=None, description='公告内容')
     status: Literal['0', '1'] | None = Field(default=None, description='公告状态（0正常 1关闭）')
     create_by: str | None = Field(default=None, description='创建者')
     create_time: datetime | None = Field(default=None, description='创建时间')

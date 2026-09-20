@@ -110,6 +110,7 @@ celerybeat.pid
 # Environments
 .env
 .env.*
+!ruoyi-fastapi-frontend/.env.docker
 .venv
 env/
 venv/
@@ -174,6 +175,7 @@ ruoyi-fastapi-frontend/.vite/
 ruoyi-fastapi-frontend/dist/
 deploy/prod.env
 deploy/releases/
+/releases/
 deploy/local-data/
 *.local-data.sql
 *.local-data.sql.gz
