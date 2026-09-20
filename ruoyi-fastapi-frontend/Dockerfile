@@ -8,10 +8,15 @@ COPY . .
 # 设置npm镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
-# 安装依赖。package-lock.json 由 Windows 生成时，npm 可能漏装 Rollup 的
-# Linux 可选原生包（npm/cli#4828），因此在容器内显式补齐当前平台包。
+# 安装依赖。package-lock.json 由 Windows 生成时，npm 可能漏装 Linux
+# 可选原生包（npm/cli#4828），因此按锁文件版本显式补齐构建链平台包。
 RUN npm install \
-    && npm install --no-save @rollup/rollup-linux-x64-gnu@4.63.3
+    && npm install --no-save \
+        @esbuild/linux-x64@0.25.12 \
+        @rollup/rollup-linux-x64-gnu@4.63.3 \
+        @tailwindcss/oxide-linux-x64-gnu@4.3.3 \
+        lightningcss-linux-x64-gnu@1.32.0 \
+        sass-embedded-linux-x64@1.97.2
 
 # 执行docker构建命令
 RUN npm run build:docker
