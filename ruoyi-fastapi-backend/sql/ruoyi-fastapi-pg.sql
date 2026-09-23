@@ -401,7 +401,7 @@ insert into sys_menu values(3030, '职业信息写入', 3028, 2, '#', '', '', ''
 insert into sys_menu values(3040, '数据库管理', 1, 10, 'database', 'system/database/index', '', 'SystemDatabase', 1, 0, 'C', '0', '0', 'system:database:list', 'table', 'system', current_timestamp, 'system', current_timestamp, '超级管理员只读数据库浏览器');
 insert into sys_menu values(3041, '数据库列表', 3040, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:database:list', '#', 'system', current_timestamp, 'system', current_timestamp, '查看数据库表结构与用户总览');
 insert into sys_menu values(3042, '数据库查询', 3040, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:database:query', '#', 'system', current_timestamp, 'system', current_timestamp, '查看数据表分页数据');
-insert into sys_menu values(3050, 'AIKey管理', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'system', current_timestamp, 'system', current_timestamp, '维护项目AI图片识别共用 API Key');
+insert into sys_menu values(3050, 'AI连接工作台', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'system', current_timestamp, 'system', current_timestamp, '管理多套 AI 连接并切换全系统当前 AI');
 insert into sys_menu values(3100, '内功信息管理', 1, 10, 'internalPower', 'system/internalPower/index', '', 'SystemInternalPower', 1, 0, 'C', '0', '0', 'system:internal-power:list', 'skill', 'system', current_timestamp, 'system', current_timestamp, '系统内功信息管理菜单');
 insert into sys_menu values(3101, '内功信息查询', 3100, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:internal-power:query', '#', 'system', current_timestamp, 'system', current_timestamp, '');
 insert into sys_menu values(3102, '内功信息新增', 3100, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:internal-power:add', '#', 'system', current_timestamp, 'system', current_timestamp, '');
@@ -1227,7 +1227,7 @@ create table ai_models (
   model_name        varchar(100)    default null,
   provider          varchar(50)     not null,
   model_sort        int4            not null,
-  api_key           varchar(255)    default null,
+  api_key           text            default null,
   base_url          varchar(255)    default null,
   model_type        varchar(50)     default null,
   max_tokens        integer         default null,

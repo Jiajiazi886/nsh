@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.env import MimoConfig
 from exceptions.exception import ServiceException
-from module_admin.service.ai_key_service import AiKeyService
+from module_admin.service.ai_key_service import ActiveAiConnection, AiKeyService
 
 
 @dataclass
@@ -64,38 +64,66 @@ class InternalPowerMimoService:
         """
         调用Mimo并只要求返回可解析JSON，具体业务校验由调用方完成。
         """
-        api_key = await cls._get_api_key(query_db)
-        if not api_key:
+        runtime = await cls._get_runtime_config(query_db)
+        if not runtime.api_key:
             raise ServiceException(message='AI图片识别 API Key 未配置，请在系统管理的 AIKey管理中配置')
+        if not runtime.base_url or not runtime.model:
+            raise ServiceException(message='当前 AI 连接缺少 Base URL 或模型 ID')
+        if not runtime.support_images:
+            raise ServiceException(message='当前 AI 连接未启用图片能力')
         if not prompt or not prompt.strip():
             raise ServiceException(message='识别提示词不能为空')
 
         mimo_client = client or AsyncOpenAI(
-            api_key=api_key,
-            base_url=MimoConfig.mimo_base_url,
+            api_key=runtime.api_key,
+            base_url=runtime.base_url,
             timeout=MimoConfig.mimo_timeout_seconds,
         )
         data_url = cls.build_data_url(image_bytes, mime_type)
         try:
-            completion = await mimo_client.chat.completions.create(
-                model=MimoConfig.mimo_model,
-                messages=[
-                    {'role': 'system', 'content': cls.SYSTEM_PROMPT},
-                    {
-                        'role': 'user',
-                        'content': [
-                            {'type': 'image_url', 'image_url': {'url': data_url}},
-                            {'type': 'text', 'text': prompt},
-                        ],
-                    },
-                ],
-                max_completion_tokens=MimoConfig.mimo_max_completion_tokens,
-                extra_body={'thinking': {'type': 'disabled'}},
-            )
+            if runtime.protocol == 'responses':
+                completion = await mimo_client.responses.create(
+                    model=runtime.model,
+                    input=[
+                        {
+                            'role': 'system',
+                            'content': [{'type': 'input_text', 'text': cls.SYSTEM_PROMPT}],
+                        },
+                        {
+                            'role': 'user',
+                            'content': [
+                                {'type': 'input_image', 'image_url': data_url},
+                                {'type': 'input_text', 'text': prompt},
+                            ],
+                        },
+                    ],
+                    max_output_tokens=runtime.max_tokens,
+                    **({'temperature': runtime.temperature} if runtime.temperature is not None else {}),
+                )
+            else:
+                request_options = {
+                    'model': runtime.model,
+                    'messages': [
+                        {'role': 'system', 'content': cls.SYSTEM_PROMPT},
+                        {
+                            'role': 'user',
+                            'content': [
+                                {'type': 'image_url', 'image_url': {'url': data_url}},
+                                {'type': 'text', 'text': prompt},
+                            ],
+                        },
+                    ],
+                    'max_completion_tokens': runtime.max_tokens,
+                }
+                if runtime.temperature is not None:
+                    request_options['temperature'] = runtime.temperature
+                if runtime.provider.lower() == 'mimo':
+                    request_options['extra_body'] = {'thinking': {'type': 'disabled'}}
+                completion = await mimo_client.chat.completions.create(**request_options)
         except Exception as exc:
-            return InternalPowerMimoResult(parsed=None, raw_text='', error=f'Mimo调用失败：{exc}')
+            return InternalPowerMimoResult(parsed=None, raw_text='', error=f'AI调用失败：{exc}')
 
-        raw_text = cls.__extract_completion_text(completion)
+        raw_text = cls.__extract_response_text(completion) if runtime.protocol == 'responses' else cls.__extract_completion_text(completion)
         parsed = cls.parse_json_response(raw_text)
         if parsed is None:
             return InternalPowerMimoResult(parsed=None, raw_text=raw_text, error='模型未返回可解析JSON')
@@ -108,6 +136,37 @@ class InternalPowerMimoService:
             return await AiKeyService.get_internal_power_api_key(query_db)
         # 保留无数据库上下文的调用兼容性，例如离线单元测试。
         return MimoConfig.mimo_api_key
+
+    @classmethod
+    async def _get_runtime_config(cls, query_db: AsyncSession | None) -> ActiveAiConnection:
+        if query_db is not None:
+            runtime = await AiKeyService.get_active_connection(query_db)
+            if runtime is not None:
+                return runtime
+            return ActiveAiConnection(
+                id=None,
+                name='未配置',
+                provider='Custom',
+                base_url='',
+                api_key='',
+                protocol='chat_completions',
+                model='',
+                max_tokens=MimoConfig.mimo_max_completion_tokens,
+                temperature=None,
+                support_images=False,
+            )
+        return ActiveAiConnection(
+            id=None,
+            name='环境配置',
+            provider='Mimo',
+            base_url=MimoConfig.mimo_base_url,
+            api_key=MimoConfig.mimo_api_key,
+            protocol='chat_completions',
+            model=MimoConfig.mimo_model,
+            max_tokens=MimoConfig.mimo_max_completion_tokens,
+            temperature=None,
+            support_images=True,
+        )
 
     @classmethod
     def parse_json_response(cls, text: str) -> dict[str, Any] | None:
@@ -157,3 +216,16 @@ class InternalPowerMimoService:
                     parts.append(str(item.text or ''))
             return ''.join(parts)
         return str(content or '')
+
+    @staticmethod
+    def __extract_response_text(response: Any) -> str:
+        output_text = getattr(response, 'output_text', None)
+        if isinstance(output_text, str):
+            return output_text
+        parts = []
+        for item in getattr(response, 'output', []) or []:
+            for content in getattr(item, 'content', []) or []:
+                text = getattr(content, 'text', None)
+                if text:
+                    parts.append(str(text))
+        return ''.join(parts)

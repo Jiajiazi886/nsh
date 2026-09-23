@@ -300,7 +300,7 @@ insert into sys_menu values(3030, '职业信息写入', 3028, 2, '#', '', '', ''
 insert into sys_menu values(3040, '数据库管理', 1, 10, 'database', 'system/database/index', '', 'SystemDatabase', 1, 0, 'C', '0', '0', 'system:database:list', 'table', 'system', sysdate(), 'system', sysdate(), '超级管理员只读数据库浏览器');
 insert into sys_menu values(3041, '数据库列表', 3040, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:database:list', '#', 'system', sysdate(), 'system', sysdate(), '查看数据库表结构与用户总览');
 insert into sys_menu values(3042, '数据库查询', 3040, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:database:query', '#', 'system', sysdate(), 'system', sysdate(), '查看数据表分页数据');
-insert into sys_menu values(3050, 'AIKey管理', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'system', sysdate(), 'system', sysdate(), '维护项目AI图片识别共用 API Key');
+insert into sys_menu values(3050, 'AI连接工作台', 1, 11, 'aiKey', 'system/aiKey/index', '', 'SystemAiKey', 1, 0, 'C', '0', '0', 'system:aikey:edit', 'lock', 'system', sysdate(), 'system', sysdate(), '管理多套 AI 连接并切换全系统当前 AI');
 insert into sys_menu values(3100, '内功信息管理', 1, 10, 'internalPower', 'system/internalPower/index', '', 'SystemInternalPower', 1, 0, 'C', '0', '0', 'system:internal-power:list', 'skill', 'system', sysdate(), 'system', sysdate(), '系统内功信息管理菜单');
 insert into sys_menu values(3101, '内功信息查询', 3100, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:internal-power:query', '#', 'system', sysdate(), 'system', sysdate(), '');
 insert into sys_menu values(3102, '内功信息新增', 3100, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:internal-power:add', '#', 'system', sysdate(), 'system', sysdate(), '');
@@ -960,7 +960,7 @@ create table ai_models (
   model_name        varchar(100)    default null               comment '模型名称',
   provider          varchar(50)     not null                   comment '提供商',
   model_sort        int(4)          not null                   comment '显示顺序',
-  api_key           varchar(255)    default null               comment 'API Key',
+  api_key           text            default null               comment 'API Key（加密存储）',
   base_url          varchar(255)    default null               comment 'Base URL',
   model_type        varchar(50)     default null               comment '模型类型',
   max_tokens        int(11)         default null               comment '最大输出token',

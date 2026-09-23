@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CHAR, BigInteger, Column, DateTime, Float, Integer, String
+from sqlalchemy import CHAR, BigInteger, Column, DateTime, Float, Integer, String, Text
 
 from config.database import Base
 from config.env import DataBaseConfig
@@ -26,7 +26,7 @@ class AiModels(Base):
     provider = Column(String(50), nullable=False, comment='提供商')
     model_sort = Column(Integer, nullable=False, comment='显示顺序')
     api_key = Column(
-        String(255),
+        Text,
         nullable=True,
         server_default=SqlalchemyUtil.get_server_default_null(DataBaseConfig.db_type),
         comment='API Key',

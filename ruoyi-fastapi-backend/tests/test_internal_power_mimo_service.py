@@ -50,6 +50,36 @@ async def test_mimo_runtime_does_not_fallback_to_environment_key_when_system_key
 
 
 @pytest.mark.asyncio
+async def test_image_recognition_uses_current_database_connection(monkeypatch):
+    runtime = SimpleNamespace(
+        id=8,
+        name='current vision',
+        provider='Custom',
+        base_url='https://vision.example.com/v1',
+        api_key='active-secret',
+        protocol='chat_completions',
+        model='vision-2',
+        max_tokens=321,
+        temperature=0.1,
+        support_images=True,
+    )
+
+    async def fake_get_active(_query_db):
+        return runtime
+
+    monkeypatch.setattr(
+        'module_admin.service.internal_power_mimo_service.AiKeyService.get_active_connection',
+        fake_get_active,
+    )
+
+    resolved = await InternalPowerMimoService._get_runtime_config(object())
+
+    assert resolved is runtime
+    assert resolved.model == 'vision-2'
+    assert resolved.base_url == 'https://vision.example.com/v1'
+
+
+@pytest.mark.asyncio
 async def test_mimo_request_uses_openai_compatible_image_payload_and_disabled_thinking(monkeypatch):
     captured = {}
 

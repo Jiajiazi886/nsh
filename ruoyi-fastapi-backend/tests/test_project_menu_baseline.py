@@ -23,7 +23,7 @@ def test_project_menu_baseline_contains_current_business_features() -> None:
     names = {menu['menu_name'] for menu in baseline['menus']}
     permissions = {menu['perms'] for menu in baseline['menus']}
 
-    assert {'帮会管理', '个人管理', 'AIKey管理', '数据库管理', '内功管理', '坦度计算器'} <= names
+    assert {'帮会管理', '个人管理', 'AI连接工作台', '数据库管理', '内功管理', '坦度计算器'} <= names
     assert '防守计算器' not in names
     assert {'system:aikey:edit', 'personal:defense-calculator:list'} <= permissions
 
@@ -40,7 +40,7 @@ def test_install_sql_matches_project_menu_baseline() -> None:
         sql = path.read_text(encoding='utf-8')
         assert "'帮会管理'" in sql
         assert "'个人管理'" in sql
-        assert "'AIKey管理'" in sql
+        assert "'AI连接工作台'" in sql
         assert "'坦度计算器'" in sql
         assert "'AI 管理'" not in sql
         assert "'模型管理'" not in sql
