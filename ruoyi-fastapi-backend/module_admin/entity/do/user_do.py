@@ -27,7 +27,6 @@ class SysUser(Base):
     user_type = Column(String(2), nullable=True, server_default='00', comment='用户类型（00系统用户）')
     email = Column(String(50), nullable=True, server_default="''", comment='用户邮箱')
     phonenumber = Column(String(11), nullable=True, server_default="''", comment='手机号码')
-    sex = Column(CHAR(1), nullable=True, server_default='0', comment='用户性别（0男 1女 2未知）')
     avatar = Column(String(100), nullable=True, server_default="''", comment='头像地址')
     password = Column(String(100), nullable=True, server_default="''", comment='密码')
     status = Column(CHAR(1), nullable=True, server_default='0', comment='帐号状态（0正常 1停用）')

@@ -7,15 +7,14 @@ from fastapi import Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.annotation.cache_annotation import ApiCache, ApiCacheEvict
-from common.annotation.log_annotation import Log
 from common.annotation.rate_limit_annotation import ApiRateLimit, ApiRateLimitPreset
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.pre_auth import CurrentUserDependency
 from common.constant import ApiGroup, ApiNamespace
-from common.enums import BusinessType, RedisInitKeyConfig
+from common.enums import RedisInitKeyConfig
 from common.router import APIRouterPro
 from common.vo import CrudResponseModel, DataResponseModel, DynamicResponseModel, ResponseBaseModel
-from config.env import AppConfig, JwtConfig
+from config.env import AccountConfig, AppConfig, JwtConfig
 from module_admin.entity.vo.login_vo import AuthConfig, LoginToken, RouterModel, Token, UserLogin, UserRegister
 from module_admin.entity.vo.user_vo import CurrentUserModel, EditUserModel
 from module_admin.service.login_service import CustomOAuth2PasswordRequestForm, LoginService, oauth2_scheme
@@ -33,11 +32,7 @@ login_controller = APIRouterPro(order_num=1, tags=['登录模块'])
     response_model=DynamicResponseModel[AuthConfig],
 )
 async def get_auth_config(request: Request) -> Response:
-    register_enabled = (
-        await request.app.state.redis.get(f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.registerUser') == 'true'
-    )
-
-    return ResponseUtil.success(model_content=AuthConfig(registerEnabled=register_enabled))
+    return ResponseUtil.success(model_content=AuthConfig(registerEnabled=AccountConfig.account_register_enabled))
 
 
 @login_controller.post(
@@ -48,15 +43,12 @@ async def get_auth_config(request: Request) -> Response:
 )
 @ApiRateLimit(namespace=ApiNamespace.LOGIN, preset=ApiRateLimitPreset.ANON_AUTH_LOGIN)
 @ApiCacheEvict(namespaces=ApiGroup.LOGIN_SUCCESS_MUTATION)
-@Log(title='用户登录', business_type=BusinessType.OTHER, log_type='login')
 async def login(
     request: Request,
     form_data: Annotated[CustomOAuth2PasswordRequestForm, Depends()],
     query_db: Annotated[AsyncSession, DBSessionDependency()],
 ) -> Response:
-    captcha_enabled = (
-        await request.app.state.redis.get(f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.captchaEnabled') == 'true'
-    )
+    captcha_enabled = AccountConfig.account_captcha_enabled
     user = UserLogin(
         userName=form_data.username,
         password=form_data.password,

@@ -65,23 +65,22 @@ async def test_vip_ai_grant_count_controller_returns_data_payload(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_set_default_ai_count_creates_config_and_overwrites_old_users(monkeypatch):
+async def test_set_default_ai_count_updates_policy_and_overwrites_old_users(monkeypatch):
     captured = {}
 
-    async def fake_get_config(db, config):
-        return None
-
-    async def fake_add_config(db, config):
-        captured['config'] = config
-        return config
+    async def fake_set_policy(db, count, update_by):
+        captured['policy_count'] = count
+        captured['policy_update_by'] = update_by
 
     async def fake_batch_update(db, count, update_by):
         captured['count'] = count
         captured['update_by'] = update_by
         return 3
 
-    monkeypatch.setattr('module_admin.service.user_service.ConfigDao.get_config_detail_by_info', fake_get_config)
-    monkeypatch.setattr('module_admin.service.user_service.ConfigDao.add_config_dao', fake_add_config)
+    monkeypatch.setattr(
+        'module_admin.service.user_service.AiUsagePolicyService.set_default_count',
+        fake_set_policy,
+    )
     monkeypatch.setattr('module_admin.service.user_service.UserDao.batch_update_normal_ai_count', fake_batch_update)
 
     request = make_request()
@@ -89,12 +88,11 @@ async def test_set_default_ai_count_creates_config_and_overwrites_old_users(monk
     result = await UserService.set_default_ai_recognition_count_services(request, db, 6, 'admin')
 
     assert db.committed is True
-    assert captured['config'].config_key == UserService.DEFAULT_AI_RECOGNITION_CONFIG_KEY
-    assert captured['config'].config_value == '6'
+    assert captured['policy_count'] == 6
+    assert captured['policy_update_by'] == 'admin'
     assert captured['count'] == 6
     assert captured['update_by'] == 'admin'
     assert '同步3个老用户' in result.message
-    assert request.app.state.redis.values[f'sys_config:{UserService.DEFAULT_AI_RECOGNITION_CONFIG_KEY}'] == '6'
 
 
 @pytest.mark.asyncio

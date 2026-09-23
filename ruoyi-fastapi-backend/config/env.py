@@ -79,6 +79,22 @@ class RedisSettings(BaseSettings):
     redis_database: int = 2
 
 
+class AccountSettings(BaseSettings):
+    """账号与认证策略。替代已删除的 sys_config 动态参数。"""
+
+    account_register_enabled: bool = True
+    account_captcha_enabled: bool = False
+    account_init_password: str = '123456'
+    account_init_password_modify: bool = True
+    account_password_validate_days: int = 0
+    account_login_black_ips: str = ''
+    account_cleanup_inactive_registered_users: bool = False
+
+    @property
+    def login_black_ip_set(self) -> set[str]:
+        return {item.strip() for item in self.account_login_black_ips.split(',') if item.strip()}
+
+
 class LogSettings(BaseSettings):
     """
     日志与队列配置
@@ -93,18 +109,6 @@ class LogSettings(BaseSettings):
     )
     log_partial_mask_fields: str = 'phonenumber,phone,mobile,email'
     log_config_secret_patterns: str = 'password,token,secret,key,private,credential,access,jwt,captcha,sms'
-    log_stream_key: str = 'log:stream'
-    log_stream_group: str = 'log_aggregator'
-    log_stream_consumer_prefix: str = 'worker'
-    log_stream_batch_size: int = 100
-    log_stream_block_ms: int = 2000
-    log_stream_maxlen: int = 100000
-    log_stream_claim_idle_ms: int = 60000
-    log_stream_claim_interval_ms: int = 5000
-    log_stream_claim_batch_size: int = 100
-    log_stream_dedup_ttl: int = 3600
-    log_stream_dedup_prefix: str = 'log:dedup'
-
     loguru_json: bool = False
     loguru_level: str = 'INFO'
     loguru_stdout: bool = True
@@ -266,6 +270,9 @@ class GetConfig:
         # 实例化Redis配置模型
         return RedisSettings()
 
+    def get_account_config(self) -> AccountSettings:
+        return AccountSettings()
+
     def get_log_config(self) -> LogSettings:
         """
         获取日志配置
@@ -343,6 +350,8 @@ JwtConfig = get_config.get_jwt_config()
 DataBaseConfig = get_config.get_database_config()
 # Redis配置
 RedisConfig = get_config.get_redis_config()
+# 账号配置
+AccountConfig = get_config.get_account_config()
 # 日志配置
 LogConfig = get_config.get_log_config()
 # 传输层加解密配置

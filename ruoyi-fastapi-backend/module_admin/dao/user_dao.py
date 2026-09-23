@@ -287,7 +287,6 @@ class UserDao:
                 if query_object.role_id
                 else True,
                 SysUser.status == query_object.status if query_object.status else True,
-                SysUser.sex == query_object.sex if query_object.sex else True,
                 SysUser.create_time.between(
                     datetime.combine(datetime.strptime(query_object.begin_time, '%Y-%m-%d'), time(00, 00, 00)),
                     datetime.combine(datetime.strptime(query_object.end_time, '%Y-%m-%d'), time(23, 59, 59)),

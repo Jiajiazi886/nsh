@@ -8,23 +8,17 @@ from sqlalchemy import ColumnElement, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.constant import CommonConstant
-from common.enums import RedisInitKeyConfig
 from common.vo import CrudResponseModel, PageModel
-from config.get_scheduler import SchedulerUtil
+from config.env import AccountConfig
 from exceptions.exception import ServiceException
-from module_admin.dao.config_dao import ConfigDao
-from module_admin.dao.job_dao import JobDao
 from module_admin.dao.user_dao import UserDao
 from module_admin.entity.do.user_do import SysUser, SysUserRole
-from module_admin.entity.vo.config_vo import ConfigModel
-from module_admin.entity.vo.job_vo import JobModel
 from module_admin.entity.vo.user_vo import (
     AddUserModel,
     CrudUserRoleModel,
     CurrentUserModel,
     DeleteUserModel,
     EditUserModel,
-    RegisterCleanupRuleModel,
     ResetUserModel,
     SelectedRoleModel,
     UserDetailModel,
@@ -37,7 +31,7 @@ from module_admin.entity.vo.user_vo import (
     UserRoleResponseModel,
     UserRowModel,
 )
-from module_admin.service.config_service import ConfigService
+from module_admin.service.ai_usage_policy_service import AiUsagePolicyService
 from module_admin.service.role_service import RoleService
 from utils.common_util import CamelCaseUtil
 from utils.excel_util import ExcelUtil
@@ -48,13 +42,6 @@ class UserService:
     """
     用户管理模块服务层
     """
-
-    REGISTER_CLEANUP_CONFIG_KEY = 'sys.account.cleanupInactiveRegisteredUsers'
-    REGISTER_CLEANUP_JOB_NAME = '注册用户24小时未登录自动清理'
-    REGISTER_CLEANUP_JOB_TARGET = 'module_task.user_cleanup.cleanup_inactive_registered_users'
-    REGISTER_CLEANUP_CRON = '0 0 * * * ?'
-    DEFAULT_AI_RECOGNITION_CONFIG_KEY = 'sys.user.defaultAiImageRecognitionCount'
-    VIP_AI_RECOGNITION_GRANT_CONFIG_KEY = 'sys.user.vipAiImageRecognitionGrantCount'
 
     @classmethod
     async def get_user_list_services(
@@ -161,92 +148,18 @@ class UserService:
             )
 
     @classmethod
-    async def get_register_cleanup_rule_services(
-        cls, request: Request, query_db: AsyncSession
-    ) -> RegisterCleanupRuleModel:
-        """
-        Get the self-registered inactive user cleanup rule.
-        """
-        config, job = await cls.__ensure_register_cleanup_rule(query_db)
-        enabled = config.config_value == 'true'
-        config_value = config.config_value
-        job_id = job.job_id if job else None
-        await query_db.commit()
-        await request.app.state.redis.set(
-            f'{RedisInitKeyConfig.SYS_CONFIG.key}:{cls.REGISTER_CLEANUP_CONFIG_KEY}', config_value
-        )
-        return RegisterCleanupRuleModel(enabled=enabled, jobId=job_id)
-
-    @classmethod
-    async def set_register_cleanup_rule_services(
-        cls, request: Request, query_db: AsyncSession, rule: RegisterCleanupRuleModel, update_by: str
-    ) -> RegisterCleanupRuleModel:
-        """
-        Enable or disable the self-registered inactive user cleanup rule.
-        """
-        config, job = await cls.__ensure_register_cleanup_rule(query_db)
-        enabled_value = 'true' if rule.enabled else 'false'
-        job_status = '0' if rule.enabled else '1'
-        job_id = job.job_id if job else None
-        now = datetime.now()
-
-        await ConfigDao.edit_config_dao(
-            query_db,
-            {
-                'config_id': config.config_id,
-                'config_name': config.config_name,
-                'config_key': config.config_key,
-                'config_value': enabled_value,
-                'config_type': config.config_type,
-                'update_by': update_by,
-                'update_time': now,
-            },
-        )
-        if job:
-            await JobDao.edit_job_dao(
-                query_db,
-                {
-                    'job_id': job.job_id,
-                    'status': job_status,
-                    'update_by': update_by,
-                    'update_time': now,
-                },
-                JobModel(**CamelCaseUtil.transform_result(job)),
-            )
-        await query_db.commit()
-        await request.app.state.redis.set(
-            f'{RedisInitKeyConfig.SYS_CONFIG.key}:{cls.REGISTER_CLEANUP_CONFIG_KEY}', enabled_value
-        )
-        await SchedulerUtil.request_scheduler_sync()
-        return RegisterCleanupRuleModel(enabled=rule.enabled, jobId=job_id)
-
-    @classmethod
     async def get_default_ai_recognition_count_services(cls, query_db: AsyncSession) -> int:
         """
         获取新用户默认普通AI识图次数，配置不存在或异常时按0处理。
         """
-        config = await ConfigDao.get_config_detail_by_info(
-            query_db, ConfigModel(configKey=cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY)
-        )
-        if not config:
-            return 0
-        try:
-            return max(0, int(config.config_value or 0))
-        except (TypeError, ValueError):
-            return 0
+        policy = await AiUsagePolicyService.get_policy(query_db)
+        return max(0, int(policy.default_recognition_count or 0))
 
     @classmethod
     async def get_vip_ai_recognition_grant_count_services(cls, query_db: AsyncSession) -> int:
         """Get the one-time image recognition grant awarded when a user first becomes VIP."""
-        config = await ConfigDao.get_config_detail_by_info(
-            query_db, ConfigModel(configKey=cls.VIP_AI_RECOGNITION_GRANT_CONFIG_KEY)
-        )
-        if not config:
-            return 0
-        try:
-            return max(0, int(config.config_value or 0))
-        except (TypeError, ValueError):
-            return 0
+        policy = await AiUsagePolicyService.get_policy(query_db)
+        return max(0, int(policy.vip_grant_count or 0))
 
     @classmethod
     async def set_vip_ai_recognition_grant_count_services(
@@ -256,44 +169,9 @@ class UserService:
         if count < 0:
             raise ServiceException(message='VIP识图赠送次数不能小于0')
 
-        now = datetime.now()
-        config = await ConfigDao.get_config_detail_by_info(
-            query_db, ConfigModel(configKey=cls.VIP_AI_RECOGNITION_GRANT_CONFIG_KEY)
-        )
         try:
-            if config:
-                await ConfigDao.edit_config_dao(
-                    query_db,
-                    {
-                        'config_id': config.config_id,
-                        'config_name': '用户管理-VIP开通赠送识图次数',
-                        'config_key': cls.VIP_AI_RECOGNITION_GRANT_CONFIG_KEY,
-                        'config_value': str(count),
-                        'config_type': CommonConstant.YES,
-                        'update_by': update_by,
-                        'update_time': now,
-                        'remark': '用户从非VIP变为有效VIP时一次性追加的VIP AI识图次数',
-                    },
-                )
-            else:
-                await ConfigDao.add_config_dao(
-                    query_db,
-                    ConfigModel(
-                        configName='用户管理-VIP开通赠送识图次数',
-                        configKey=cls.VIP_AI_RECOGNITION_GRANT_CONFIG_KEY,
-                        configValue=str(count),
-                        configType=CommonConstant.YES,
-                        createBy=update_by,
-                        createTime=now,
-                        updateBy=update_by,
-                        updateTime=now,
-                        remark='用户从非VIP变为有效VIP时一次性追加的VIP AI识图次数',
-                    ),
-                )
+            await AiUsagePolicyService.set_vip_grant_count(query_db, count, update_by)
             await query_db.commit()
-            await request.app.state.redis.set(
-                f'{RedisInitKeyConfig.SYS_CONFIG.key}:{cls.VIP_AI_RECOGNITION_GRANT_CONFIG_KEY}', str(count)
-            )
             return CrudResponseModel(is_success=True, message='VIP开通赠送识图次数已保存')
         except Exception as e:
             await query_db.rollback()
@@ -309,92 +187,14 @@ class UserService:
         if count < 0:
             raise ServiceException(message='AI识图次数不能小于0')
 
-        now = datetime.now()
-        config = await ConfigDao.get_config_detail_by_info(
-            query_db, ConfigModel(configKey=cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY)
-        )
         try:
-            if config:
-                await ConfigDao.edit_config_dao(
-                    query_db,
-                    {
-                        'config_id': config.config_id,
-                        'config_name': '用户管理-新用户默认普通AI识图次数',
-                        'config_key': cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY,
-                        'config_value': str(count),
-                        'config_type': CommonConstant.YES,
-                        'update_by': update_by,
-                        'update_time': now,
-                        'remark': '后台新增、注册和导入新增用户时默认发放的普通AI识图次数',
-                    },
-                )
-            else:
-                await ConfigDao.add_config_dao(
-                    query_db,
-                    ConfigModel(
-                        configName='用户管理-新用户默认普通AI识图次数',
-                        configKey=cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY,
-                        configValue=str(count),
-                        configType=CommonConstant.YES,
-                        createBy=update_by,
-                        createTime=now,
-                        updateBy=update_by,
-                        updateTime=now,
-                        remark='后台新增、注册和导入新增用户时默认发放的普通AI识图次数',
-                    ),
-                )
+            await AiUsagePolicyService.set_default_count(query_db, count, update_by)
             affected_count = await UserDao.batch_update_normal_ai_count(query_db, count, update_by)
             await query_db.commit()
-            await request.app.state.redis.set(
-                f'{RedisInitKeyConfig.SYS_CONFIG.key}:{cls.DEFAULT_AI_RECOGNITION_CONFIG_KEY}', str(count)
-            )
             return CrudResponseModel(is_success=True, message=f'已设置默认次数，并同步{affected_count}个老用户')
         except Exception as e:
             await query_db.rollback()
             raise e
-
-    @classmethod
-    async def __ensure_register_cleanup_rule(cls, query_db: AsyncSession) -> tuple[Any, Any]:
-        config = await ConfigDao.get_config_detail_by_info(
-            query_db, ConfigModel(configKey=cls.REGISTER_CLEANUP_CONFIG_KEY)
-        )
-        if config is None:
-            config = await ConfigDao.add_config_dao(
-                query_db,
-                ConfigModel(
-                    configName='账号自助-是否清理24小时未登录注册用户',
-                    configKey=cls.REGISTER_CLEANUP_CONFIG_KEY,
-                    configValue='false',
-                    configType='Y',
-                    createBy='system',
-                    createTime=datetime.now(),
-                    updateBy='system',
-                    updateTime=datetime.now(),
-                    remark='开启后，定时任务会软删除注册后24小时仍未登录的自助注册账号',
-                ),
-            )
-
-        job = await JobDao.get_job_detail_by_invoke_target(query_db, cls.REGISTER_CLEANUP_JOB_TARGET)
-        if job is None:
-            job = await JobDao.add_job_dao(
-                query_db,
-                JobModel(
-                    jobName=cls.REGISTER_CLEANUP_JOB_NAME,
-                    jobGroup='default',
-                    jobExecutor='default',
-                    invokeTarget=cls.REGISTER_CLEANUP_JOB_TARGET,
-                    cronExpression=cls.REGISTER_CLEANUP_CRON,
-                    misfirePolicy='3',
-                    concurrent='1',
-                    status='1',
-                    createBy='system',
-                    createTime=datetime.now(),
-                    updateBy='system',
-                    updateTime=datetime.now(),
-                    remark='清理注册后24小时仍未登录的自助注册账号',
-                ),
-            )
-        return config, job
 
     @classmethod
     async def check_user_allowed_services(cls, check_user: UserModel) -> CrudResponseModel:
@@ -876,21 +676,6 @@ class UserService:
         return result.rowcount or 0
 
     @classmethod
-    def _set_row_sex_value(cls, row: pd.Series) -> None:
-        """
-        设置行性别值
-
-        :param row: 行数据
-        :return: None
-        """
-        if row['sex'] == '男':
-            row['sex'] = '0'
-        if row['sex'] == '女':
-            row['sex'] = '1'
-        if row['sex'] == '未知':
-            row['sex'] = '2'
-
-    @classmethod
     def _set_row_status_value(cls, row: pd.Series) -> None:
         """
         设置行状态值
@@ -930,7 +715,6 @@ class UserService:
             '用户名称': 'nick_name',
             '用户邮箱': 'email',
             '手机号码': 'phonenumber',
-            '用户性别': 'sex',
             '帐号状态': 'status',
         }
         contents = await file.read()
@@ -943,20 +727,14 @@ class UserService:
         try:
             for _index, row in df.iterrows():
                 count = count + 1
-                cls._set_row_sex_value(row)
                 cls._set_row_status_value(row)
                 add_user = UserModel(
                     deptId=row['dept_id'],
                     userName=row['user_name'],
-                    password=PwdUtil.get_password_hash(
-                        await ConfigService.query_config_list_from_cache_services(
-                            request.app.state.redis, 'sys.user.initPassword'
-                        )
-                    ),
+                    password=PwdUtil.get_password_hash(AccountConfig.account_init_password),
                     nickName=row['nick_name'],
                     email=row['email'],
                     phonenumber=str(row['phonenumber']),
-                    sex=row['sex'],
                     status=row['status'],
                     aiImageRecognitionCount=default_ai_count,
                     createBy=current_user.user.user_name,
@@ -974,7 +752,6 @@ class UserService:
                             nickName=row['nick_name'],
                             email=row['email'],
                             phonenumber=str(row['phonenumber']),
-                            sex=row['sex'],
                             status=row['status'],
                             updateBy=current_user.user.user_name,
                             updateTime=datetime.now(),
@@ -1005,9 +782,9 @@ class UserService:
 
         :return: 用户导入模板excel的二进制数据
         """
-        header_list = ['登录名称', '用户名称', '用户邮箱', '手机号码', '用户性别', '帐号状态']
-        selector_header_list = ['用户性别', '帐号状态']
-        option_list = [{'用户性别': ['男', '女', '未知']}, {'帐号状态': ['正常', '停用']}]
+        header_list = ['登录名称', '用户名称', '用户邮箱', '手机号码', '帐号状态']
+        selector_header_list = ['帐号状态']
+        option_list = [{'帐号状态': ['正常', '停用']}]
         binary_data = ExcelUtil.get_excel_template(
             header_list=header_list, selector_header_list=selector_header_list, option_list=option_list
         )
@@ -1029,7 +806,6 @@ class UserService:
             'nickName': '用户昵称',
             'email': '邮箱地址',
             'phonenumber': '手机号码',
-            'sex': '性别',
             'status': '状态',
             'createBy': '创建者',
             'createTime': '创建时间',
@@ -1043,12 +819,6 @@ class UserService:
                 item['status'] = '正常'
             else:
                 item['status'] = '停用'
-            if item.get('sex') == '0':
-                item['sex'] = '男'
-            elif item.get('sex') == '1':
-                item['sex'] = '女'
-            else:
-                item['sex'] = '未知'
         binary_data = ExcelUtil.export_list2excel(user_list, mapping_dict)
 
         return binary_data

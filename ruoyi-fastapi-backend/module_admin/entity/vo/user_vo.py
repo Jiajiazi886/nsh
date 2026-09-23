@@ -34,7 +34,6 @@ class UserModel(BaseModel):
     user_type: str | None = Field(default=None, description='用户类型（00系统用户）')
     email: str | None = Field(default=None, description='用户邮箱')
     phonenumber: str | None = Field(default=None, description='手机号码')
-    sex: Literal['0', '1', '2'] | None = Field(default=None, description='用户性别（0男 1女 2未知）')
     avatar: str | None = Field(default=None, description='头像地址')
     password: str | None = Field(default=None, description='密码')
     status: Literal['0', '1'] | None = Field(default=None, description='帐号状态（0正常 1停用）')
@@ -203,17 +202,6 @@ class UserPageQueryModel(UserQueryModel):
 
     page_num: int = Field(default=1, description='当前页码')
     page_size: int = Field(default=10, description='每页记录数')
-
-
-class RegisterCleanupRuleModel(BaseModel):
-    """
-    Registered user cleanup rule model.
-    """
-
-    model_config = ConfigDict(alias_generator=to_camel)
-
-    enabled: bool = Field(default=False, description='是否启用注册用户24小时未登录自动清理')
-    job_id: int | None = Field(default=None, description='定时任务ID')
 
 
 class AddUserModel(UserModel):

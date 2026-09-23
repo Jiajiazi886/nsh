@@ -14,7 +14,7 @@ from common.constant import CommonConstant, MenuConstant
 from common.context import RequestContext
 from common.enums import RedisInitKeyConfig
 from common.vo import CrudResponseModel
-from config.env import AppConfig, JwtConfig
+from config.env import AccountConfig, AppConfig, JwtConfig
 from config.get_db import get_db
 from exceptions.exception import AuthException, LoginException, ServiceException
 from module_admin.dao.login_dao import login_by_account
@@ -148,9 +148,7 @@ class LoginService:
         :param request: Request对象
         :return: 校验结果
         """
-        black_ip_value = await request.app.state.redis.get(f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.login.blackIPList')
-        black_ip_list = black_ip_value.split(',') if black_ip_value else []
-        if ClientIPUtil.get_client_ip(request) in black_ip_list:
+        if ClientIPUtil.get_client_ip(request) in AccountConfig.login_black_ip_set:
             logger.warning('当前IP禁止登录')
             raise LoginException(data='', message='当前IP禁止登录')
         return True
@@ -295,10 +293,7 @@ class LoginService:
         :param pwd_update_date: 密码最后更新时间
         :return: 是否初始密码登录
         """
-        init_password_is_modify = await request.app.state.redis.get(
-            f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.initPasswordModify'
-        )
-        return init_password_is_modify == '1' and pwd_update_date is None
+        return AccountConfig.account_init_password_modify and pwd_update_date is None
 
     @classmethod
     async def __password_is_expired(cls, request: Request, pwd_update_date: datetime) -> bool:
@@ -309,13 +304,11 @@ class LoginService:
         :param pwd_update_date: 密码最后更新时间
         :return: 密码是否过期
         """
-        password_validate_days = await request.app.state.redis.get(
-            f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.passwordValidateDays'
-        )
-        if password_validate_days and int(password_validate_days) > 0:
+        password_validate_days = AccountConfig.account_password_validate_days
+        if password_validate_days > 0:
             if pwd_update_date is None:
                 return True
-            expire_date = pwd_update_date + timedelta(days=int(password_validate_days))
+            expire_date = pwd_update_date + timedelta(days=password_validate_days)
             if datetime.now() > expire_date:
                 return True
         return False
@@ -443,13 +436,8 @@ class LoginService:
         :param user_register: 注册用户对象
         :return: 注册结果
         """
-        register_enabled = (
-            await request.app.state.redis.get(f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.registerUser') == 'true'
-        )
-        captcha_enabled = (
-            await request.app.state.redis.get(f'{RedisInitKeyConfig.SYS_CONFIG.key}:sys.account.captchaEnabled')
-            == 'true'
-        )
+        register_enabled = AccountConfig.account_register_enabled
+        captcha_enabled = AccountConfig.account_captcha_enabled
         if user_register.password == user_register.confirm_password:
             if register_enabled:
                 if captcha_enabled:

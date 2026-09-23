@@ -120,18 +120,6 @@
               >导出</el-button
             >
           </el-col>
-          <el-col :span="1.5">
-            <div class="cleanup-rule-toggle" v-hasPermi="['system:user:edit']">
-              <span>清理未登录注册用户</span>
-              <el-switch
-                v-model="registerCleanupEnabled"
-                :loading="registerCleanupLoading"
-                active-text="开"
-                inactive-text="关"
-                @change="handleRegisterCleanupChange"
-              />
-            </div>
-          </el-col>
           <el-col v-if="canManageVip" :span="1.5">
             <el-button
               type="primary"
@@ -514,18 +502,6 @@
         </el-row>
         <el-row>
           <el-col :span="12">
-            <el-form-item label="用户性别">
-              <el-select v-model="form.sex" placeholder="请选择">
-                <el-option
-                  v-for="dict in sys_user_sex"
-                  :key="dict.value"
-                  :label="dict.label"
-                  :value="dict.value"
-                ></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="状态">
               <el-radio-group v-model="form.status">
                 <el-radio
@@ -814,19 +790,17 @@ import {
   addUser,
   getDefaultAiRecognitionCount,
   getVipAiRecognitionGrantCount,
-  getRegisterCleanupRule,
   updateDefaultAiRecognitionCount,
   updateVipAiRecognitionGrantCount,
-  updateRegisterCleanupRule,
 } from "@/api/system/user";
 
 const router = useRouter();
 const userStore = useUserStore();
 const { proxy } = getCurrentInstance();
-const { sys_normal_disable, sys_user_sex } = proxy.useDict(
-  "sys_normal_disable",
-  "sys_user_sex"
-);
+const sys_normal_disable = ref([
+  { label: "正常", value: "0" },
+  { label: "停用", value: "1" },
+]);
 
 const userList = ref([]);
 const open = ref(false);
@@ -840,8 +814,6 @@ const title = ref("");
 const dateRange = ref([]);
 const initPassword = ref(undefined);
 const roleOptions = ref([]);
-const registerCleanupEnabled = ref(false);
-const registerCleanupLoading = ref(false);
 const canManageVip = computed(() => (userStore.roles || []).includes("admin"));
 const vipDialog = reactive({
   open: false,
@@ -990,24 +962,6 @@ function fetchRoleOptions() {
   getUser().then((response) => {
     roleOptions.value = response.roles || [];
   });
-}
-function fetchRegisterCleanupRule() {
-  getRegisterCleanupRule().then((response) => {
-    registerCleanupEnabled.value = !!response.data?.enabled;
-  });
-}
-function handleRegisterCleanupChange(enabled) {
-  registerCleanupLoading.value = true;
-  updateRegisterCleanupRule({ enabled })
-    .then(() => {
-      proxy.$modal.msgSuccess(enabled ? "已开启自动清理规则" : "已关闭自动清理规则");
-    })
-    .catch(() => {
-      registerCleanupEnabled.value = !enabled;
-    })
-    .finally(() => {
-      registerCleanupLoading.value = false;
-    });
 }
 function handleDelete(row) {
   const userIds = row.userId || ids.value;
@@ -1378,7 +1332,6 @@ function reset() {
     nickName: undefined,
     password: undefined,
     email: undefined,
-    sex: undefined,
     status: "0",
     isVip: "0",
     aiImageRecognitionCount: 0,
@@ -1396,7 +1349,6 @@ function buildUserPayload() {
     userName: form.value.userName?.trim(),
     nickName: form.value.nickName?.trim(),
     email: form.value.email || "",
-    sex: form.value.sex !== undefined && form.value.sex !== null ? String(form.value.sex) : undefined,
     status: form.value.status !== undefined && form.value.status !== null ? String(form.value.status) : "0",
     remark: form.value.remark || "",
     roleIds: Array.isArray(form.value.roleIds)
@@ -1473,11 +1425,8 @@ function submitForm() {
 
 onMounted(() => {
   fetchRoleOptions();
-  fetchRegisterCleanupRule();
   getList();
-  proxy.getConfigKey("sys.user.initPassword").then((response) => {
-    initPassword.value = response.msg;
-  });
+  initPassword.value = "123456";
 });
 </script>
 
