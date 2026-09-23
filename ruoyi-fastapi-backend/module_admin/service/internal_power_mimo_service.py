@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 import json
 import re
@@ -10,6 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.env import MimoConfig
 from exceptions.exception import ServiceException
 from module_admin.service.ai_key_service import ActiveAiConnection, AiKeyService
+from module_admin.service.ai_usage_service import AiUsageContext, AiUsageService
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from module_admin.entity.vo.user_vo import CurrentUserModel
 
 
 @dataclass
@@ -43,8 +51,18 @@ class InternalPowerMimoService:
         prompt: str,
         client: AsyncOpenAI | None = None,
         query_db: AsyncSession | None = None,
+        current_user: CurrentUserModel | None = None,
+        scene: str = 'internal_power_image',
     ) -> InternalPowerMimoResult:
-        result = await cls.recognize_image_json(image_bytes, mime_type, prompt, client, query_db)
+        result = await cls.recognize_image_json(
+            image_bytes,
+            mime_type,
+            prompt,
+            client,
+            query_db,
+            current_user=current_user,
+            scene=scene,
+        )
         if result.parsed is None:
             return result
         validation_error = cls.validate_parsed_result(result.parsed)
@@ -60,6 +78,8 @@ class InternalPowerMimoService:
         prompt: str,
         client: AsyncOpenAI | None = None,
         query_db: AsyncSession | None = None,
+        current_user: CurrentUserModel | None = None,
+        scene: str = 'internal_power_image',
     ) -> InternalPowerMimoResult:
         """
         调用Mimo并只要求返回可解析JSON，具体业务校验由调用方完成。
@@ -80,6 +100,9 @@ class InternalPowerMimoService:
             timeout=MimoConfig.mimo_timeout_seconds,
         )
         data_url = cls.build_data_url(image_bytes, mime_type)
+        usage_context: AiUsageContext | None = None
+        if query_db is not None and current_user is not None:
+            usage_context = await AiUsageService.start_request(current_user, runtime, scene)
         try:
             if runtime.protocol == 'responses':
                 completion = await mimo_client.responses.create(
@@ -121,7 +144,12 @@ class InternalPowerMimoService:
                     request_options['extra_body'] = {'thinking': {'type': 'disabled'}}
                 completion = await mimo_client.chat.completions.create(**request_options)
         except Exception as exc:
+            if usage_context is not None:
+                await AiUsageService.finish_failure(usage_context, exc)
             return InternalPowerMimoResult(parsed=None, raw_text='', error=f'AI调用失败：{exc}')
+
+        if usage_context is not None:
+            await AiUsageService.finish_success(usage_context, runtime.protocol, completion)
 
         raw_text = cls.__extract_response_text(completion) if runtime.protocol == 'responses' else cls.__extract_completion_text(completion)
         parsed = cls.parse_json_response(raw_text)

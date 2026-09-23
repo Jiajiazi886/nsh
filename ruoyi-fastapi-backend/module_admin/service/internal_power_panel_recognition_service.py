@@ -100,6 +100,7 @@ class InternalPowerPanelRecognitionService:
             file,
             PANEL_RECOGNITION_PROMPT,
             cls.normalize_panel_json,
+            'player_panel',
         )
 
     @classmethod
@@ -113,6 +114,7 @@ class InternalPowerPanelRecognitionService:
             file,
             DEFENSE_PANEL_RECOGNITION_PROMPT,
             cls.normalize_defense_panel_json,
+            'defense_panel',
         )
 
     @classmethod
@@ -126,6 +128,7 @@ class InternalPowerPanelRecognitionService:
             file,
             INTERNAL_POWER_BENEFIT_RECOGNITION_PROMPT,
             cls.normalize_internal_power_benefit_json,
+            'internal_power_defense_entries',
         )
 
     @classmethod
@@ -136,6 +139,7 @@ class InternalPowerPanelRecognitionService:
         file: UploadFile,
         prompt: str,
         normalizer: Callable[[dict[str, Any]], tuple[dict[str, Any], str]],
+        scene: str,
     ) -> PanelRecognitionResultModel:
         requested_user_id = int(current_user.user.user_id)
         user_name = current_user.user.user_name
@@ -169,6 +173,8 @@ class InternalPowerPanelRecognitionService:
             mime_type,
             prompt,
             query_db=query_db,
+            current_user=current_user,
+            scene=scene,
         )
         if mimo_result.parsed is None:
             await cls.__update_history(
