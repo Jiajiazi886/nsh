@@ -14,3 +14,56 @@ export function updateInternalPowerAiKey(data) {
     data
   })
 }
+
+export function listAiConnections() {
+  return request({
+    url: '/system/ai-key/connections',
+    method: 'get'
+  })
+}
+
+export function createAiConnection(data) {
+  return request({
+    url: '/system/ai-key/connections',
+    method: 'post',
+    data
+  })
+}
+
+export function updateAiConnection(id, data) {
+  return request({
+    url: `/system/ai-key/connections/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+export function deleteAiConnection(id) {
+  return request({
+    url: `/system/ai-key/connections/${id}`,
+    method: 'delete'
+  })
+}
+
+export function activateAiConnection(id) {
+  return request({
+    url: `/system/ai-key/connections/${id}/activate`,
+    method: 'put'
+  })
+}
+
+export function discoverAiModels(data) {
+  return request({
+    url: '/system/ai-key/connections/discover-models',
+    method: 'post',
+    data
+  })
+}
+
+export function testAiConnection(data) {
+  return request({
+    url: '/system/ai-key/connections/test-chat',
+    method: 'post',
+    data
+  })
+}
