@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildProbePayload, buildTestPayload, connectionToForm, validateImageFile } from './workbench.js'
+import { buildProbePayload, buildTestPayload, connectionToForm, formatTokenCount, validateImageFile } from './workbench.js'
 
 const form = connectionToForm({
   name: '主连接',
@@ -25,5 +25,8 @@ assert.equal(payload.messages.length, 1)
 assert.match(validateImageFile({ type: 'text/plain', size: 10 }), /仅支持/)
 assert.match(validateImageFile({ type: 'image/png', size: 6 * 1024 * 1024 }), /5 MB/)
 assert.equal(validateImageFile({ type: 'image/png', size: 10 }), '')
+assert.equal(formatTokenCount(823), '0.08万（823）')
+assert.equal(formatTokenCount(12345), '1.23万（12,345）')
+assert.equal(formatTokenCount(null), '未上报')
 
 console.log('AI connection workbench utilities passed')

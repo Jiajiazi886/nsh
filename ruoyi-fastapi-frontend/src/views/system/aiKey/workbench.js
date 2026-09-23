@@ -52,3 +52,10 @@ export function validateImageFile(file, maxBytes = 5 * 1024 * 1024) {
   if (file.size > maxBytes) return '单张图片不能超过 5 MB'
   return ''
 }
+
+export function formatTokenCount(value) {
+  if (value === null || value === undefined || value === '') return '未上报'
+  const count = Number(value)
+  if (!Number.isFinite(count)) return '未上报'
+  return `${(count / 10000).toFixed(2)}万（${Math.trunc(count).toLocaleString('en-US')}）`
+}

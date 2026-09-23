@@ -67,3 +67,15 @@ export function testAiConnection(data) {
     data
   })
 }
+
+export function listAiUsageRecords(params) {
+  return request({ url: '/system/ai-key/usage-records', method: 'get', params })
+}
+
+export function getAiUsageSummary(params) {
+  return request({ url: '/system/ai-key/usage-summary', method: 'get', params })
+}
+
+export function searchAiUsageUsers(keyword) {
+  return request({ url: '/system/ai-key/usage-users', method: 'get', params: { keyword } })
+}
