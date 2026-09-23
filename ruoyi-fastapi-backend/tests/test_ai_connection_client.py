@@ -63,6 +63,25 @@ async def test_chat_completions_uses_selected_runtime_and_image_payload():
 
 
 @pytest.mark.asyncio
+async def test_chat_with_usage_returns_text_and_provider_usage():
+    class FakeCompletions:
+        async def create(self, **_kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='ok'))],
+                usage=SimpleNamespace(prompt_tokens=80, completion_tokens=20, total_tokens=100),
+            )
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    messages = [AiTestMessageModel(role='user', content='hello')]
+
+    result = await AiConnectionClientService.chat_with_usage(runtime(), messages, client=client)
+
+    assert result.text == 'ok'
+    assert result.usage.total_tokens == 100
+    assert result.usage.reported is True
+
+
+@pytest.mark.asyncio
 async def test_responses_protocol_uses_responses_input_shape():
     captured = {}
 

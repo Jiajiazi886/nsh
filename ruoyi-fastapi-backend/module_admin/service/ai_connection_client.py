@@ -3,16 +3,25 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from openai import AsyncOpenAI
 
 from config.env import MimoConfig
 from exceptions.exception import ServiceException
+from module_admin.service.ai_usage_service import AiUsageService, AiUsageSnapshot
 
 if TYPE_CHECKING:
     from module_admin.entity.vo.ai_key_vo import AiTestMessageModel
     from module_admin.service.ai_key_service import ActiveAiConnection
+
+
+@dataclass(frozen=True)
+class AiGenerationResult:
+    text: str
+    usage: AiUsageSnapshot
+    raw_response: Any
 
 
 class AiConnectionClientService:
@@ -52,6 +61,16 @@ class AiConnectionClientService:
         messages: list[AiTestMessageModel],
         client: Any = None,
     ) -> str:
+        result = await cls.chat_with_usage(runtime, messages, client=client)
+        return result.text
+
+    @classmethod
+    async def chat_with_usage(
+        cls,
+        runtime: ActiveAiConnection,
+        messages: list[AiTestMessageModel],
+        client: Any = None,
+    ) -> AiGenerationResult:
         cls._validate_runtime(runtime, require_model=True)
         has_images = any(message.images for message in messages)
         if has_images and not runtime.support_images:
@@ -87,7 +106,11 @@ class AiConnectionClientService:
             cls._raise_upstream_error(exc, runtime)
         if not text.strip():
             raise ServiceException(message='上游模型未返回文本内容')
-        return text
+        return AiGenerationResult(
+            text=text,
+            usage=AiUsageService.extract_usage(runtime.protocol, result),
+            raw_response=result,
+        )
 
     @staticmethod
     def _chat_message(message: AiTestMessageModel) -> dict:
