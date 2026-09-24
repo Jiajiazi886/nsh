@@ -3,10 +3,8 @@ from typing import Annotated
 from fastapi import File, Form, Path, Query, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DynamicResponseModel, ResponseBaseModel
 from module_admin.entity.vo.internal_power_vo import (
@@ -93,7 +91,6 @@ async def get_personal_internal_power_entries(
     description='用于新增当前登录用户的内功',
     response_model=DynamicResponseModel[InternalPowerModel],
 )
-@Log(title='内功管理', business_type=BusinessType.INSERT)
 async def add_personal_internal_power(
     request: Request,
     power: InternalPowerModel,
@@ -112,7 +109,6 @@ async def add_personal_internal_power(
     description='用于编辑当前登录用户的内功',
     response_model=DynamicResponseModel[InternalPowerModel],
 )
-@Log(title='内功管理', business_type=BusinessType.UPDATE)
 async def edit_personal_internal_power(
     request: Request,
     power: InternalPowerModel,
@@ -132,7 +128,6 @@ async def edit_personal_internal_power(
     description='用于删除当前登录用户的内功',
     response_model=ResponseBaseModel,
 )
-@Log(title='内功管理', business_type=BusinessType.DELETE)
 async def delete_personal_internal_power(
     request: Request,
     query_db: Annotated[AsyncSession, DBSessionDependency()],
@@ -151,7 +146,6 @@ async def delete_personal_internal_power(
     description='用于首次把浏览器localStorage内功导入后端',
     response_model=DynamicResponseModel[InternalPowerListModel],
 )
-@Log(title='内功管理', business_type=BusinessType.IMPORT)
 async def import_personal_internal_power_from_local(
     request: Request,
     import_data: InternalPowerImportModel,
@@ -170,7 +164,6 @@ async def import_personal_internal_power_from_local(
     description='用于上传一张或多张内功图片并调用Mimo识别，成功解析的图片才消耗AI识图次数',
     response_model=DynamicResponseModel[InternalPowerRecognizeResultModel],
 )
-@Log(title='内功图片识别', business_type=BusinessType.OTHER)
 async def recognize_personal_internal_power_images(
     request: Request,
     files: Annotated[list[UploadFile], File(description='待识别图片列表')],
@@ -214,7 +207,6 @@ async def get_personal_internal_power_recognition_history(
     description='用于清空当前登录用户的内功图片识别历史',
     response_model=ResponseBaseModel,
 )
-@Log(title='内功图片识别历史', business_type=BusinessType.DELETE)
 async def clear_personal_internal_power_recognition_history(
     request: Request,
     query_db: Annotated[AsyncSession, DBSessionDependency()],

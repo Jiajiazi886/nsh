@@ -5,11 +5,9 @@ from fastapi import Path, Query, Request, Response
 from pydantic_validation_decorator import ValidateFields
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
 from module_admin.entity.vo.internal_power_entry_vo import (
@@ -59,7 +57,6 @@ async def get_system_internal_power_entry_list(
     ],
 )
 @ValidateFields(validate_model='add_entry')
-@Log(title='内功词条管理', business_type=BusinessType.INSERT)
 async def add_system_internal_power_entry(
     request: Request,
     add_entry: InternalPowerEntryConfigModel,
@@ -85,7 +82,6 @@ async def add_system_internal_power_entry(
     ],
 )
 @ValidateFields(validate_model='edit_entry')
-@Log(title='内功词条管理', business_type=BusinessType.UPDATE)
 async def edit_system_internal_power_entry(
     request: Request,
     edit_entry: InternalPowerEntryConfigModel,
@@ -109,7 +105,6 @@ async def edit_system_internal_power_entry(
         RoleInterfaceAuthDependency('admin'),
     ],
 )
-@Log(title='内功词条管理', business_type=BusinessType.DELETE)
 async def delete_system_internal_power_entry(
     request: Request,
     entry_ids: Annotated[str, Path(description='需要删除的词条ID')],

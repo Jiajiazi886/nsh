@@ -156,10 +156,6 @@ def build_default_search_provider_registry(
                 '按任务名搜索',
                 provider_factory.build(completion_provider_gateway.complete_job_names),
             ),
-            'configs': SearchSuggestionProviderSpec(
-                '按配置键搜索',
-                provider_factory.build(completion_provider_gateway.complete_config_keys),
-            ),
             'cache': SearchSuggestionProviderSpec(
                 '按缓存名搜索',
                 provider_factory.build(completion_provider_gateway.complete_cache_names),

@@ -102,14 +102,14 @@
          <el-table-column label="任务名称" align="center" prop="jobName" :show-overflow-tooltip="true" />
          <el-table-column label="任务组名" align="center" prop="jobGroup" :show-overflow-tooltip="true">
             <template #default="scope">
-               <dict-tag :options="sys_job_group" :value="scope.row.jobGroup" />
+               <el-tag :type="businessOptionType(sys_job_group, scope.row.jobGroup)">{{ businessOptionLabel(sys_job_group, scope.row.jobGroup) }}</el-tag>
             </template>
          </el-table-column>
          <el-table-column label="调用目标字符串" align="center" prop="invokeTarget" :show-overflow-tooltip="true" />
          <el-table-column label="日志信息" align="center" prop="jobMessage" :show-overflow-tooltip="true" />
          <el-table-column label="执行状态" align="center" prop="status">
             <template #default="scope">
-               <dict-tag :options="sys_common_status" :value="scope.row.status" />
+               <el-tag :type="businessOptionType(sys_common_status, scope.row.status)">{{ businessOptionLabel(sys_common_status, scope.row.status) }}</el-tag>
             </template>
          </el-table-column>
          <el-table-column label="执行时间" align="center" prop="createTime" width="180">
@@ -183,11 +183,14 @@
 </template>
 
 <script setup name="JobLog">
+import { COMMON_STATUS_OPTIONS, JOB_EXECUTOR_OPTIONS, JOB_GROUP_OPTIONS, businessOptionLabel, businessOptionType } from '@/utils/businessOptions'
 import { getJob } from "@/api/monitor/job";
 import { listJobLog, delJobLog, cleanJobLog } from "@/api/monitor/jobLog";
 
 const { proxy } = getCurrentInstance();
-const { sys_common_status, sys_job_group, sys_job_executor } = proxy.useDict("sys_common_status", "sys_job_group", "sys_job_executor");
+const sys_common_status = COMMON_STATUS_OPTIONS;
+const sys_job_group = JOB_GROUP_OPTIONS;
+const sys_job_executor = JOB_EXECUTOR_OPTIONS;
 
 const jobLogList = ref([]);
 const open = ref(false);
@@ -223,11 +226,11 @@ function getList() {
 }
 /** 任务组名字典翻译 */
 function jobGroupFormat(row, column) {
-   return proxy.selectDictLabel(sys_job_group.value, row.jobGroup);
+   return proxy.selectDictLabel(sys_job_group, row.jobGroup);
 }
 /** 任务组名字典翻译 */
 function jobExecutorFormat(row, column) {
-   return proxy.selectDictLabel(sys_job_executor.value, row.jobExecutor);
+   return proxy.selectDictLabel(sys_job_executor, row.jobExecutor);
 }
 // 返回按钮
 function handleClose() {

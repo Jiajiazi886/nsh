@@ -7,13 +7,11 @@ from pydantic_validation_decorator import ValidateFields
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.annotation.cache_annotation import ApiCache, ApiCacheEvict
-from common.annotation.log_annotation import Log
 from common.annotation.rate_limit_annotation import ApiRateLimit, ApiRateLimitPreset
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
 from common.constant import ApiGroup, ApiNamespace
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
 from module_admin.entity.vo.job_vo import (
@@ -66,7 +64,6 @@ async def get_system_job_list(
 )
 @ValidateFields(validate_model='add_job')
 @ApiCacheEvict(namespaces=ApiGroup.JOB_MUTATION)
-@Log(title='定时任务', business_type=BusinessType.INSERT)
 async def add_system_job(
     request: Request,
     add_job: JobModel,
@@ -92,7 +89,6 @@ async def add_system_job(
 )
 @ValidateFields(validate_model='edit_job')
 @ApiCacheEvict(namespaces=ApiGroup.JOB_MUTATION)
-@Log(title='定时任务', business_type=BusinessType.UPDATE)
 async def edit_system_job(
     request: Request,
     edit_job: EditJobModel,
@@ -115,7 +111,6 @@ async def edit_system_job(
     dependencies=[UserInterfaceAuthDependency('monitor:job:changeStatus')],
 )
 @ApiCacheEvict(namespaces=ApiGroup.JOB_MUTATION)
-@Log(title='定时任务', business_type=BusinessType.UPDATE)
 async def change_system_job_status(
     request: Request,
     change_job: EditJobModel,
@@ -144,7 +139,6 @@ async def change_system_job_status(
 )
 @ApiRateLimit(namespace=ApiNamespace.MONITOR_JOB_RUN, preset=ApiRateLimitPreset.USER_RESOURCE_EXECUTION)
 @ApiCacheEvict(namespaces=ApiGroup.JOB_MUTATION)
-@Log(title='定时任务', business_type=BusinessType.UPDATE)
 async def execute_system_job(
     request: Request,
     execute_job: JobModel,
@@ -165,7 +159,6 @@ async def execute_system_job(
 )
 @ApiRateLimit(namespace=ApiNamespace.MONITOR_JOB_DELETE, preset=ApiRateLimitPreset.USER_DESTRUCTIVE_MUTATION)
 @ApiCacheEvict(namespaces=ApiGroup.JOB_MUTATION)
-@Log(title='定时任务', business_type=BusinessType.DELETE)
 async def delete_system_job(
     request: Request,
     job_ids: Annotated[str, Path(description='需要删除的定时任务ID')],
@@ -213,7 +206,6 @@ async def query_detail_system_job(
     dependencies=[UserInterfaceAuthDependency('monitor:job:export')],
 )
 @ApiRateLimit(namespace=ApiNamespace.MONITOR_JOB_EXPORT, preset=ApiRateLimitPreset.USER_RESOURCE_EXPORT)
-@Log(title='定时任务', business_type=BusinessType.EXPORT)
 async def export_system_job_list(
     request: Request,
     job_page_query: Annotated[JobPageQueryModel, Form()],
@@ -256,7 +248,6 @@ async def get_system_job_log_list(
     dependencies=[UserInterfaceAuthDependency('monitor:job:remove')],
 )
 @ApiRateLimit(namespace=ApiNamespace.MONITOR_JOB_LOG_CLEAN, preset=ApiRateLimitPreset.USER_DESTRUCTIVE_MUTATION)
-@Log(title='定时任务调度日志', business_type=BusinessType.CLEAN)
 async def clear_system_job_log(
     request: Request,
     query_db: Annotated[AsyncSession, DBSessionDependency()],
@@ -275,7 +266,6 @@ async def clear_system_job_log(
     dependencies=[UserInterfaceAuthDependency('monitor:job:remove')],
 )
 @ApiRateLimit(namespace=ApiNamespace.MONITOR_JOB_LOG_DELETE, preset=ApiRateLimitPreset.USER_DESTRUCTIVE_MUTATION)
-@Log(title='定时任务调度日志', business_type=BusinessType.DELETE)
 async def delete_system_job_log(
     request: Request,
     job_log_ids: Annotated[str, Path(description='需要删除的定时任务日志ID')],
@@ -304,7 +294,6 @@ async def delete_system_job_log(
     dependencies=[UserInterfaceAuthDependency('monitor:job:export')],
 )
 @ApiRateLimit(namespace=ApiNamespace.MONITOR_JOB_LOG_EXPORT, preset=ApiRateLimitPreset.USER_RESOURCE_EXPORT)
-@Log(title='定时任务调度日志', business_type=BusinessType.EXPORT)
 async def export_system_job_log_list(
     request: Request,
     job_log_page_query: Annotated[JobLogPageQueryModel, Form()],

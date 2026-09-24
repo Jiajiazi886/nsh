@@ -3,10 +3,8 @@ from typing import Annotated
 from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DynamicResponseModel
 from module_admin.entity.vo.internal_power_entry_conversion_vo import (
@@ -49,7 +47,6 @@ async def get_personal_internal_power_entry_conversion(
     description='用于保存当前登录用户的内功词条换算配置',
     response_model=DynamicResponseModel[InternalPowerEntryConversionModel],
 )
-@Log(title='个人内功词条换算', business_type=BusinessType.UPDATE)
 async def save_personal_internal_power_entry_conversion(
     request: Request,
     payload: InternalPowerEntryConversionSaveModel,

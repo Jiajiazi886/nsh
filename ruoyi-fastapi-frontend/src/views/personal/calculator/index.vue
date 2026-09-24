@@ -311,7 +311,6 @@ import {
   updatePersonalDefenseAttackPanel
 } from '@/api/personal/defenseCalculator'
 import { listInternalPowerPresets, listInternalPowers } from '@/api/personal/internalPower'
-import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
 import {
   DEFAULT_ATTACK_PANEL,
   DEFENDER_FIELDS,
@@ -468,14 +467,13 @@ watch(() => curveInputs.crit, () => syncCritCurvePointers())
 async function loadCalculatorData() {
   const legacySetting = loadDefenseCalculatorPanelSetting()
   try {
-    const [settingResponse, systemResponse, personalResponse, professionResponse, powerResponse, presetResponse, imageDisplayResponse] = await Promise.all([
+    const [settingResponse, systemResponse, personalResponse, professionResponse, powerResponse, presetResponse] = await Promise.all([
       getDefenseCalculatorSetting(),
       listDefenseAttackPanels(),
       listPersonalDefenseAttackPanels(),
       listDefenseProfessionBonuses(),
       listInternalPowers(),
-      listInternalPowerPresets().catch(() => ({ presets: [] })),
-      getInternalPowerImageDisplayStatus().catch(() => ({ data: { enabled: true } }))
+      listInternalPowerPresets().catch(() => ({ presets: [] }))
     ])
     const setting = settingResponse.data || settingResponse || {}
     systemAttackPanels.value = systemResponse.data?.length ? systemResponse.data : [DEFAULT_ATTACK_PANEL]
@@ -483,7 +481,7 @@ async function loadCalculatorData() {
     professionBonuses.value = professionResponse.data || []
     internalPowers.value = (powerResponse.powers || powerResponse.data?.powers || []).map(normalizeInternalPower)
     internalPowerPresets.value = presetResponse.presets || presetResponse.data || []
-    internalPowerImageVisible.value = imageDisplayResponse.data?.enabled !== false
+    internalPowerImageVisible.value = true
     Object.assign(defender, createDefaultDefender(), setting.defender || {})
     Object.assign(professionOverrides, setting.professionOverrides || {})
     Object.assign(recommendationInputs, createRecommendationInputs(), setting.recommendationInputs || {})

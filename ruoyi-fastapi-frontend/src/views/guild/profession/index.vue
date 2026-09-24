@@ -66,7 +66,7 @@
       <el-table-column label="显示顺序" align="center" prop="orderNum" width="100" />
       <el-table-column label="状态" align="center" prop="status" width="100">
         <template #default="scope">
-          <dict-tag :options="sys_normal_disable" :value="scope.row.status" />
+          <el-tag :type="businessOptionType(sys_normal_disable, scope.row.status)">{{ businessOptionLabel(sys_normal_disable, scope.row.status) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="备注" align="center" prop="remark" show-overflow-tooltip />
@@ -135,10 +135,11 @@
 </template>
 
 <script setup name="GuildProfession">
+import { NORMAL_DISABLE_OPTIONS, businessOptionLabel, businessOptionType } from '@/utils/businessOptions'
 import { listProfession, addProfession, delProfession, getProfession, updateProfession } from '@/api/guild/profession'
 
 const { proxy } = getCurrentInstance()
-const { sys_normal_disable } = proxy.useDict('sys_normal_disable')
+const sys_normal_disable = NORMAL_DISABLE_OPTIONS
 
 const professionList = ref([])
 const open = ref(false)

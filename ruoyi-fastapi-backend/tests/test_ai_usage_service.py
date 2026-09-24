@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
+import pytest
+
+from common.vo import PageModel
+from module_admin.entity.vo.ai_usage_vo import AiUsagePageQueryModel
 from module_admin.service.ai_usage_service import AiUsageService
+from utils.page_util import PageUtil
 
 
 def test_extract_chat_completions_usage_uses_provider_values():
@@ -49,3 +54,20 @@ def test_error_summary_redacts_secrets_and_content():
     assert '***' in summary
     assert len(summary) <= 500
 
+
+@pytest.mark.asyncio
+async def test_list_records_returns_camel_case_page_model(monkeypatch):
+    async def fake_paginate(*_args, **_kwargs):
+        return PageModel(rows=[], pageNum=1, pageSize=20, total=0, hasNext=False)
+
+    monkeypatch.setattr(PageUtil, 'paginate', fake_paginate)
+
+    page = await AiUsageService.list_records(SimpleNamespace(), AiUsagePageQueryModel())
+
+    assert page.model_dump(by_alias=True) == {
+        'rows': [],
+        'pageNum': 1,
+        'pageSize': 20,
+        'total': 0,
+        'hasNext': False,
+    }

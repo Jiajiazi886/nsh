@@ -539,8 +539,6 @@ class DashboardPanelBuilder:
                 '## 首选入口',
                 f'[{TUI_KEYMAP_REGISTRY.get_navigation_shortcut("jobs").upper()}] 任务 · {TUI_DIAGNOSTIC_SERVICE.build_jobs_focus_hint()}',
                 '## 次级入口',
-                f'[{TUI_KEYMAP_REGISTRY.get_navigation_shortcut("configs").upper()}] 参数配置 · {TUI_DIAGNOSTIC_SERVICE.build_configs_focus_hint()}',
-                '## 扩展入口',
                 f'[{TUI_KEYMAP_REGISTRY.get_navigation_shortcut("gen").upper()}] 代码生成 · {TUI_DIAGNOSTIC_SERVICE.build_gen_focus_hint()}',
                 f'[{TUI_KEYMAP_REGISTRY.get_navigation_shortcut("app").upper()}] 应用 · 配置摘要 / 路由状态',
             ]
@@ -590,7 +588,7 @@ class DashboardPanelBuilder:
         else:
             status = 'ok'
             conclusion = '当前核心依赖状态正常，可继续查看业务分区'
-            next_step = '优先查看任务与参数配置页面，确认业务侧是否有风险'
+            next_step = '优先查看任务与缓存页面，确认业务侧是否有风险'
 
         return DashboardPanelSnapshot(
             title='总览判断',
@@ -775,7 +773,7 @@ class DashboardPanelBuilder:
                     summary_label='风险热区',
                     summary_value='0 个',
                     detail='当前没有需要优先处理的失败或警告面板',
-                    suggestion='可继续浏览任务、缓存、参数配置等业务页面',
+                    suggestion='可继续浏览任务、缓存等业务页面',
                 )
             )
         else:

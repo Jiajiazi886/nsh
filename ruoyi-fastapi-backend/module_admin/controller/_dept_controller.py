@@ -7,13 +7,11 @@ from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.annotation.cache_annotation import ApiCache, ApiCacheEvict
-from common.annotation.log_annotation import Log
 from common.aspect.data_scope import DataScopeDependency
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
 from common.constant import ApiGroup, ApiNamespace
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, ResponseBaseModel
 from module_admin.entity.do.dept_do import SysDept
@@ -78,7 +76,6 @@ async def get_system_dept_list(
 )
 @ValidateFields(validate_model='add_dept')
 @ApiCacheEvict(namespaces=ApiGroup.DATA_SCOPE_MUTATION)
-@Log(title='部门管理', business_type=BusinessType.INSERT)
 async def add_system_dept(
     request: Request,
     add_dept: DeptModel,
@@ -104,7 +101,6 @@ async def add_system_dept(
 )
 @ValidateFields(validate_model='edit_dept')
 @ApiCacheEvict(namespaces=ApiGroup.DATA_SCOPE_MUTATION)
-@Log(title='部门管理', business_type=BusinessType.UPDATE)
 async def edit_system_dept(
     request: Request,
     edit_dept: DeptModel,
@@ -130,7 +126,6 @@ async def edit_system_dept(
     dependencies=[UserInterfaceAuthDependency('system:dept:remove')],
 )
 @ApiCacheEvict(namespaces=ApiGroup.DATA_SCOPE_MUTATION)
-@Log(title='部门管理', business_type=BusinessType.DELETE)
 async def delete_system_dept(
     request: Request,
     dept_ids: Annotated[str, Path(description='需要删除的部门id')],

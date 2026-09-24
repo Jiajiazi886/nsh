@@ -127,56 +127,6 @@ def test_complete_output_paths_returns_directories_and_zip_files(
     assert 'build/notes.txt' not in candidates
 
 
-def test_complete_config_keys_returns_dynamic_readonly_choices(monkeypatch: MonkeyPatch) -> None:
-    """
-    校验参数键名补全会返回动态只读查询结果。
-
-    :param monkeypatch: pytest monkeypatch 工具
-    :return: None
-    """
-
-    class _FakeConfigRuntime:
-        """
-        模拟配置运行时模块。
-        """
-
-        class ConfigRuntime:
-            """
-            模拟配置运行时服务对象。
-            """
-
-            @staticmethod
-            def list_configs(**kwargs: str) -> dict:
-                """
-                模拟配置列表查询入口。
-
-                :param kwargs: 查询参数
-                :return: 伪造的结果字典
-                """
-                return kwargs
-
-        CONFIG_RUNTIME = ConfigRuntime()
-
-    monkeypatch.setattr(
-        completion_registry.dynamic_service, 'load_runtime_module', lambda module_name: _FakeConfigRuntime
-    )
-    monkeypatch.setattr(
-        completion_registry.dynamic_service,
-        'run_completion_coroutine',
-        lambda coroutine, *, env: {
-            'ok': True,
-            'items': [
-                {'configKey': 'sys.user.initPassword'},
-                {'configKey': 'sys.user.maxRetryCount'},
-            ],
-        },
-    )
-
-    candidates = completion_gateway.complete_config_keys(None, None, 'sys.user.i')
-
-    assert candidates == ['sys.user.initPassword']
-
-
 def test_complete_gen_table_names_returns_dynamic_readonly_choices(monkeypatch: MonkeyPatch) -> None:
     """
     校验代码生成业务表补全会返回动态只读查询结果。

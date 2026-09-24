@@ -188,10 +188,6 @@ class CacheRuntimeService:
                 if target_keys:
                     await redis.delete(*target_keys)
 
-                if clear_all:
-                    await redis_util.init_sys_dict(redis)
-                    await redis_util.init_sys_config(redis)
-
                 result['message'] = '缓存清理完成'
                 return result
         except redis_error as exc:
@@ -205,10 +201,8 @@ class CacheRuntimeService:
         """
         redis_error = self.infrastructure_gateway.get_redis_error_class()
         try:
-            async with self.redis_support.redis_session() as (redis, redis_util):
-                await redis_util.init_sys_dict(redis)
-                await redis_util.init_sys_config(redis)
-                return {'ok': True, 'message': '缓存预热完成'}
+            async with self.redis_support.redis_session():
+                return {'ok': True, 'message': '当前没有需要预热的字典或参数缓存'}
         except redis_error as exc:
             return self.redis_support.build_redis_error_result('缓存预热失败', exc)
 

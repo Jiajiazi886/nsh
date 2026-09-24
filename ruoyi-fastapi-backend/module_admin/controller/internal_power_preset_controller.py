@@ -5,11 +5,9 @@ from fastapi import Path, Query, Request, Response
 from pydantic_validation_decorator import ValidateFields
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
 from module_admin.entity.vo.internal_power_preset_vo import (
@@ -56,7 +54,6 @@ async def get_system_internal_power_preset_list(
     dependencies=[UserInterfaceAuthDependency('system:internal-power:add')],
 )
 @ValidateFields(validate_model='add_preset')
-@Log(title='内功信息管理', business_type=BusinessType.INSERT)
 async def add_system_internal_power_preset(
     request: Request,
     add_preset: InternalPowerPresetModel,
@@ -79,7 +76,6 @@ async def add_system_internal_power_preset(
     dependencies=[UserInterfaceAuthDependency('system:internal-power:edit')],
 )
 @ValidateFields(validate_model='edit_preset')
-@Log(title='内功信息管理', business_type=BusinessType.UPDATE)
 async def edit_system_internal_power_preset(
     request: Request,
     edit_preset: InternalPowerPresetModel,
@@ -100,7 +96,6 @@ async def edit_system_internal_power_preset(
     response_model=ResponseBaseModel,
     dependencies=[UserInterfaceAuthDependency('system:internal-power:remove')],
 )
-@Log(title='内功信息管理', business_type=BusinessType.DELETE)
 async def delete_system_internal_power_preset(
     request: Request,
     preset_ids: Annotated[str, Path(description='需要删除的预设ID')],

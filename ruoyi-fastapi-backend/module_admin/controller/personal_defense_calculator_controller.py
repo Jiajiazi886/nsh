@@ -3,11 +3,9 @@ from typing import Annotated
 from fastapi import File, Path, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, DynamicResponseModel, ResponseBaseModel
 from module_admin.entity.vo.internal_power_panel_setting_vo import PanelRecognitionResultModel
@@ -75,7 +73,6 @@ async def get_personal_pvp_attack_panels(
     response_model=DataResponseModel[PersonalPvpAttackPanelModel],
     dependencies=[UserInterfaceAuthDependency('personal:defense-calculator:list')],
 )
-@Log(title='个人进攻方面板', business_type=BusinessType.INSERT)
 async def add_personal_pvp_attack_panel(
     request: Request,
     payload: PersonalPvpAttackPanelPayload,
@@ -91,7 +88,6 @@ async def add_personal_pvp_attack_panel(
     response_model=ResponseBaseModel,
     dependencies=[UserInterfaceAuthDependency('personal:defense-calculator:list')],
 )
-@Log(title='个人进攻方面板', business_type=BusinessType.UPDATE)
 async def update_personal_pvp_attack_panel(
     request: Request,
     panel_id: Annotated[int, Path(description='个人进攻方面板ID')],
@@ -108,7 +104,6 @@ async def update_personal_pvp_attack_panel(
     response_model=ResponseBaseModel,
     dependencies=[UserInterfaceAuthDependency('personal:defense-calculator:list')],
 )
-@Log(title='个人进攻方面板', business_type=BusinessType.DELETE)
 async def delete_personal_pvp_attack_panel(
     request: Request,
     panel_id: Annotated[int, Path(description='个人进攻方面板ID')],
@@ -138,7 +133,6 @@ async def get_personal_defense_calculator_setting(
     response_model=DynamicResponseModel[DefenseCalculatorSettingModel],
     dependencies=[UserInterfaceAuthDependency('personal:defense-calculator:list')],
 )
-@Log(title='个人防守计算器设置', business_type=BusinessType.UPDATE)
 async def save_personal_defense_calculator_setting(
     request: Request,
     payload: DefenseCalculatorSettingModel,
@@ -155,7 +149,6 @@ async def save_personal_defense_calculator_setting(
     response_model=DataResponseModel[PanelRecognitionResultModel],
     dependencies=[UserInterfaceAuthDependency('personal:defense-calculator:list')],
 )
-@Log(title='防守面板图片识别', business_type=BusinessType.INSERT)
 async def recognize_defense_panel_image(
     request: Request,
     query_db: Annotated[AsyncSession, DBSessionDependency()],
@@ -176,7 +169,6 @@ async def recognize_defense_panel_image(
     response_model=DataResponseModel[PanelRecognitionResultModel],
     dependencies=[UserInterfaceAuthDependency('personal:defense-calculator:list')],
 )
-@Log(title='内功防御词条图片识别', business_type=BusinessType.INSERT)
 async def recognize_internal_power_benefit_image(
     request: Request,
     query_db: Annotated[AsyncSession, DBSessionDependency()],

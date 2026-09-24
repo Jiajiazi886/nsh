@@ -9,7 +9,6 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir = Join-Path $Root 'ruoyi-fastapi-backend'
 $FrontendDir = Join-Path $Root 'ruoyi-fastapi-frontend'
 $PythonExe = Join-Path $BackendDir '.venv\Scripts\python.exe'
-$RegistrationScript = Join-Path $BackendDir 'enable_local_registration.py'
 $LogDir = Join-Path $Root 'logs\startup'
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 
@@ -54,19 +53,6 @@ function Wait-HttpOk {
   } while ((Get-Date) -lt $deadline)
 
   return $false
-}
-
-function Enable-LocalRegistration {
-  Write-Host 'Enabling local self-registration...'
-  Push-Location $BackendDir
-  try {
-    & $PythonExe $RegistrationScript
-    if ($LASTEXITCODE -ne 0) {
-      throw 'Failed to enable local self-registration in MySQL and Redis.'
-    }
-  } finally {
-    Pop-Location
-  }
 }
 
 function Wait-RegistrationReady {
@@ -130,8 +116,6 @@ if (-not $SkipDependencyCheck) {
 
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
-
-Enable-LocalRegistration
 
 if (Test-Port -Port 9100) {
   $pids = (Get-ListeningPids -Port 9100) -join ', '

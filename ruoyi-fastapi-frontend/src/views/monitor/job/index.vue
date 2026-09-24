@@ -93,7 +93,7 @@
          <el-table-column label="任务名称" align="center" prop="jobName" :show-overflow-tooltip="true" />
          <el-table-column label="任务组名" align="center" prop="jobGroup">
             <template #default="scope">
-               <dict-tag :options="sys_job_group" :value="scope.row.jobGroup" />
+               <el-tag :type="businessOptionType(sys_job_group, scope.row.jobGroup)">{{ businessOptionLabel(sys_job_group, scope.row.jobGroup) }}</el-tag>
             </template>
          </el-table-column>
          <el-table-column label="调用目标字符串" align="center" prop="invokeTarget" :show-overflow-tooltip="true" />
@@ -327,12 +327,15 @@
 </template>
 
 <script setup name="Job">
+import { JOB_EXECUTOR_OPTIONS, JOB_GROUP_OPTIONS, JOB_STATUS_OPTIONS, businessOptionLabel, businessOptionType } from '@/utils/businessOptions'
 import Crontab from '@/components/Crontab'
 import { listJob, getJob, delJob, addJob, updateJob, runJob, changeJobStatus } from "@/api/monitor/job"
 
 const router = useRouter();
 const { proxy } = getCurrentInstance();
-const { sys_job_group, sys_job_status, sys_job_executor } = proxy.useDict("sys_job_group", "sys_job_status", "sys_job_executor");
+const sys_job_group = JOB_GROUP_OPTIONS;
+const sys_job_status = JOB_STATUS_OPTIONS;
+const sys_job_executor = JOB_EXECUTOR_OPTIONS;
 
 const jobList = ref([]);
 const open = ref(false);
@@ -376,11 +379,11 @@ function getList() {
 }
 /** 任务组名字典翻译 */
 function jobGroupFormat(row, column) {
-  return proxy.selectDictLabel(sys_job_group.value, row.jobGroup);
+  return proxy.selectDictLabel(sys_job_group, row.jobGroup);
 }
 /** 任务执行器名字典翻译 */
 function jobExecutorFormat(row, column) {
-  return proxy.selectDictLabel(sys_job_executor.value, row.jobExecutor);
+  return proxy.selectDictLabel(sys_job_executor, row.jobExecutor);
 }
 /** 取消按钮 */
 function cancel() {

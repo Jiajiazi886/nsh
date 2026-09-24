@@ -274,7 +274,7 @@ def test_action_registry_builder_assembles_expected_slots() -> None:
         spec_factory=action_bootstrap_module._ACTION_SPEC_FACTORY,
     ).build()
 
-    assert sorted(registry.browser_resolvers) == ['cache', 'configs', 'gen', 'jobs']
+    assert sorted(registry.browser_resolvers) == ['cache', 'gen', 'jobs']
     assert sorted(registry.detail_resolvers) == ['app', 'crypto', 'database', 'ops']
     assert sorted(registry.browser_resolvers['gen'].slot_templates) == ['global', 'primary', 'secondary', 'utility']
     assert sorted(registry.detail_resolvers['ops'].slot_templates) == ['global', 'primary', 'secondary']
@@ -404,21 +404,21 @@ def test_action_execution_service_execute_appends_env_output_and_yes(monkeypatch
     def _fake_run_nested_cli_command(*arguments: str, parse_json: bool = False) -> SimpleNamespace:
         assert parse_json is True
         calls.append(arguments)
-        return SimpleNamespace(payload={'ok': True, 'message': '参数缓存刷新成功'})
+        return SimpleNamespace(payload={'ok': True, 'message': '任务同步成功'})
 
     monkeypatch.setattr(action_execution_module.NESTED_CLI_SUPPORT, 'run', _fake_run_nested_cli_command)
     spec = actions_module.TuiActionSpec(
-        action_id='config-sync-cache',
-        label='刷新参数缓存',
-        command_args=('config', 'sync-cache'),
-        preview_title='刷新参数缓存',
+        action_id='job-sync',
+        label='同步任务',
+        command_args=('job', 'sync'),
+        preview_title='同步任务',
         preview_lines=['line a'],
     )
 
     result = actions_module.TUI_ACTION_EXECUTION_SERVICE.execute(spec, 'dev')
 
     assert result.ok is True
-    assert calls == [('config', 'sync-cache', '--env=dev', '--output=json', '--yes')]
+    assert calls == [('job', 'sync', '--env=dev', '--output=json', '--yes')]
 
 
 def test_action_execution_service_execute_skips_yes_for_readonly_action(monkeypatch: MonkeyPatch) -> None:
@@ -488,7 +488,6 @@ def test_action_presentation_service_build_browser_action_hint_matches_supported
     :return: None
     """
     assert '[X]' in actions_module.TUI_ACTION_PRESENTATION_SERVICE.build_browser_action_hint('jobs')
-    assert '[Y]' in actions_module.TUI_ACTION_PRESENTATION_SERVICE.build_browser_action_hint('configs')
     assert '[W]' in actions_module.TUI_ACTION_PRESENTATION_SERVICE.build_browser_action_hint('cache')
     assert '[Y] 清理向导' in actions_module.TUI_ACTION_PRESENTATION_SERVICE.build_browser_action_hint('cache')
     assert '[X] 导出向导' in actions_module.TUI_ACTION_PRESENTATION_SERVICE.build_browser_action_hint('gen')

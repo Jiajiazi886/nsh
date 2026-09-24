@@ -18,11 +18,9 @@ from fastapi.responses import StreamingResponse
 from pydantic_validation_decorator import ValidateFields
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
 from module_admin.entity.vo.user_vo import CurrentUserModel
@@ -72,7 +70,6 @@ async def get_{{ moduleName }}_{{ businessName }}_list(
     dependencies=[UserInterfaceAuthDependency('{{ permissionPrefix }}:add')],
 )
 @ValidateFields(validate_model='add_{{ businessName }}')
-@Log(title='{{ functionName }}', business_type=BusinessType.INSERT)
 async def add_{{ moduleName }}_{{ businessName }}(
     request: Request,
     add_{{ businessName }}: {{ BusinessName }}Model,
@@ -104,7 +101,6 @@ async def add_{{ moduleName }}_{{ businessName }}(
     dependencies=[UserInterfaceAuthDependency('{{ permissionPrefix }}:edit')],
 )
 @ValidateFields(validate_model='edit_{{ businessName }}')
-@Log(title='{{ functionName }}', business_type=BusinessType.UPDATE)
 async def edit_{{ moduleName }}_{{ businessName }}(
     request: Request,
     edit_{{ businessName }}: {{ BusinessName }}Model,
@@ -131,7 +127,6 @@ async def edit_{{ moduleName }}_{{ businessName }}(
     response_model=ResponseBaseModel,
     dependencies=[UserInterfaceAuthDependency('{{ permissionPrefix }}:remove')],
 )
-@Log(title='{{ functionName }}', business_type=BusinessType.DELETE)
 async def delete_{{ moduleName }}_{{ businessName }}(
     request: Request,
     {{ pk_field }}s: Annotated[str, Path(description='需要删除的{{ pk_field_comment }}')],
@@ -177,7 +172,6 @@ async def query_detail_{{ moduleName }}_{{ businessName }}(
     },
     dependencies=[UserInterfaceAuthDependency('{{ permissionPrefix }}:export')],
 )
-@Log(title='{{ functionName }}', business_type=BusinessType.EXPORT)
 async def export_{{ moduleName }}_{{ businessName }}_list(
     request: Request,
     {{ businessName }}_page_query: Annotated[{{ BusinessName }}PageQueryModel, Form()],
@@ -185,7 +179,7 @@ async def export_{{ moduleName }}_{{ businessName }}_list(
 ) -> Response:
     # 获取全量数据
     {{ businessName }}_query_result = await {{ BusinessName }}Service.get_{{ businessName }}_list_services(query_db, {{ businessName }}_page_query, is_page=False)
-    {{ businessName }}_export_result = await {{ BusinessName }}Service.export_{{ businessName }}_list_services({% if dicts %}request, {% endif %}{{ businessName }}_query_result)
+    {{ businessName }}_export_result = await {{ BusinessName }}Service.export_{{ businessName }}_list_services({{ businessName }}_query_result)
     logger.info('导出成功')
 
     return ResponseUtil.streaming(data=bytes2file_response({{ businessName }}_export_result))

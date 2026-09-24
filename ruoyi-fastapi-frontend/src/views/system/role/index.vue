@@ -233,12 +233,13 @@
 </template>
 
 <script setup name="Role">
+import { NORMAL_DISABLE_OPTIONS } from '@/utils/businessOptions'
 import { addRole, changeRoleStatus, delRole, getRole, listRole, menuScope, updateRole } from "@/api/system/role";
 import { roleMenuTreeselect, treeselect as menuTreeselect } from "@/api/system/menu";
 
 const router = useRouter();
 const { proxy } = getCurrentInstance();
-const { sys_normal_disable } = proxy.useDict("sys_normal_disable");
+const sys_normal_disable = NORMAL_DISABLE_OPTIONS;
 
 const roleList = ref([]);
 const open = ref(false);

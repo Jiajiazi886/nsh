@@ -12,7 +12,6 @@ from config.get_redis import RedisUtil
 from config.get_scheduler import SchedulerUtil
 from exceptions.handle import handle_exception
 from middlewares.handle import handle_middleware
-from module_admin.service.log_service import LogAggregatorService
 from sub_applications.handle import handle_sub_applications
 from utils.common_util import worship
 from utils.log_util import logger
@@ -28,7 +27,6 @@ async def _start_background_tasks(app: FastAPI) -> None:
     :return: None
     """
     await SchedulerUtil.init_system_scheduler(app.state.redis)
-    app.state.log_aggregator_task = asyncio.create_task(LogAggregatorService.consume_stream(app.state.redis))
 
 
 async def _stop_background_tasks(app: FastAPI) -> None:
@@ -38,13 +36,6 @@ async def _stop_background_tasks(app: FastAPI) -> None:
     :param app: FastAPI对象
     :return: None
     """
-    log_task = getattr(app.state, 'log_aggregator_task', None)
-    if log_task:
-        log_task.cancel()
-        try:
-            await log_task
-        except asyncio.CancelledError:
-            pass
     lock_task = getattr(app.state, 'lock_renewal_task', None)
     if lock_task:
         lock_task.cancel()
@@ -93,8 +84,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         TransportKeyProvider.validate_runtime_configuration()
         await init_create_table()
         await RedisUtil.check_redis_connection(app.state.redis, log_enabled=startup_log_enabled)
-        await RedisUtil.init_sys_dict(app.state.redis)
-        await RedisUtil.init_sys_config(app.state.redis)
+        await RedisUtil.cleanup_removed_legacy_keys(app.state.redis)
         await _start_background_tasks(app)
 
     if startup_log_enabled:

@@ -2,7 +2,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import Connection, inspect, text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from config.env import DataBaseConfig
@@ -12,6 +12,34 @@ BASELINE_PATH = Path(__file__).with_name('project_menu_baseline.json')
 LEGACY_MENU_IDS = (4, 99, 118, 119, 1061, 1062, 1063, 1064)
 BUILTIN_ROLE_IDS = (1, 2, 100)
 DEFENSE_CALCULATOR_RENAME_VERSION = '20260813_rename_defense_calculator'
+SYSTEM_SLIMMING_VERSION = '20260924_system_slimming_ai_usage'
+REMOVED_MENU_IDS = (
+    105,
+    106,
+    108,
+    500,
+    501,
+    1025,
+    1026,
+    1027,
+    1028,
+    1029,
+    1030,
+    1031,
+    1032,
+    1033,
+    1034,
+    1039,
+    1040,
+    1041,
+    1042,
+    1043,
+    1044,
+    1045,
+    3120,
+    3121,
+    3122,
+)
 MENU_COLUMNS = (
     'menu_id',
     'menu_name',
@@ -98,6 +126,90 @@ async def _apply_local_parity_menu_baseline(conn: AsyncConnection, baseline: dic
         )
 
 
+def _schema_snapshot(sync_conn: Connection) -> tuple[set[str], dict[str, set[str]]]:
+    inspector = inspect(sync_conn)
+    table_names = set(inspector.get_table_names())
+    columns = {
+        table_name: {column['name'] for column in inspector.get_columns(table_name)}
+        for table_name in ('sys_user', 'gen_table_column')
+        if table_name in table_names
+    }
+    return table_names, columns
+
+
+async def _apply_system_slimming(conn: AsyncConnection) -> None:
+    table_names, columns = await conn.run_sync(_schema_snapshot)
+
+    default_count = 0
+    vip_grant_count = 0
+    if 'sys_config' in table_names:
+        rows = (
+            await conn.execute(
+                text(
+                    'SELECT config_key, config_value FROM sys_config '
+                    'WHERE config_key IN (:default_key, :vip_key)'
+                ),
+                {
+                    'default_key': 'sys.user.defaultAiImageRecognitionCount',
+                    'vip_key': 'sys.user.vipAiImageRecognitionGrantCount',
+                },
+            )
+        ).mappings()
+        for row in rows:
+            try:
+                value = max(0, int(row['config_value'] or 0))
+            except (TypeError, ValueError):
+                value = 0
+            if row['config_key'] == 'sys.user.defaultAiImageRecognitionCount':
+                default_count = value
+            elif row['config_key'] == 'sys.user.vipAiImageRecognitionGrantCount':
+                vip_grant_count = value
+
+    if DataBaseConfig.db_type == 'postgresql':
+        policy_sql = """
+        INSERT INTO ai_usage_policy (
+          policy_id, default_recognition_count, vip_grant_count, update_by, update_time
+        ) VALUES (1, :default_count, :vip_grant_count, 'system', CURRENT_TIMESTAMP)
+        ON CONFLICT (policy_id) DO UPDATE SET
+          default_recognition_count = EXCLUDED.default_recognition_count,
+          vip_grant_count = EXCLUDED.vip_grant_count,
+          update_by = 'system', update_time = CURRENT_TIMESTAMP
+        """
+    else:
+        policy_sql = """
+        INSERT INTO ai_usage_policy (
+          policy_id, default_recognition_count, vip_grant_count, update_by, update_time
+        ) VALUES (1, :default_count, :vip_grant_count, 'system', CURRENT_TIMESTAMP)
+        ON DUPLICATE KEY UPDATE
+          default_recognition_count = VALUES(default_recognition_count),
+          vip_grant_count = VALUES(vip_grant_count),
+          update_by = 'system', update_time = CURRENT_TIMESTAMP
+        """
+    await conn.execute(
+        text(policy_sql),
+        {'default_count': default_count, 'vip_grant_count': vip_grant_count},
+    )
+
+    menu_params = {f'menu_{index}': menu_id for index, menu_id in enumerate(REMOVED_MENU_IDS)}
+    menu_slots = ', '.join(f':menu_{index}' for index in range(len(REMOVED_MENU_IDS)))
+    await conn.execute(text(f'DELETE FROM sys_role_menu WHERE menu_id IN ({menu_slots})'), menu_params)
+    await conn.execute(text(f'DELETE FROM sys_menu WHERE menu_id IN ({menu_slots})'), menu_params)
+    await conn.execute(
+        text(
+            "UPDATE sys_menu SET menu_name = '大模型配置', remark = '大模型连接与Token请求记录' "
+            "WHERE menu_id = 3050 OR component = 'system/aiKey/index'"
+        )
+    )
+
+    if 'sex' in columns.get('sys_user', set()):
+        await conn.execute(text('ALTER TABLE sys_user DROP COLUMN sex'))
+    if 'dict_type' in columns.get('gen_table_column', set()):
+        await conn.execute(text('ALTER TABLE gen_table_column DROP COLUMN dict_type'))
+
+    for table_name in ('sys_dict_data', 'sys_dict_type', 'sys_config', 'sys_oper_log', 'sys_logininfor'):
+        await conn.execute(text(f'DROP TABLE IF EXISTS {table_name}'))
+
+
 async def run_schema_migrations(conn: AsyncConnection) -> None:
     """Run project data migrations once and keep later administrator permission edits intact."""
     await conn.execute(text(_migration_table_sql()))
@@ -137,3 +249,18 @@ async def run_schema_migrations(conn: AsyncConnection) -> None:
             },
         )
         logger.info(f'已应用数据库迁移：{DEFENSE_CALCULATOR_RENAME_VERSION}')
+
+    slimming_applied = await conn.scalar(
+        text('SELECT 1 FROM app_schema_migration WHERE version = :version'),
+        {'version': SYSTEM_SLIMMING_VERSION},
+    )
+    if not slimming_applied:
+        await _apply_system_slimming(conn)
+        await conn.execute(
+            text('INSERT INTO app_schema_migration (version, description) VALUES (:version, :description)'),
+            {
+                'version': SYSTEM_SLIMMING_VERSION,
+                'description': 'Remove dictionaries, dynamic parameters and legacy audit logs; preserve AI quota policy',
+            },
+        )
+        logger.info(f'已应用数据库迁移：{SYSTEM_SLIMMING_VERSION}')

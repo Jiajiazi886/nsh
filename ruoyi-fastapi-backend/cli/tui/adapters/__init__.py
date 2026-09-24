@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 from cli.tui.adapters.app import APP_DETAIL_ADAPTER as _APP_DETAIL_ADAPTER
 from cli.tui.adapters.cache import CACHE_BROWSER_ADAPTER as _CACHE_BROWSER_ADAPTER
-from cli.tui.adapters.configs import CONFIGS_BROWSER_ADAPTER as _CONFIGS_BROWSER_ADAPTER
 from cli.tui.adapters.crypto import CRYPTO_DETAIL_ADAPTER as _CRYPTO_DETAIL_ADAPTER
 from cli.tui.adapters.database import DATABASE_DETAIL_ADAPTER as _DATABASE_DETAIL_ADAPTER
 from cli.tui.adapters.gen import GEN_BROWSER_ADAPTER as _GEN_BROWSER_ADAPTER
@@ -81,7 +80,6 @@ TUI_SNAPSHOT_COLLECTOR_REGISTRY = TuiSnapshotCollectorRegistry(
         'cache': _CACHE_BROWSER_ADAPTER.collect_snapshot,
         'jobs': _JOBS_BROWSER_ADAPTER.collect_snapshot,
         'gen': _GEN_BROWSER_ADAPTER.collect_snapshot,
-        'configs': _CONFIGS_BROWSER_ADAPTER.collect_snapshot,
         'crypto': _CRYPTO_DETAIL_ADAPTER.collect_snapshot,
     }
 )

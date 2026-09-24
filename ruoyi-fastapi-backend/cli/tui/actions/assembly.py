@@ -45,12 +45,6 @@ class TuiActionRegistryBuilder:
                     },
                     spec_factory=self.spec_factory,
                 ),
-                'configs': TuiActionSlotResolver(
-                    slot_templates={
-                        'global': self.static.create_config_sync_template(),
-                    },
-                    spec_factory=self.spec_factory,
-                ),
                 'cache': TuiActionSlotResolver(
                     slot_templates={
                         'global': self.cache.create_clear_wizard_template(),

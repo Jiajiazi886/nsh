@@ -383,7 +383,6 @@ class GenTableService:
                     prev_column = table_column_map[column.column_name]
                     column.column_id = prev_column.column_id
                     if column.list:
-                        column.dict_type = prev_column.dict_type
                         column.query_type = prev_column.query_type
                     if (
                         prev_column.is_required != ''

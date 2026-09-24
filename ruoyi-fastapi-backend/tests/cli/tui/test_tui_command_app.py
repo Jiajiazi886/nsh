@@ -222,36 +222,6 @@ def test_tui_app_show_jobs_uses_remembered_filter(
     assert recorded_filter_keys == [('failed', 'sync')]
 
 
-def test_tui_app_show_configs_uses_remembered_filter(
-    monkeypatch: MonkeyPatch,
-    tui_modules: SimpleNamespace,
-) -> None:
-    recorded_filter_keys: list[tuple[str, str]] = []
-    app = tui_modules.cli_tui_app.RuoyiTuiApp('dev')
-    app.remember_browser_filter('configs', 'cache-drift')
-    app.remember_browser_query('configs', 'site')
-    monkeypatch.setitem(
-        tui_modules.cli_tui_app.TUI_SNAPSHOT_COLLECTOR_REGISTRY.collectors,
-        'configs',
-        lambda env, filter_key='all', query='': (
-            recorded_filter_keys.append((filter_key, query))
-            or tui_modules.cli_tui_app.BrowserPageSnapshot(
-                title='参数配置',
-                subtitle='subtitle',
-                records=[],
-                shared_sections=[],
-                filters=[],
-                active_filter_key=filter_key,
-                search=None,
-            )
-        ),
-    )
-    monkeypatch.setattr(app.screen_navigator, 'show', lambda screen: None)
-    app.action_show_configs()
-
-    assert recorded_filter_keys == [('cache-drift', 'site')]
-
-
 def test_tui_app_show_cache_and_gen_use_remembered_query(
     monkeypatch: MonkeyPatch,
     tui_modules: SimpleNamespace,

@@ -604,31 +604,6 @@ class DomainDynamicCompletionProvider:
         """
         self.dynamic_service = DynamicCompletionService(context_resolver=self.context_resolver)
 
-    def complete_config_keys(
-        self,
-        ctx: click.Context | None,
-        args: list[str] | None,
-        incomplete: str,
-    ) -> list[str]:
-        """
-        为参数键名提供动态只读补全结果。
-
-        :param ctx: Click 上下文
-        :param args: 当前命令参数列表
-        :param incomplete: 当前未完成输入片段
-        :return: 参数键名列表
-        """
-        del args
-        return self.dynamic_service.complete_dynamic_items(
-            ctx,
-            incomplete,
-            runtime_module_name='cli.runtime.config',
-            runtime_object_name='CONFIG_RUNTIME',
-            runtime_method_name='list_configs',
-            runtime_kwargs={'config_key': incomplete, 'paged': True, 'page_num': 1, 'page_size': 20},
-            field_name='configKey',
-        )
-
     def complete_gen_table_names(
         self,
         ctx: click.Context | None,
@@ -920,22 +895,6 @@ class CompletionProviderGateway:
         :return: 目录或 zip 文件路径列表
         """
         return self.provider_registry.path_provider.complete_output_paths(ctx, args, incomplete)
-
-    def complete_config_keys(
-        self,
-        ctx: click.Context | None,
-        args: list[str] | None,
-        incomplete: str,
-    ) -> list[str]:
-        """
-        为参数键名提供动态只读补全结果。
-
-        :param ctx: Click 上下文
-        :param args: 当前命令参数列表
-        :param incomplete: 当前未完成输入片段
-        :return: 参数键名列表
-        """
-        return self.provider_registry.domain_provider.complete_config_keys(ctx, args, incomplete)
 
     def complete_gen_table_names(
         self,

@@ -3,11 +3,9 @@ from typing import Annotated
 from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import ResponseBaseModel
 from exceptions.exception import ServiceException
@@ -28,7 +26,6 @@ battle_controller = APIRouterPro(
     response_model=ResponseBaseModel,
     dependencies=[UserInterfaceAuthDependency('guild:battle:import')],
 )
-@Log(title='约战管理', business_type=BusinessType.IMPORT)
 async def import_battle(
     request: Request,
     import_data: BattleImportModel,

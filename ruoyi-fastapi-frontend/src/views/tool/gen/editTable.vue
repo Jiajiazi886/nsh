@@ -100,20 +100,6 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="字典类型" min-width="12%">
-            <template #default="scope">
-              <el-select v-model="scope.row.dictType" clearable filterable placeholder="请选择">
-                <el-option
-                  v-for="dict in dictOptions"
-                  :key="dict.dictType"
-                  :label="dict.dictName"
-                  :value="dict.dictType">
-                  <span style="float: left">{{ dict.dictName }}</span>
-                  <span style="float: right; color: #8492a6; font-size: 13px">{{ dict.dictType }}</span>
-              </el-option>
-              </el-select>
-            </template>
-          </el-table-column>
         </el-table>
       </el-tab-pane>
       <el-tab-pane label="生成信息" name="genInfo">
@@ -131,7 +117,6 @@
 
 <script setup name="GenEdit">
 import { getGenTable, updateGenTable } from "@/api/tool/gen";
-import { optionselect as getDictOptionselect } from "@/api/system/dict/type";
 import basicInfoForm from "./basicInfoForm";
 import genInfoForm from "./genInfoForm";
 import Sortable from 'sortablejs';
@@ -143,7 +128,6 @@ const activeName = ref("columnInfo");
 const tableHeight = ref(document.documentElement.scrollHeight - 245 + "px");
 const tables = ref([]);
 const columns = ref([]);
-const dictOptions = ref([]);
 const info = ref({});
 
 /** 提交按钮 */
@@ -194,10 +178,6 @@ function close() {
       columns.value = res.data.rows;
       info.value = res.data.info;
       tables.value = res.data.tables;
-    });
-    /** 查询字典下拉列表 */
-    getDictOptionselect().then(response => {
-      dictOptions.value = response.data;
     });
   }
 })();

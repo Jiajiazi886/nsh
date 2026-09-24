@@ -221,7 +221,7 @@ ruoyi db upgrade --env=dev --revision=head --yes
 
 ```bash
 ruoyi cache stats --env=dev
-ruoyi cache keys sys_config --env=dev --output=json
+ruoyi cache keys login_tokens --env=dev --output=json
 ruoyi job list --env=dev --output=json
 ruoyi job sync --env=dev --yes
 ```
@@ -316,10 +316,10 @@ ruoyi ops server-info --env=dev --output=json
 ruoyi cache stats --env=dev
 ruoyi cache stats --env=dev --output=json
 ruoyi cache keys login_tokens --env=dev --output=json
-ruoyi cache get sys_config site.name --env=dev --output=json
-ruoyi cache ttl sys_config site.name --env=dev --output=json
-ruoyi cache clear --env=dev --cache-name=sys_config --yes
-ruoyi cache clear --env=dev --cache-key=site.name --yes
+ruoyi cache get login_tokens user:1 --env=dev --output=json
+ruoyi cache ttl login_tokens user:1 --env=dev --output=json
+ruoyi cache clear --env=dev --cache-name=login_tokens --yes
+ruoyi cache clear --env=dev --cache-key=user:1 --yes
 ruoyi cache clear --env=dev --all --yes
 ruoyi cache warmup --env=dev --yes
 ```
@@ -341,31 +341,7 @@ ruoyi job sync --env=dev --yes
 ruoyi job run-once 1 --env=prod --allow-prod --yes
 ```
 
-### 5.6 `config`
-
-用于系统参数配置读取、写入和缓存同步。
-
-```bash
-ruoyi config list --env=dev --output=json
-ruoyi config list --env=dev --paged
-ruoyi config get <config-key> --env=dev --output=json
-ruoyi config get <config-key> --env=dev --source=both --output=json
-ruoyi config get <config-key> --env=dev --source=db --output=json
-ruoyi config get <config-key> --env=dev --source=cache
-ruoyi config doctor --env=dev --output=json
-ruoyi config set sys.user.initPassword --env=dev --value=123456 --name="初始密码" --yes
-ruoyi config set sys.user.initPassword --env=dev --value=123456 --remark="CLI update" --yes
-ruoyi config sync-cache --env=dev --yes
-```
-
-说明：
-
-- `config get --source=both` 会同时读取数据库和 Redis，并在 JSON 中返回 `database`、`cache` 与 `inSync`
-- `config get --source=db` 只读取参数配置表，适合确认数据库中的真实存量值
-- `config get --source=cache` 只读取 Redis 缓存，适合确认当前运行时命中的值
-- 如果某个键只在缓存里存在、不在数据库里存在，`--source=db` 会返回“参数配置不存在”，这代表数据库侧没有对应记录，不表示缓存读取异常
-
-### 5.7 `crypto`
+### 5.6 `crypto`
 
 用于传输加密配置校验、公钥导出和密钥辅助操作。
 

@@ -386,7 +386,13 @@ class BattleRegistrationService:
 
     @classmethod
     def _build_join_remark(cls, data: PublicBattleJoinApplicationModel) -> list[str]:
-        remark_parts = cls._build_join_remark(data)
+        remark_parts: list[str] = []
+        if data.applicant_name:
+            remark_parts.append(f'申请人：{data.applicant_name.strip()}')
+        if data.applicant_contact:
+            remark_parts.append(f'联系方式：{data.applicant_contact.strip()}')
+        if data.remark:
+            remark_parts.append(data.remark.strip())
         return remark_parts
 
     @classmethod

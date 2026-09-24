@@ -5,11 +5,9 @@ from fastapi import Path, Query, Request, Response
 from pydantic_validation_decorator import ValidateFields
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
 from module_admin.entity.vo.damage_formula_version_vo import (
@@ -76,7 +74,6 @@ async def get_formula_version_list(
     ],
 )
 @ValidateFields(validate_model='add_version')
-@Log(title='公式设计', business_type=BusinessType.INSERT)
 async def add_formula_version(
     request: Request,
     add_version: DamageFormulaVersionModel,
@@ -103,7 +100,6 @@ async def add_formula_version(
     ],
 )
 @ValidateFields(validate_model='edit_version')
-@Log(title='公式设计', business_type=BusinessType.UPDATE)
 async def edit_formula_version(
     request: Request,
     edit_version: DamageFormulaVersionModel,
@@ -128,7 +124,6 @@ async def edit_formula_version(
         RoleInterfaceAuthDependency('admin'),
     ],
 )
-@Log(title='公式设计', business_type=BusinessType.INSERT)
 async def copy_formula_version(
     request: Request,
     version_id: Annotated[int, Path(description='公式版本ID')],
@@ -152,7 +147,6 @@ async def copy_formula_version(
         RoleInterfaceAuthDependency('admin'),
     ],
 )
-@Log(title='公式设计', business_type=BusinessType.UPDATE)
 async def publish_formula_version(
     request: Request,
     version_id: Annotated[int, Path(description='公式版本ID')],
@@ -176,7 +170,6 @@ async def publish_formula_version(
         RoleInterfaceAuthDependency('admin'),
     ],
 )
-@Log(title='公式设计', business_type=BusinessType.UPDATE)
 async def rollback_formula_version(
     request: Request,
     version_id: Annotated[int, Path(description='公式版本ID')],

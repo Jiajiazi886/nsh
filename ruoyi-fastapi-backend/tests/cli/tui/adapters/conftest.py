@@ -49,11 +49,6 @@ def gen_adapter() -> ModuleType:
 
 
 @pytest.fixture
-def configs_adapter() -> ModuleType:
-    return _load_adapter_module('cli.tui.adapters.configs')
-
-
-@pytest.fixture
 def ops_adapter() -> ModuleType:
     return _load_adapter_module('cli.tui.adapters.ops')
 

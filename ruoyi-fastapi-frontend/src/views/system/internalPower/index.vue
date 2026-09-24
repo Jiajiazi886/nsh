@@ -154,7 +154,6 @@ import {
   listInternalPowerPreset,
   updateInternalPowerPreset
 } from '@/api/system/internalPowerPreset'
-import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
 
 const { proxy } = getCurrentInstance()
 const baseApi = import.meta.env.VITE_APP_BASE_API
@@ -171,7 +170,6 @@ const elementOptions = [
 ]
 
 const presetList = ref([])
-const imageDisplayEnabled = ref(true)
 const loading = ref(true)
 const showSearch = ref(true)
 const open = ref(false)
@@ -341,17 +339,7 @@ function toPayload(value) {
   return payload
 }
 
-async function loadImageDisplayStatus() {
-  try {
-    const response = await getInternalPowerImageDisplayStatus()
-    imageDisplayEnabled.value = response.data?.enabled !== false
-  } catch {
-    imageDisplayEnabled.value = true
-  }
-}
-
 function resolveImageUrl(url = '') {
-  if (!imageDisplayEnabled.value) return ''
   const value = String(url || '').trim()
   if (!value) return ''
   if (/^(https?:)?\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) return value
@@ -399,7 +387,7 @@ function formatBonus(value) {
   return `${Number(value || 0).toFixed(1)}%`
 }
 
-loadImageDisplayStatus().finally(getList)
+getList()
 </script>
 
 <style scoped>

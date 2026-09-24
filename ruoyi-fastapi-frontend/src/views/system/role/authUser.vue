@@ -65,7 +65,7 @@
          <el-table-column label="手机" prop="phonenumber" :show-overflow-tooltip="true" />
          <el-table-column label="状态" align="center" prop="status">
             <template #default="scope">
-               <dict-tag :options="sys_normal_disable" :value="scope.row.status" />
+               <el-tag :type="businessOptionType(sys_normal_disable, scope.row.status)">{{ businessOptionLabel(sys_normal_disable, scope.row.status) }}</el-tag>
             </template>
          </el-table-column>
          <el-table-column label="创建时间" align="center" prop="createTime" width="180">
@@ -92,12 +92,13 @@
 </template>
 
 <script setup name="AuthUser">
+import { NORMAL_DISABLE_OPTIONS, businessOptionLabel, businessOptionType } from '@/utils/businessOptions'
 import selectUser from "./selectUser";
 import { allocatedUserList, authUserCancel, authUserCancelAll } from "@/api/system/role";
 
 const route = useRoute();
 const { proxy } = getCurrentInstance();
-const { sys_normal_disable } = proxy.useDict("sys_normal_disable");
+const sys_normal_disable = NORMAL_DISABLE_OPTIONS;
 
 const userList = ref([]);
 const loading = ref(true);

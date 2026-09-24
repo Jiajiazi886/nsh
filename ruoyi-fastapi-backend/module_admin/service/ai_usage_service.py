@@ -193,17 +193,17 @@ class AiUsageService:
     async def list_records(
         cls, db: AsyncSession, query: AiUsagePageQueryModel
     ) -> PageModel[AiUsageRecordModel]:
-        statement = select(AiRequestUsageLog).where(and_(*cls._filters(query))).order_by(
+        statement = select(AiRequestUsageLog).where(and_(True, *cls._filters(query))).order_by(
             AiRequestUsageLog.request_time.desc(), AiRequestUsageLog.record_id.desc()
         )
         page = await PageUtil.paginate(db, statement, query.page_num, query.page_size, True)
         rows = [cls._to_record_model(item) for item in page.rows]
         return PageModel(
             rows=rows,
-            page_num=page.page_num,
-            page_size=page.page_size,
+            pageNum=page.page_num,
+            pageSize=page.page_size,
             total=page.total,
-            has_next=page.has_next,
+            hasNext=page.has_next,
         )
 
     @classmethod
@@ -215,7 +215,7 @@ class AiUsageService:
                     func.sum(case((AiRequestUsageLog.usage_reported == '1', 1), else_=0)),
                     func.sum(case((AiRequestUsageLog.usage_reported == '0', 1), else_=0)),
                     func.coalesce(func.sum(AiRequestUsageLog.total_tokens), 0),
-                ).where(and_(*cls._filters(query)))
+                ).where(and_(True, *cls._filters(query)))
             )
         ).one()
         return AiUsageSummaryModel(

@@ -6,7 +6,6 @@ VIEW_LABELS = {
     'cache': '缓存',
     'jobs': '任务',
     'gen': '代码生成',
-    'configs': '参数配置',
     'crypto': '加密',
 }
 
@@ -53,7 +52,6 @@ NAVIGATION_DESCRIPTIONS = {
     'cache': 'Redis 容量、热点与命中信号',
     'jobs': '定时任务、执行轨迹与失败样本',
     'gen': '业务表、字段与生成配置',
-    'configs': '配置巡检、漂移与异常值',
     'crypto': '传输加密校验、公钥身份与兼容版本',
 }
 
@@ -72,7 +70,6 @@ ACTION_LABELS = {
     'cache_clear_wizard': '打开缓存清理向导',
     'cache_warmup': '执行缓存预热',
     'completion_install': '安装当前 Shell 补全',
-    'config_sync': '刷新参数缓存',
     'crypto_keygen': '打开密钥生成入口',
     'crypto_rotate_dry_run': '执行轮换预演',
     'db_init_dry_run': '执行初始化预演',
@@ -91,9 +88,8 @@ ACTION_LABELS = {
 }
 
 ACTION_SCOPE_LABELS = {
-    'cache_warmup': '系统字典与系统参数基础缓存',
+    'cache_warmup': '运行时基础缓存',
     'completion_install': '当前终端活动 Shell 的补全安装流程',
-    'config_sync': '当前环境全部系统参数',
     'db_init_dry_run': '当前环境数据库初始化流程',
     'gen_export_dry_run': '当前业务表的代码导出结果预演',
     'gen_sync_db': '当前业务表对应的生成配置和物理表结构',
@@ -105,7 +101,6 @@ ACTION_SCOPE_LABELS = {
 ACTION_PURPOSE_LABELS = {
     'cache_warmup': '重建运行所需的基础缓存内容',
     'completion_install': '自动识别当前 Shell，写入补全脚本并按需更新 rc 文件激活命令',
-    'config_sync': '将数据库中的参数值重新写入 Redis 缓存',
     'db_init_dry_run': '仅预演初始化到最新迁移版本，不直接执行真实升级',
     'gen_export_dry_run': '先演练导出流程并确认输出模式、模板数量和结果摘要',
     'gen_sync_db': '将数据库中的最新字段结构同步回当前业务表配置',
@@ -211,7 +206,6 @@ CAPABILITY_LABELS = {
     'cache_clear_wizard': ACTION_LABELS['cache_clear_wizard'],
     'cache_warmup': ACTION_LABELS['cache_warmup'],
     'completion_install': ACTION_LABELS['completion_install'],
-    'config_sync': ACTION_LABELS['config_sync'],
     'crypto_keygen': ACTION_LABELS['crypto_keygen'],
     'crypto_rotate_dry_run': ACTION_LABELS['crypto_rotate_dry_run'],
     'db_init_dry_run': ACTION_LABELS['db_init_dry_run'],
@@ -234,7 +228,6 @@ CAPABILITY_HINT_LABELS = {
     'cache_clear_wizard': '清理向导',
     'cache_warmup': '执行缓存预热',
     'completion_install': '安装补全',
-    'config_sync': '刷新参数缓存',
     'crypto_keygen': '密钥生成',
     'crypto_rotate_dry_run': '执行轮换预演',
     'db_init_dry_run': '初始化预演',
@@ -315,7 +308,6 @@ ACTION_HINT_COPY = {
     'browser_default': '当前页面以浏览为主。{interaction_hint}',
     'browser_templates': {
         'cache': '建议先核对 Redis 概览与键值样本，再决定预热或进入清理向导。{interaction_hint}',
-        'configs': '建议先看高风险配置，再决定是否刷新参数缓存。{interaction_hint}',
         'gen': '建议先看生成前校验、同步预检查与代码预览，再决定是否进入导入向导、同步表结构或进入导出向导。{interaction_hint}',
         'jobs': '建议先看失败聚合，再决定执行一次、暂停恢复或同步调度。{interaction_hint}',
     },

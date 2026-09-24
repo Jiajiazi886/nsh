@@ -20,6 +20,7 @@ from module_admin.entity.vo.user_vo import CurrentUserModel, EditUserModel
 from module_admin.service.login_service import CustomOAuth2PasswordRequestForm, LoginService, oauth2_scheme
 from module_admin.service.user_service import UserService
 from utils.log_util import logger
+from utils.login_info_util import build_login_info
 from utils.response_util import ResponseUtil
 
 login_controller = APIRouterPro(order_num=1, tags=['登录模块'])
@@ -48,6 +49,7 @@ async def login(
     form_data: Annotated[CustomOAuth2PasswordRequestForm, Depends()],
     query_db: Annotated[AsyncSession, DBSessionDependency()],
 ) -> Response:
+    form_data.login_info = await build_login_info(request)
     captcha_enabled = AccountConfig.account_captcha_enabled
     user = UserLogin(
         userName=form_data.username,

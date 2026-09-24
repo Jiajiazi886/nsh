@@ -3,11 +3,9 @@ from typing import Annotated
 from fastapi import Path, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, ResponseBaseModel
 from module_admin.entity.vo.pvp_defense_profession_bonus_vo import ProfessionBonusModel, ProfessionBonusUpdateModel
@@ -47,7 +45,6 @@ async def list_profession_bonuses(
         RoleInterfaceAuthDependency('admin'),
     ],
 )
-@Log(title='职业加成设置', business_type=BusinessType.UPDATE)
 async def update_profession_bonus(
     request: Request,
     profession_id: Annotated[int, Path(description='职业ID')],

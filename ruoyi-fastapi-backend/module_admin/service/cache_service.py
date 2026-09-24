@@ -2,7 +2,6 @@ from fastapi import Request
 
 from common.enums import RedisInitKeyConfig
 from common.vo import CrudResponseModel
-from config.get_redis import RedisUtil
 from module_admin.entity.vo.cache_vo import CacheInfoModel, CacheMonitorModel
 
 
@@ -119,8 +118,5 @@ class CacheService:
         cache_keys = await request.app.state.redis.keys()
         if cache_keys:
             await request.app.state.redis.delete(*cache_keys)
-
-        await RedisUtil.init_sys_dict(request.app.state.redis)
-        await RedisUtil.init_sys_config(request.app.state.redis)
 
         return CrudResponseModel(is_success=True, message='所有缓存清除成功')

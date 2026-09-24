@@ -899,7 +899,6 @@ import {
   listPersonalDefenseAttackPanels
 } from '@/api/personal/defenseCalculator'
 import { getActiveFormulaVersion } from '@/api/system/formulaDesign'
-import { getInternalPowerImageDisplayStatus } from '@/api/system/internalPowerImageDisplay'
 import {
   FORMULA_SCOPE_INTERNAL_POWER_PVP,
   formatBenefitPercent,
@@ -1212,7 +1211,6 @@ const elementSummaryText = computed(() => {
 })
 
 onMounted(async () => {
-  await loadImageDisplayStatus()
   await loadActiveFormulaPackage()
   await loadPowerCatalog()
   await loadEntryOptions()
@@ -1245,15 +1243,6 @@ watch(
   () => route.query.action,
   action => consumeSkillRouteAction(action)
 )
-
-async function loadImageDisplayStatus() {
-  try {
-    const response = await getInternalPowerImageDisplayStatus()
-    internalPowerImageVisible.value = response.data?.enabled !== false
-  } catch {
-    internalPowerImageVisible.value = true
-  }
-}
 
 async function loadActiveFormulaPackage() {
   try {

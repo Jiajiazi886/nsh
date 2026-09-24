@@ -3,10 +3,8 @@ from typing import Annotated
 from fastapi import File, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, DynamicResponseModel, ResponseBaseModel
 from module_admin.entity.vo.internal_power_panel_setting_vo import (
@@ -52,7 +50,6 @@ async def get_personal_internal_power_panel_setting(
     description='用于保存当前登录用户的受击方面板和攻击方无内功基础面板',
     response_model=DynamicResponseModel[InternalPowerPanelSettingModel],
 )
-@Log(title='个人内功PVP收益面板设置', business_type=BusinessType.UPDATE)
 async def save_personal_internal_power_panel_setting(
     request: Request,
     payload: InternalPowerPanelSettingModel,
@@ -70,7 +67,6 @@ async def save_personal_internal_power_panel_setting(
     description='上传单张玩家面板图片并调用Mimo识别为面板JSON',
     response_model=DataResponseModel[PanelRecognitionResultModel],
 )
-@Log(title='个人玩家面板识别', business_type=BusinessType.INSERT)
 async def recognize_personal_internal_power_panel_image(
     request: Request,
     query_db: Annotated[AsyncSession, DBSessionDependency()],
@@ -104,7 +100,6 @@ async def get_personal_internal_power_panel_recognition_history(
     description='清空当前用户的玩家面板识别历史',
     response_model=ResponseBaseModel,
 )
-@Log(title='个人玩家面板识别历史', business_type=BusinessType.DELETE)
 async def clear_personal_internal_power_panel_recognition_history(
     request: Request,
     query_db: Annotated[AsyncSession, DBSessionDependency()],

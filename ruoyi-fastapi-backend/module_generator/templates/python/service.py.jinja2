@@ -4,9 +4,6 @@
 {% set pk_field_comment = pkColumn.column_comment[:pkParentheseIndex] if pkParentheseIndex != -1 else pkColumn.column_comment %}
 from typing import Any
 
-{% if dicts %}
-from fastapi import Request
-{% endif %}
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.constant import CommonConstant
@@ -14,9 +11,6 @@ from common.vo import CrudResponseModel, PageModel
 from exceptions.exception import ServiceException
 from {{ packageName }}.dao.{{ businessName }}_dao import {{ BusinessName }}Dao
 from {{ packageName }}.entity.vo.{{ businessName }}_vo import Delete{{ BusinessName }}Model, {{ BusinessName }}Model, {{ BusinessName }}PageQueryModel
-{% if dicts %}
-from module_admin.service.dict_service import DictDataService
-{% endif %}
 from utils.common_util import CamelCaseUtil
 from utils.excel_util import ExcelUtil
 
@@ -174,7 +168,7 @@ class {{ BusinessName }}Service:
         return result
 
     @staticmethod
-    async def export_{{ businessName }}_list_services({% if dicts %}request: Request, {% endif %}{{ businessName }}_list: list) -> bytes:
+    async def export_{{ businessName }}_list_services({{ businessName }}_list: list) -> bytes:
         """
         导出{{ functionName }}信息service
 
@@ -189,22 +183,6 @@ class {{ BusinessName }}Service:
             '{{ column.python_field }}': '{{ comment }}',
             {% endfor %}
         }
-        {% if dicts %}
-        {% for dict_type in dicts.split(", ") %}
-        {{ dict_type[1:-1] }}_list = await DictDataService.query_dict_data_list_from_cache_services(
-            request.app.state.redis, dict_type={{ dict_type }}
-        )
-        {{ dict_type[1:-1] }}_option = [{'label': item.get('dictLabel'), 'value': item.get('dictValue')} for item in {{ dict_type[1:-1] }}_list]
-        {{ dict_type[1:-1] }}_option_dict = {item.get('value'): item for item in {{ dict_type[1:-1] }}_option}
-        {% endfor %}
-        for item in {{ businessName }}_list:
-            {% for column in columns %}
-            {% if column.dict_type %}
-            if str(item.get('{{ column.python_field }}')) in {{ column.dict_type }}_option_dict:
-                item['{{ column.python_field }}'] = {{ column.dict_type }}_option_dict.get(str(item.get('{{ column.python_field }}'))).get('label')
-            {% endif %}
-            {% endfor %}
-        {% endif %}
         binary_data = ExcelUtil.export_list2excel({{ businessName }}_list, mapping_dict)
 
         return binary_data

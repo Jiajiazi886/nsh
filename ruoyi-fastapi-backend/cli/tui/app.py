@@ -131,7 +131,6 @@ _TUI_VIEW_SPECS: tuple[TuiViewSpec, ...] = (
     TuiViewSpec('cache', include_query=True),
     TuiViewSpec('jobs', include_query=True, include_filter=True),
     TuiViewSpec('gen', include_query=True),
-    TuiViewSpec('configs', include_query=True, include_filter=True),
     TuiViewSpec('crypto', include_query=True),
 )
 
@@ -444,7 +443,7 @@ class TuiViewStateStore:
         """
         return cls(
             action_feedback_by_view={},
-            browser_filter_by_view={'jobs': 'all', 'configs': 'all'},
+            browser_filter_by_view={'jobs': 'all'},
             browser_query_by_view={},
         )
 
@@ -854,14 +853,6 @@ class RuoyiTuiApp(App[None]):
         :return: None
         """
         self.open_view('gen')
-
-    def action_show_configs(self) -> None:
-        """
-        切换到配置浏览视图。
-
-        :return: None
-        """
-        self.open_view('configs')
 
     def action_show_crypto(self) -> None:
         """

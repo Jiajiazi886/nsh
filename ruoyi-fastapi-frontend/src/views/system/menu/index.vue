@@ -66,7 +66,7 @@
          <el-table-column prop="component" label="组件路径" :show-overflow-tooltip="true"></el-table-column>
          <el-table-column prop="status" label="状态" width="80">
             <template #default="scope">
-               <dict-tag :options="sys_normal_disable" :value="scope.row.status" />
+               <el-tag :type="businessOptionType(sys_normal_disable, scope.row.status)">{{ businessOptionLabel(sys_normal_disable, scope.row.status) }}</el-tag>
             </template>
          </el-table-column>
          <el-table-column label="创建时间" align="center" width="160" prop="createTime">
@@ -289,12 +289,14 @@
 </template>
 
 <script setup name="Menu">
+import { NORMAL_DISABLE_OPTIONS, SHOW_HIDE_OPTIONS, businessOptionLabel, businessOptionType } from '@/utils/businessOptions'
 import { addMenu, delMenu, getMenu, listMenu, updateMenu } from "@/api/system/menu";
 import SvgIcon from "@/components/SvgIcon";
 import IconSelect from "@/components/IconSelect";
 
 const { proxy } = getCurrentInstance();
-const { sys_show_hide, sys_normal_disable } = proxy.useDict("sys_show_hide", "sys_normal_disable");
+const sys_show_hide = SHOW_HIDE_OPTIONS;
+const sys_normal_disable = NORMAL_DISABLE_OPTIONS;
 
 const menuList = ref([]);
 const open = ref(false);

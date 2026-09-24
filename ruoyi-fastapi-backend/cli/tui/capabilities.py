@@ -51,7 +51,6 @@ _BROWSER_CAPABILITY_SPECS: dict[str, tuple[TuiCapabilitySpec, ...]] = {
         TuiCapabilitySpec('job_toggle', 'low_risk_action', 'secondary', 'Z'),
         TuiCapabilitySpec('job_sync', 'preview', 'global', 'Y'),
     ),
-    'configs': (TuiCapabilitySpec('config_sync', 'low_risk_action', 'global', 'Y'),),
     'cache': (
         TuiCapabilitySpec('cache_clear_wizard', 'wizard_entry', 'global', 'Y'),
         TuiCapabilitySpec('cache_warmup', 'low_risk_action', 'utility', 'W'),

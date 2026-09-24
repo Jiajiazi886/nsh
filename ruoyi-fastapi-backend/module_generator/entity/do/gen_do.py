@@ -94,7 +94,6 @@ class GenTableColumn(Base):
     html_type = Column(
         String(200), nullable=True, comment='显示类型（文本框、文本域、下拉框、复选框、单选框、日期控件）'
     )
-    dict_type = Column(String(200), nullable=True, server_default="''", comment='字典类型')
     sort = Column(Integer, nullable=True, comment='排序')
     create_by = Column(String(64), server_default="''", comment='创建者')
     create_time = Column(DateTime, nullable=True, default=datetime.now(), comment='创建时间')

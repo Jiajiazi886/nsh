@@ -214,7 +214,6 @@ class GenTableColumnBaseModel(BaseModel):
     html_type: str | None = Field(
         default=None, description='显示类型（文本框、文本域、下拉框、复选框、单选框、日期控件）'
     )
-    dict_type: str | None = Field(default=None, description='字典类型')
     sort: int | None = Field(default=None, description='排序')
     create_by: str | None = Field(default=None, description='创建者')
     create_time: datetime | None = Field(default=None, description='创建时间')

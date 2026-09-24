@@ -6,7 +6,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MYSQL_INSTALL_SQL = BACKEND_ROOT / 'sql' / 'ruoyi-fastapi.sql'
 POSTGRES_INSTALL_SQL = BACKEND_ROOT / 'sql' / 'ruoyi-fastapi-pg.sql'
 STARTUP_DB_MODULE = BACKEND_ROOT / 'config' / 'get_db.py'
-EXPECTED_ROLE_MENU_COUNTS = {'1': 152, '2': 41, '100': 11}
+EXPECTED_ROLE_MENU_COUNTS = {'1': 127, '2': 41, '100': 11}
 
 
 def test_project_menu_baseline_has_only_expected_top_level_menus() -> None:
@@ -23,7 +23,8 @@ def test_project_menu_baseline_contains_current_business_features() -> None:
     names = {menu['menu_name'] for menu in baseline['menus']}
     permissions = {menu['perms'] for menu in baseline['menus']}
 
-    assert {'帮会管理', '个人管理', 'AI连接工作台', '数据库管理', '内功管理', '坦度计算器'} <= names
+    assert {'帮会管理', '个人管理', '大模型配置', '数据库管理', '内功管理', '坦度计算器'} <= names
+    assert not {'字典管理', '参数设置', '日志管理', '操作日志', '登录日志', '图片显示管理'} & names
     assert '防守计算器' not in names
     assert {'system:aikey:edit', 'personal:defense-calculator:list'} <= permissions
 
@@ -40,13 +41,15 @@ def test_install_sql_matches_project_menu_baseline() -> None:
         sql = path.read_text(encoding='utf-8')
         assert "'帮会管理'" in sql
         assert "'个人管理'" in sql
-        assert "'AI连接工作台'" in sql
+        assert "'大模型配置'" in sql
         assert "'坦度计算器'" in sql
         assert "'AI 管理'" not in sql
         assert "'模型管理'" not in sql
         assert "'AI 对话'" not in sql
         assert "'若依官网'" not in sql
         assert 'ai_chat_config' not in sql
+        for removed_table in ('sys_dict_type', 'sys_dict_data', 'sys_config', 'sys_oper_log', 'sys_logininfor'):
+            assert f'create table {removed_table}' not in sql.lower()
 
     postgres_sql = POSTGRES_INSTALL_SQL.read_text(encoding='utf-8')
     assert "setval(pg_get_serial_sequence('sys_menu', 'menu_id')" in postgres_sql

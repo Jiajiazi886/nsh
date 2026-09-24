@@ -59,7 +59,7 @@
          <el-table-column prop="orderNum" label="排序" width="200"></el-table-column>
          <el-table-column prop="status" label="状态" width="100">
             <template #default="scope">
-               <dict-tag :options="sys_normal_disable" :value="scope.row.status" />
+               <el-tag :type="businessOptionType(sys_normal_disable, scope.row.status)">{{ businessOptionLabel(sys_normal_disable, scope.row.status) }}</el-tag>
             </template>
          </el-table-column>
          <el-table-column label="创建时间" align="center" prop="createTime" width="200">
@@ -141,10 +141,11 @@
 </template>
 
 <script setup name="Dept">
+import { NORMAL_DISABLE_OPTIONS, businessOptionLabel, businessOptionType } from '@/utils/businessOptions'
 import { listDept, getDept, delDept, addDept, updateDept, listDeptExcludeChild } from "@/api/system/dept";
 
 const { proxy } = getCurrentInstance();
-const { sys_normal_disable } = proxy.useDict("sys_normal_disable");
+const sys_normal_disable = NORMAL_DISABLE_OPTIONS;
 
 const deptList = ref([]);
 const open = ref(false);

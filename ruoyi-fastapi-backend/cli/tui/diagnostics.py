@@ -117,14 +117,6 @@ class TuiDiagnosticService:
         """
         return self.build_page_focus_hint('jobs')
 
-    def build_configs_focus_hint(self) -> str:
-        """
-        构建参数配置页统一聚焦词。
-
-        :return: 聚焦提示
-        """
-        return self.build_page_focus_hint('configs')
-
     def build_gen_focus_hint(self) -> str:
         """
         构建代码生成页统一聚焦词。
@@ -296,30 +288,6 @@ class TuiDiagnosticService:
         )
 
     @staticmethod
-    def _build_configs_subtitle(
-        filter_label: str,
-        matched_count: int,
-        mismatch_count: int,
-        drift_count: int,
-        *,
-        focus_hint: str,
-    ) -> str:
-        """
-        构建参数配置页诊断摘要。
-
-        :param filter_label: 当前筛选标签
-        :param matched_count: 当前匹配配置数
-        :param mismatch_count: 值不一致数量
-        :param drift_count: 缓存漂移数量
-        :param focus_hint: 聚焦提示
-        :return: 页面摘要
-        """
-        return (
-            f'{focus_hint} | 当前筛选：{filter_label}，已匹配 {matched_count} 项配置，'
-            f'值不一致 {mismatch_count} 项，缓存漂移 {drift_count} 项'
-        )
-
-    @staticmethod
     def _build_gen_subtitle(
         matched_count: int,
         importable_count: int,
@@ -481,30 +449,6 @@ class TuiDiagnosticService:
             focus_hint=self.build_jobs_focus_hint(),
         )
 
-    def build_configs_diagnostic_subtitle(
-        self,
-        filter_label: str,
-        matched_count: int,
-        mismatch_count: int,
-        drift_count: int,
-    ) -> str:
-        """
-        构建参数配置页统一诊断摘要。
-
-        :param filter_label: 当前筛选标签
-        :param matched_count: 当前匹配配置数
-        :param mismatch_count: 值不一致数量
-        :param drift_count: 缓存漂移数量
-        :return: 页面摘要
-        """
-        return self.page_policy_registry.get('configs').subtitle_builder(
-            filter_label,
-            matched_count,
-            mismatch_count,
-            drift_count,
-            focus_hint=self.build_configs_focus_hint(),
-        )
-
     def build_gen_diagnostic_subtitle(
         self,
         matched_count: int,
@@ -563,10 +507,6 @@ TUI_DIAGNOSTIC_PAGE_POLICY_REGISTRY = DiagnosticPagePolicyRegistry(
         'jobs': DiagnosticPagePolicy(
             focus_terms=('失败聚合', '暂停任务', '执行轨迹'),
             subtitle_builder=TuiDiagnosticService._build_jobs_subtitle,
-        ),
-        'configs': DiagnosticPagePolicy(
-            focus_terms=('高风险配置', '值不一致', '缓存漂移'),
-            subtitle_builder=TuiDiagnosticService._build_configs_subtitle,
         ),
         'gen': DiagnosticPagePolicy(
             focus_terms=('生成前校验', '同步预检查', '代码预览'),

@@ -1,4 +1,4 @@
--- AI 连接工作台（MySQL）
+-- 大模型配置（MySQL）
 -- API Key 仍以 Fernet 密文存储，TEXT 用于兼容更长的上游密钥。
 
 alter table ai_models
@@ -34,6 +34,6 @@ where status = '0'
   );
 
 update sys_menu
-set menu_name = 'AI连接工作台',
+set menu_name = '大模型配置',
     remark = '管理多套 AI 连接并切换全系统当前 AI'
 where menu_id = 3050;

@@ -5,11 +5,9 @@ from fastapi import Path, Query, Request, Response
 from pydantic_validation_decorator import ValidateFields
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import RoleInterfaceAuthDependency, UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, PageResponseModel, ResponseBaseModel
 from module_admin.entity.vo.internal_power_panel_setting_vo import (
@@ -58,7 +56,6 @@ async def get_system_internal_power_panel_template_list(
     ],
 )
 @ValidateFields(validate_model='add_template')
-@Log(title='面板模板设置', business_type=BusinessType.INSERT)
 async def add_system_internal_power_panel_template(
     request: Request,
     add_template: InternalPowerPanelTemplateModel,
@@ -84,7 +81,6 @@ async def add_system_internal_power_panel_template(
     ],
 )
 @ValidateFields(validate_model='edit_template')
-@Log(title='面板模板设置', business_type=BusinessType.UPDATE)
 async def edit_system_internal_power_panel_template(
     request: Request,
     edit_template: InternalPowerPanelTemplateModel,
@@ -108,7 +104,6 @@ async def edit_system_internal_power_panel_template(
         RoleInterfaceAuthDependency('admin'),
     ],
 )
-@Log(title='面板模板状态', business_type=BusinessType.UPDATE)
 async def change_system_internal_power_panel_template_status(
     request: Request,
     template_id: Annotated[int, Path(description='模板ID')],
@@ -133,7 +128,6 @@ async def change_system_internal_power_panel_template_status(
         RoleInterfaceAuthDependency('admin'),
     ],
 )
-@Log(title='面板模板设置', business_type=BusinessType.DELETE)
 async def delete_system_internal_power_panel_template(
     request: Request,
     template_ids: Annotated[str, Path(description='需要删除的模板ID')],

@@ -74,18 +74,18 @@ def test_tui_search_service_skips_provider_when_query_is_empty(
     service = tui_modules.cli_tui_search.TuiSearchService(
         tui_modules.cli_tui_search.TuiSearchSuggestionProviderRegistry(
             providers={
-                'configs': tui_modules.cli_tui_search.SearchSuggestionProviderSpec(
-                    '按配置键搜索',
+                'custom': tui_modules.cli_tui_search.SearchSuggestionProviderSpec(
+                    '按关键字搜索',
                     record_provider,
                 )
             }
         )
     )
 
-    search_context = service.resolve_search_context('configs', '')
+    search_context = service.resolve_search_context('custom', '')
 
     assert search_context is not None
-    assert search_context.placeholder == '按配置键搜索'
+    assert search_context.placeholder == '按关键字搜索'
     assert search_context.suggestions == []
     assert provider_calls == []
 

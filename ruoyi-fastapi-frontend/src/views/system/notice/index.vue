@@ -79,12 +79,12 @@
          />
          <el-table-column label="公告类型" align="center" prop="noticeType" width="100">
             <template #default="scope">
-               <dict-tag :options="sys_notice_type" :value="scope.row.noticeType" />
+               <el-tag :type="businessOptionType(sys_notice_type, scope.row.noticeType)">{{ businessOptionLabel(sys_notice_type, scope.row.noticeType) }}</el-tag>
             </template>
          </el-table-column>
          <el-table-column label="状态" align="center" prop="status" width="100">
             <template #default="scope">
-               <dict-tag :options="sys_notice_status" :value="scope.row.status" />
+               <el-tag :type="businessOptionType(sys_notice_status, scope.row.status)">{{ businessOptionLabel(sys_notice_status, scope.row.status) }}</el-tag>
             </template>
          </el-table-column>
          <el-table-column label="创建者" align="center" prop="createBy" width="100" />
@@ -159,10 +159,12 @@
 </template>
 
 <script setup name="Notice">
+import { NOTICE_STATUS_OPTIONS, NOTICE_TYPE_OPTIONS, businessOptionLabel, businessOptionType } from '@/utils/businessOptions'
 import { listNotice, getNotice, delNotice, addNotice, updateNotice } from "@/api/system/notice";
 
 const { proxy } = getCurrentInstance();
-const { sys_notice_status, sys_notice_type } = proxy.useDict("sys_notice_status", "sys_notice_type");
+const sys_notice_status = NOTICE_STATUS_OPTIONS;
+const sys_notice_type = NOTICE_TYPE_OPTIONS;
 
 const noticeList = ref([]);
 const open = ref(false);

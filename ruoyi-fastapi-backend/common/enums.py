@@ -69,8 +69,6 @@ class RedisInitKeyConfig(Enum):
         return self.value.get('remark')
 
     ACCESS_TOKEN = {'key': 'access_token', 'remark': '登录令牌信息'}
-    SYS_DICT = {'key': 'sys_dict', 'remark': '数据字典'}
-    SYS_CONFIG = {'key': 'sys_config', 'remark': '配置信息'}
     API_CACHE = {'key': 'api_cache', 'remark': '接口响应缓存'}
     API_RATE_LIMIT = {'key': 'api_rate_limit', 'remark': '接口限流'}
     CAPTCHA_CODES = {'key': 'captcha_codes', 'remark': '图片验证码'}

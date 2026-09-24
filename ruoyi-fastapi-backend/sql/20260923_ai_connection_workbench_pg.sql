@@ -1,4 +1,4 @@
--- AI 连接工作台（PostgreSQL）
+-- 大模型配置（PostgreSQL）
 
 alter table ai_models alter column api_key type text;
 
@@ -28,6 +28,6 @@ where status = '0'
   and model_id <> (select model_id from active_connection);
 
 update sys_menu
-set menu_name = 'AI连接工作台',
+set menu_name = '大模型配置',
     remark = '管理多套 AI 连接并切换全系统当前 AI'
 where menu_id = 3050;

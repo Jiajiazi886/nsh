@@ -92,7 +92,6 @@ class TemplateUtils:
             'permissionPrefix': cls.get_permission_prefix(module_name, business_name),
             'columns': gen_table.columns,
             'table': gen_table,
-            'dicts': cls.get_dicts(gen_table),
             'dbType': DataBaseConfig.db_type,
             'column_not_add_show': GenConstant.COLUMNNAME_NOT_ADD_SHOW,
             'column_not_edit_show': GenConstant.COLUMNNAME_NOT_EDIT_SHOW,
@@ -319,40 +318,6 @@ class TemplateUtils:
             merged_imports.append(merged_datetime_import)
 
         return merged_imports
-
-    @classmethod
-    def get_dicts(cls, gen_table: GenTableModel) -> str:
-        """
-        获取字典列表
-
-        :param gen_table: 生成表的配置信息
-        :return: 字典列表
-        """
-        columns = gen_table.columns or []
-        dicts = set()
-        cls.add_dicts(dicts, columns)
-        if gen_table.sub_table is not None:
-            cls.add_dicts(dicts, gen_table.sub_table.columns)
-        return ', '.join(dicts)
-
-    @classmethod
-    def add_dicts(cls, dicts: set[str], columns: list[GenTableColumnModel]) -> None:
-        """
-        添加字典列表
-
-        :param dicts: 字典列表
-        :param columns: 字段列表
-        :return: 新的字典列表
-        """
-        for column in columns:
-            if (
-                not column.super_column
-                and StringUtil.is_not_empty(column.dict_type)
-                and StringUtil.equals_any_ignore_case(
-                    column.html_type, [GenConstant.HTML_SELECT, GenConstant.HTML_RADIO, GenConstant.HTML_CHECKBOX]
-                )
-            ):
-                dicts.add(f"'{column.dict_type}'")
 
     @classmethod
     def get_permission_prefix(cls, module_name: str, business_name: str) -> str:

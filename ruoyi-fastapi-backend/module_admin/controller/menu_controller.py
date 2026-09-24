@@ -6,12 +6,10 @@ from pydantic_validation_decorator import ValidateFields
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.annotation.cache_annotation import ApiCache, ApiCacheEvict
-from common.annotation.log_annotation import Log
 from common.aspect.db_seesion import DBSessionDependency
 from common.aspect.interface_auth import UserInterfaceAuthDependency
 from common.aspect.pre_auth import CurrentUserDependency, PreAuthDependency
 from common.constant import ApiGroup, ApiNamespace
-from common.enums import BusinessType
 from common.router import APIRouterPro
 from common.vo import DataResponseModel, DynamicResponseModel, ResponseBaseModel
 from module_admin.entity.vo.menu_vo import DeleteMenuModel, MenuModel, MenuQueryModel, MenuTreeModel
@@ -92,7 +90,6 @@ async def get_system_menu_list(
 )
 @ValidateFields(validate_model='add_menu')
 @ApiCacheEvict(namespaces=ApiGroup.MENU_MUTATION)
-@Log(title='菜单管理', business_type=BusinessType.INSERT)
 async def add_system_menu(
     request: Request,
     add_menu: MenuModel,
@@ -118,7 +115,6 @@ async def add_system_menu(
 )
 @ValidateFields(validate_model='edit_menu')
 @ApiCacheEvict(namespaces=ApiGroup.MENU_MUTATION)
-@Log(title='菜单管理', business_type=BusinessType.UPDATE)
 async def edit_system_menu(
     request: Request,
     edit_menu: MenuModel,
@@ -141,7 +137,6 @@ async def edit_system_menu(
     dependencies=[UserInterfaceAuthDependency('system:menu:remove')],
 )
 @ApiCacheEvict(namespaces=ApiGroup.MENU_MUTATION)
-@Log(title='菜单管理', business_type=BusinessType.DELETE)
 async def delete_system_menu(
     request: Request,
     menu_ids: Annotated[str, Path(description='需要删除的菜单ID')],

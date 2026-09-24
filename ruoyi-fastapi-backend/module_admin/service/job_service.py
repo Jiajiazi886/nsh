@@ -9,7 +9,6 @@ from config.get_scheduler import SchedulerUtil
 from exceptions.exception import ServiceException
 from module_admin.dao.job_dao import JobDao
 from module_admin.entity.vo.job_vo import DeleteJobModel, EditJobModel, JobModel, JobPageQueryModel
-from module_admin.service.dict_service import DictDataService
 from utils.common_util import CamelCaseUtil
 from utils.cron_util import CronUtil
 from utils.excel_util import ExcelUtil
@@ -236,28 +235,16 @@ class JobService:
             'remark': '备注',
         }
 
-        job_group_list = await DictDataService.query_dict_data_list_from_cache_services(
-            request.app.state.redis, dict_type='sys_job_group'
-        )
-        job_group_option = [{'label': item.get('dictLabel'), 'value': item.get('dictValue')} for item in job_group_list]
-        job_group_option_dict = {item.get('value'): item for item in job_group_option}
-        job_executor_list = await DictDataService.query_dict_data_list_from_cache_services(
-            request.app.state.redis, dict_type='sys_job_executor'
-        )
-        job_executor_option = [
-            {'label': item.get('dictLabel'), 'value': item.get('dictValue')} for item in job_executor_list
-        ]
-        job_executor_option_dict = {item.get('value'): item for item in job_executor_option}
+        job_group_labels = {'default': '默认', 'sqlalchemy': '数据库', 'redis': 'Redis'}
+        job_executor_labels = {'default': '默认', 'processpool': '进程池'}
 
         for item in job_list:
             if item.get('status') == '0':
                 item['status'] = '正常'
             else:
                 item['status'] = '暂停'
-            if str(item.get('jobGroup')) in job_group_option_dict:
-                item['jobGroup'] = job_group_option_dict.get(str(item.get('jobGroup'))).get('label')
-            if str(item.get('jobExecutor')) in job_executor_option_dict:
-                item['jobExecutor'] = job_executor_option_dict.get(str(item.get('jobExecutor'))).get('label')
+            item['jobGroup'] = job_group_labels.get(str(item.get('jobGroup')), item.get('jobGroup'))
+            item['jobExecutor'] = job_executor_labels.get(str(item.get('jobExecutor')), item.get('jobExecutor'))
             if item.get('misfirePolicy') == '1':
                 item['misfirePolicy'] = '立即执行'
             elif item.get('misfirePolicy') == '2':

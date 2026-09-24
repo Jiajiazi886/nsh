@@ -31,18 +31,6 @@ class StaticActionTemplateFactory:
         return ('job', 'sync')
 
     @staticmethod
-    def build_config_sync_command(record: BrowserRecordSnapshot | None, env: str) -> tuple[str, ...]:
-        """
-        构建配置同步命令参数。
-
-        :param record: 当前记录
-        :param env: 当前运行环境
-        :return: 命令参数
-        """
-        del record, env
-        return ('config', 'sync-cache')
-
-    @staticmethod
     def build_cache_warmup_command(record: BrowserRecordSnapshot | None, env: str) -> tuple[str, ...]:
         """
         构建缓存预热命令参数。
@@ -186,22 +174,6 @@ class StaticActionTemplateFactory:
         """
         del record, env
         return ('ops', 'ping-redis')
-
-    def create_config_sync_template(self) -> TuiActionTemplate:
-        """
-        创建配置同步动作模板。
-
-        :return: 动作模板
-        """
-        return TuiActionTemplate(
-            action_id='config-sync-cache',
-            label=TUI_COPY.build_action_label('config_sync'),
-            command_builder=self.build_config_sync_command,
-            summary_builder=lambda record, env: self.support.build_scope_purpose_summary(
-                TUI_COPY.build_action_scope_label('config_sync'),
-                TUI_COPY.build_action_purpose_label('config_sync'),
-            ),
-        )
 
     def create_db_upgrade_wizard_template(self) -> TuiActionTemplate:
         """
