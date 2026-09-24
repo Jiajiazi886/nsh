@@ -243,7 +243,7 @@ class AiUsageService:
                 AiRequestUsageLog.user_name,
                 AiRequestUsageLog.nick_name,
             )
-            .where(and_(*filters))
+            .where(and_(True, *filters))
             .distinct()
             .order_by(AiRequestUsageLog.user_id.asc())
             .limit(50)
@@ -251,7 +251,9 @@ class AiUsageService:
         return [AiUsageUserModel(user_id=row[0], user_name=row[1], nick_name=row[2]) for row in (await db.execute(statement)).all()]
 
     @staticmethod
-    def _to_record_model(record: AiRequestUsageLog) -> AiUsageRecordModel:
+    def _to_record_model(record: AiRequestUsageLog | dict[str, Any]) -> AiUsageRecordModel:
+        if isinstance(record, dict):
+            return AiUsageRecordModel.model_validate(record)
         return AiUsageRecordModel(
             record_id=int(record.record_id),
             request_id=record.request_id,

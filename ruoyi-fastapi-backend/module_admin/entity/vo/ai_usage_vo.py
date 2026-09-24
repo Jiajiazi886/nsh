@@ -6,7 +6,7 @@ from pydantic.alias_generators import to_camel
 
 
 class AiUsageRecordModel(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel, from_attributes=True)
+    model_config = ConfigDict(alias_generator=to_camel, from_attributes=True, populate_by_name=True)
 
     record_id: int
     request_id: str
@@ -45,7 +45,7 @@ class AiUsagePageQueryModel(BaseModel):
 
 
 class AiUsageSummaryModel(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     request_count: int = 0
     reported_count: int = 0
@@ -54,7 +54,7 @@ class AiUsageSummaryModel(BaseModel):
 
 
 class AiUsageUserModel(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     user_id: int
     user_name: str

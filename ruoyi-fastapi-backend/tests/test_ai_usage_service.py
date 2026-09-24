@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -58,16 +59,68 @@ def test_error_summary_redacts_secrets_and_content():
 @pytest.mark.asyncio
 async def test_list_records_returns_camel_case_page_model(monkeypatch):
     async def fake_paginate(*_args, **_kwargs):
-        return PageModel(rows=[], pageNum=1, pageSize=20, total=0, hasNext=False)
+        return PageModel(
+            rows=[
+                {
+                    'recordId': 9,
+                    'requestId': 'request-9',
+                    'userId': 1,
+                    'userName': 'admin',
+                    'nickName': '管理员',
+                    'connectionId': 2,
+                    'connectionName': '测试连接',
+                    'provider': 'test',
+                    'protocol': 'chat_completions',
+                    'model': 'test-model',
+                    'scene': 'connection_test',
+                    'status': 'success',
+                    'inputTokens': 10,
+                    'outputTokens': 2,
+                    'totalTokens': 12,
+                    'usageReported': '1',
+                    'requestTime': datetime(2026, 9, 24, 10, 0, 0),
+                    'completeTime': datetime(2026, 9, 24, 10, 0, 1),
+                    'durationMs': 1000,
+                    'errorMessage': '',
+                }
+            ],
+            pageNum=1,
+            pageSize=20,
+            total=1,
+            hasNext=False,
+        )
 
     monkeypatch.setattr(PageUtil, 'paginate', fake_paginate)
 
     page = await AiUsageService.list_records(SimpleNamespace(), AiUsagePageQueryModel())
 
     assert page.model_dump(by_alias=True) == {
-        'rows': [],
+        'rows': [
+            {
+                'recordId': 9,
+                'requestId': 'request-9',
+                'userId': 1,
+                'userName': 'admin',
+                'nickName': '管理员',
+                'connectionId': 2,
+                'connectionName': '测试连接',
+                'provider': 'test',
+                'protocol': 'chat_completions',
+                'model': 'test-model',
+                'scene': 'connection_test',
+                'status': 'success',
+                'inputTokens': 10,
+                'outputTokens': 2,
+                'totalTokens': 12,
+                'usageReported': True,
+                'requestTime': datetime(2026, 9, 24, 10, 0, 0),
+                'completeTime': datetime(2026, 9, 24, 10, 0, 1),
+                'durationMs': 1000,
+                'errorMessage': '',
+            }
+        ],
         'pageNum': 1,
         'pageSize': 20,
-        'total': 0,
+        'total': 1,
         'hasNext': False,
     }
